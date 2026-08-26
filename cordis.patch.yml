@@ -1,0 +1,5 @@
+# cau-portal 服务端补丁层（bundle patch）：
+# 阶段4第1步只注册插件本体（服务端插件为占位，第2步加 webServer+llm 路由）。
+- insert:
+    - id: cau-portal
+      name: cau-portal

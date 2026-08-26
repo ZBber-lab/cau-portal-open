@@ -1,0 +1,12 @@
+{
+  "name": "cau-portal",
+  "description": "农大门户：CAU 通知公告聚合、AI 摘要与对话查询",
+  "version": "0.1.0",
+  "entry": {
+    "name": "cau-portal",
+    "inject": []
+  },
+  "client": {
+    "platform": "web"
+  }
+}
