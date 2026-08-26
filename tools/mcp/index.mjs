@@ -16,6 +16,40 @@ const DATA_DIR = process.env.CAU_DATA_DIR || path.resolve(HERE, '..', '..', 'dat
 const FEED_DIR = path.join(DATA_DIR, 'feed')
 const ART_DIR = path.join(DATA_DIR, 'articles')
 
+// ---- GitHub 云端数据源（阶段4 第3步）：CAU_GITHUB_TOKEN 存在即切换 ----
+const GH_TOKEN = process.env.CAU_GITHUB_TOKEN || ''
+const GH_REPO = process.env.CAU_GITHUB_REPO || 'zhouxuanting52-lab/cau-portal'
+const GH_BRANCH = process.env.CAU_GITHUB_BRANCH || 'main'
+const GH_MODE = !!GH_TOKEN
+const ghCache = new Map() // rel -> { t, text }
+const ghListCache = new Map() // rel -> { t, list }
+const CACHE_TTL_MS = 30_000
+const CACHE_TTL_LIST_MS = 30_000
+const CACHE_TTL_ARTICLE_MS = 300_000
+
+async function ghFetch(rel) {
+  const url = `https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${GH_TOKEN}`,
+      Accept: 'application/vnd.github.raw',
+      'User-Agent': 'cau-portal-mcp',
+    },
+  })
+  if (!res.ok) throw new Error(`GitHub ${res.status} for ${rel}`)
+  return res.text()
+}
+
+async function ghList(rel) {
+  const url = `https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${GH_TOKEN}`, 'User-Agent': 'cau-portal-mcp' },
+  })
+  if (!res.ok) throw new Error(`GitHub ${res.status} listing ${rel}`)
+  const list = await res.json()
+  return Array.isArray(list) ? list.map((e) => e.name) : []
+}
+
 const SITE_HOST = {
   clst: 'https://clst.cau.edu.cn',
   jwc: 'https://jwc.cau.edu.cn',
@@ -25,28 +59,64 @@ const CATEGORIES = ['通知', '新闻', '讲座', '竞赛', '评奖', '选课', 
 
 const server = new McpServer({ name: 'cau-portal', version: '0.1.0' })
 
-// ---------- 数据读取 ----------
-async function readJson(file) {
-  try { return JSON.parse(await readFile(file, 'utf8')) } catch { return null }
+// ---------- 数据读取（统一源：GH 模式读 GitHub，否则本地 data/） ----------
+/** 读取 data/ 下的相对子路径文本；GH 模式带进程内缓存 */
+async function readSource(rel) {
+  if (GH_MODE) {
+    const hit = ghCache.get(rel)
+    if (hit && Date.now() - hit.t < (rel.startsWith('articles/') ? CACHE_TTL_ARTICLE_MS : CACHE_TTL_MS)) return hit.text
+    const text = await ghFetch(`data/${rel}`)
+    ghCache.set(rel, { t: Date.now(), text })
+    return text
+  }
+  try {
+    return await readFile(path.join(DATA_DIR, rel), 'utf8')
+  } catch {
+    return null
+  }
+}
+
+async function readJson(rel) {
+  const text = await readSource(rel)
+  if (text == null) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+async function listDir(rel) {
+  if (GH_MODE) {
+    const hit = ghListCache.get(rel)
+    if (hit && Date.now() - hit.t < CACHE_TTL_LIST_MS) return hit.list
+    const list = await ghList(`data/${rel}`)
+    ghListCache.set(rel, { t: Date.now(), list })
+    return list
+  }
+  try {
+    return (await readdir(path.join(DATA_DIR, rel))).filter((f) => f.endsWith('.json'))
+  } catch {
+    return []
+  }
 }
 
 async function loadIndex() {
-  return readJson(path.join(DATA_DIR, 'index.json'))
+  return readJson('index.json')
 }
 
 async function loadFeeds() {
-  let names = []
-  try { names = (await readdir(FEED_DIR)).filter((f) => f.endsWith('.json')) } catch { /* 无 feed 目录 */ }
+  const names = await listDir('feed')
   const feeds = []
   for (const name of names) {
-    const feed = await readJson(path.join(FEED_DIR, name))
+    const feed = await readJson(`feed/${name}`)
     if (feed && Array.isArray(feed.items)) feeds.push(feed)
   }
   return feeds
 }
 
 async function listArticleFiles() {
-  try { return (await readdir(ART_DIR)).filter((f) => f.endsWith('.json')) } catch { return [] }
+  return listDir('articles')
 }
 
 /** 相对路径 → 绝对 URL */
@@ -106,7 +176,7 @@ function localDay(ts) {
 /** 附带 AI 元数据（若该条目已有正文） */
 async function withAi(item) {
   if (!item.article) return { ...item }
-  const art = await readJson(path.join(ART_DIR, item.article))
+  const art = await readJson('articles/' + item.article)
   if (!art) return { ...item }
   const { title, time, source, url, body, is_image_only, ai, ai_model } = art
   return {
@@ -213,7 +283,7 @@ server.registerTool('search_news', {
       let hay = title
       let ai = null
       if (it.article) {
-        const art = await readJson(path.join(ART_DIR, it.article))
+        const art = await readJson('articles/' + it.article)
         if (art) {
           ai = art.ai ?? null
           hay += ' ' + String(art.body ?? '').slice(0, 2000).toLowerCase()
@@ -254,7 +324,7 @@ server.registerTool('get_article', {
     // 1) 直接按文件名
     const idOnly = key.replace(/\.json$/, '').split(/[\\/]/).pop()
     if (/^[0-9a-f]{40}$/.test(idOnly)) {
-      const art = await readJson(path.join(ART_DIR, idOnly + '.json'))
+      const art = await readJson('articles/' + idOnly + '.json')
       if (art) return okJson({ found: true, stored: true, ...art, article_id: idOnly })
     }
     // 2) 按 URL 反查 feed
@@ -263,7 +333,7 @@ server.registerTool('get_article', {
     const hit = items.find((it) => it.path === target)
     if (!hit) return okJson({ found: false, stored: false, id_or_url: key, note: '未找到该文章：id 或 URL 不在农大门户数据中' })
     if (hit.article) {
-      const art = await readJson(path.join(ART_DIR, hit.article))
+      const art = await readJson('articles/' + hit.article)
       if (art) return okJson({ found: true, stored: true, ...art, article_id: String(hit.article).replace(/\.json$/, '') })
     }
     return okJson({
@@ -297,7 +367,7 @@ server.registerTool('list_deadlines', {
     const ceil = floor.getTime() + days * 86400000
     const out = []
     for (const f of files) {
-      const art = await readJson(path.join(ART_DIR, f))
+      const art = await readJson('articles/' + f)
       const dl = art?.ai?.deadline
       if (!dl || typeof dl.date !== 'string') continue
       const t = parseDay(dl.date)
@@ -329,7 +399,7 @@ server.registerTool('get_usage', {
   try {
     const days = Math.min(365, Math.max(1, Number(args?.days) || 30))
     const floor = Date.now() - days * 86400000
-    const raw = await readFile(path.join(DATA_DIR, 'usage.jsonl'), 'utf8').catch(() => '')
+    const raw = (await readSource('usage.jsonl')) ?? ''
     const byDay = {}
     let calls = 0, cost = 0, promptTokens = 0, completionTokens = 0, cachedTokens = 0
     for (const line of raw.split('\n')) {
@@ -365,7 +435,7 @@ server.registerTool('get_usage', {
 const transport = new StdioServerTransport()
 await server.connect(transport)
 // stdio 打开即保持进程存活；日志一律走 stderr，避免污染协议流
-console.error(`[cau-portal-mcp] ready, data dir: ${DATA_DIR}`)
+console.error(`[cau-portal-mcp] ready, data dir: ${DATA_DIR}${GH_MODE ? ` (github: ${GH_REPO}@${GH_BRANCH})` : ' (local)'}`)
 // 协议审计（本地日志，验证 DSH 客户端握手与工具调用用）
 const auditLog = (line) => appendFile(path.join(DATA_DIR, 'mcp-audit.log'), `${new Date().toISOString()} ${line}\n`, 'utf8').catch(() => {})
 {
