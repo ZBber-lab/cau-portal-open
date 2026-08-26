@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "sites": [
+    {
+      "id": "clst",
+      "name": "土地科学与技术学院",
+      "baseUrl": "https://clst.cau.edu.cn",
+      "cms": "boda",
+      "columns": [
+        { "id": 31131, "key": "notice", "name": "通知公告" },
+        { "id": 31132, "key": "seminar", "name": "学术报告" },
+        { "id": 31133, "key": "news", "name": "学院新闻" }
+      ]
+    },
+    {
+      "id": "jwc",
+      "name": "教务处（本科生院）",
+      "baseUrl": "https://jwc.cau.edu.cn",
+      "cms": "boda",
+      "columns": [
+        { "id": 41345, "key": "news", "name": "新闻资讯" }
+      ],
+      "note": "综合通知(41016)为权限页需登录、学籍通知/教学安排跳转统一门户 → 归阶段5；办事指南等服务栏目暂不收录"
+    },
+    {
+      "id": "news",
+      "name": "校新闻网",
+      "baseUrl": "https://news.cau.edu.cn",
+      "cms": "news-custom",
+      "columns": [
+        { "key": "ttgz", "name": "头条关注", "path": "ttgznew" },
+        { "key": "zhxw", "name": "综合新闻", "path": "zhxwnew" },
+        { "key": "jcdt", "name": "基层动态", "path": "jcdt" },
+        { "key": "kxyj", "name": "科学研究", "path": "kxyj" },
+        { "key": "rwgs", "name": "深度观察", "path": "rwgs" },
+        { "key": "mtnd", "name": "媒体农大", "path": "mtndnew" },
+        { "key": "bnxs", "name": "百廿学术", "path": "bnxs" }
+      ],
+      "note": "文章页容器 id=articleDiv；翻页 index.htm/indexN.htm；图说农大(tsnd)与校报平台(ihwrm)留待 v2"
+    }
+  ]
+}

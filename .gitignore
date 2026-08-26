@@ -1,0 +1,15 @@
+node_modules/
+.npm-cache/
+.env
+assets/brand-raw/
+explore/html/
+explore/refs/
+*.log
+data/*.log
+tools/mcp/smoke-out.jsonl
+tools/mcp/smoke-input.jsonl
+.gh-token
+*.token
+explore/gh-push/
+push-log.txt
+push-to-github.bat

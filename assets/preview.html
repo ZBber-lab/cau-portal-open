@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>农大门户 · 品牌资产预览</title>
+<style>
+  body { font-family: system-ui, 'Segoe UI', sans-serif; margin: 0; padding: 32px; background: #e8e8e8; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 32px 0 12px; }
+  p.meta { color: #666; font-size: 13px; margin: 0 0 24px; }
+  .board { border-radius: 16px; padding: 24px; margin-bottom: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 32px; }
+  .light { background: #ffffff; color: #1a1a1a; }
+  .dark { background: #1e1e1e; color: #e8e8e8; }
+  .dark .current { filter: invert(1); }
+  .green { background: #008038; }
+  .row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+  .label { font-size: 12px; opacity: .6; }
+  .swatch { width: 48px; height: 48px; border-radius: 8px; background: #008038; border: 1px solid rgba(0,0,0,.1); }
+</style>
+</head>
+<body>
+<h1>农大门户 · 品牌资产预览</h1>
+<p class="meta">打开方式：双击本文件。以下均为官方素材矢量化产物（potrace，IoU 0.96–0.97）。</p>
+
+<h2>① 侧边栏按钮场景 · 校徽 currentColor（跟随主题色）</h2>
+<div class="board light">
+  <div class="row"><img src="brand-svg/cau-emblem.svg" width="36" height="36"><span class="label">36px · 亮色主题</span></div>
+  <div class="row"><img src="brand-svg/cau-emblem.svg" width="16" height="16"><span class="label">16px · 亮色</span></div>
+</div>
+<div class="board dark">
+  <div class="row"><img class="current" src="brand-svg/cau-emblem.svg" width="36" height="36"><span class="label">36px · 暗色主题</span></div>
+  <div class="row"><img class="current" src="brand-svg/cau-emblem.svg" width="16" height="16"><span class="label">16px · 暗色</span></div>
+</div>
+
+<h2>② 面板 header / 品牌区 · 校徽官方绿</h2>
+<div class="board light">
+  <div class="row"><img src="brand-svg/cau-emblem-green.svg" width="24"><span class="label">24px 高</span></div>
+  <div class="row"><img src="brand-svg/cau-emblem-green.svg" width="64"><span class="label">64px 高</span></div>
+  <div class="row"><img src="brand-svg/cau-emblem-green.svg" width="128"><span class="label">128px 高</span></div>
+</div>
+
+<h2>③ 面板品牌区 · 校名题字官方绿（书法展示位）</h2>
+<div class="board light">
+  <div class="row"><img src="brand-svg/cau-name-green.svg" width="120"><span class="label">120px 宽</span></div>
+  <div class="row"><img src="brand-svg/cau-name-green.svg" width="240"><span class="label">240px 宽（推荐）</span></div>
+  <div class="row"><img src="brand-svg/cau-name-green.svg" width="480"><span class="label">480px 宽</span></div>
+</div>
+
+<h2>④ 暗色面板里的题字（官方绿在深色底上的表现）</h2>
+<div class="board dark">
+  <div class="row"><img src="brand-svg/cau-name-green.svg" width="240"><span class="label">240px 宽 · 暗色背景</span></div>
+</div>
+
+<h2>⑤ 题字 currentColor（水印/单色场景）</h2>
+<div class="board light">
+  <div class="row"><img src="brand-svg/cau-name.svg" width="240" style="opacity:.15"><span class="label">240px · 15% 透明度水印</span></div>
+</div>
+<div class="board dark">
+  <div class="row"><img class="current" src="brand-svg/cau-name.svg" width="240" style="opacity:.15"><span class="label">240px · 15% · 暗色</span></div>
+</div>
+
+<h2>⑥ 官方标准绿 #008038</h2>
+<div class="board light">
+  <div class="swatch"></div>
+  <span>#008038 · 用于品牌色点缀（重要度徽章、主题标签激活态等）</span>
+</div>
+</body>
+</html>

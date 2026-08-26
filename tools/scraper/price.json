@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "updated": "2026-08-23",
+  "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "unit": "元/百万 tokens",
+  "peak_hours": [[9, 12], [14, 18]],
+  "weekend_offpeak": true,
+  "models": {
+    "deepseek-v4-flash": {
+      "input_cached": { "off": 0.05, "peak": 0.10 },
+      "input_uncached": { "off": 1.5, "peak": 3.0 },
+      "output": { "off": 4.5, "peak": 9.0 }
+    },
+    "deepseek-v4-pro": {
+      "input_cached": { "off": 0.15, "peak": 0.30 },
+      "input_uncached": { "off": 4.5, "peak": 9.0 },
+      "output": { "off": 13.5, "peak": 27.0 }
+    },
+    "deepseek-v4-flash-vision-exp": {
+      "input_cached": { "off": 0.05, "peak": 0.10 },
+      "input_uncached": { "off": 1.5, "peak": 3.0 },
+      "output": { "off": 4.5, "peak": 9.0 }
+    }
+  }
+}

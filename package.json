@@ -1,0 +1,11 @@
+{
+  "name": "cau-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "农大门户 —— DeepSeek Harness 客户端插件：中国农业大学通知公告聚合、AI 摘要与对话查询",
+  "type": "module",
+  "scripts": {
+    "crawl": "node tools/scraper/crawl.mjs",
+    "enrich": "node tools/scraper/enrich.mjs"
+  }
+}
