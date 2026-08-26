@@ -14,3 +14,6 @@ tools/mcp/smoke-input.jsonl
 explore/gh-push/
 push-log.txt
 push-to-github.bat
+fix-log.txt
+cau-fix-push.bat
+.push-clone/
