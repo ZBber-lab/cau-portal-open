@@ -43,6 +43,14 @@ function CauButton(props: any) {
     }
   }, [])
 
+  // 抽屉开合 → body 类（驱动聊天栏让位重构）
+  useEffect(() => {
+    document.body.classList.toggle('dsh-cau-drawer-open', open)
+    return () => {
+      document.body.classList.remove('dsh-cau-drawer-open')
+    }
+  }, [open])
+
   return (
     <>
       <div
@@ -63,7 +71,12 @@ function CauButton(props: any) {
         {wide && count > 0 && <span className="dsh-cau_count">{count}</span>}
       </div>
       {open && (
-        <CauPanel anchor={rowRef.current} emblem={emblemSvg} onClose={() => setOpen(false)} onUnreadChange={setCount} />
+        <CauPanel
+          outsideIgnore={rowRef.current}
+          emblem={emblemSvg}
+          onClose={() => setOpen(false)}
+          onUnreadChange={setCount}
+        />
       )}
     </>
   )
