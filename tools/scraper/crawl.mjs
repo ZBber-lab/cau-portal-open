@@ -57,6 +57,17 @@ function mergeFeedItems(crawled, prev, runTs) {
   return { items: merged, newCount };
 }
 
+/** URL 归一化为 /path 形式（feed 存相对路径、文章存绝对 URL，需互查） */
+const pathForm = (u) => {
+  let s = String(u ?? '');
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s)) {
+    try { s = new URL(s).pathname; } catch { /* 保持原样 */ }
+  }
+  if (!s.startsWith('/')) s = '/' + s;
+  return s;
+};
+
 /** 全库聚合索引 data/index.json（面板/MCP 的入口） */
 export function writeIndex(dataDir) {
   const feedsDir = `${dataDir}/feed`;
@@ -114,6 +125,108 @@ export function writeIndex(dataDir) {
   };
   mkdirSync(dataDir, { recursive: true });
   writeFileSync(`${dataDir}/index.json`, JSON.stringify(index, null, 2));
+}
+
+/**
+ * 面板聚合摘要 data/summary.json（面板 L0/搜索的入口，一次读一个小文件）：
+ *   - deadlines：全部未过期截止事项（按日期升序）
+ *   - important：AI 标记重要（高/中）且近 7 天的新条目（按发布时间降序；时间无法解析的重要条目保留）
+ *   - ai_map：article_id → AI 元数据映射（供列表行/搜索显示摘要徽章，免逐篇读文章文件）
+ */
+export function writeSummary(dataDir) {
+  const feedsDir = `${dataDir}/feed`;
+  const artsDir = `${dataDir}/articles`;
+  // feed 条目 URL（相对路径归一）→ 站点/栏目上下文；另建 basename 索引兜底
+  // （校新闻网列表存裸 hash 文件名，文章存 /<栏目>/<hash>.htm 完整路径）
+  const urlCtx = new Map();
+  const baseCtx = new Map();
+  if (existsSync(feedsDir)) {
+    for (const f of readdirSync(feedsDir)) {
+      if (!f.endsWith('.json')) continue;
+      let j;
+      try { j = JSON.parse(readFileSync(`${feedsDir}/${f}`, 'utf8')); } catch { continue; }
+      for (const it of j.items ?? []) {
+        if (!it.url) continue;
+        const k = pathForm(it.url);
+        const ctx = {
+          site: j.site ?? '',
+          site_name: j.site_name ?? j.site ?? '',
+          column_key: j.column_key ?? '',
+          column_name: j.column_name ?? '',
+        };
+        if (!urlCtx.has(k)) urlCtx.set(k, ctx);
+        const b = k.split('/').pop();
+        if (b && !baseCtx.has(b)) baseCtx.set(b, ctx);
+      }
+    }
+  }
+  const deadlines = [];
+  const important = [];
+  const aiMap = {};
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const today = dayStart.getTime();
+  const WEEK = 7 * 86400000;
+  if (existsSync(artsDir)) {
+    for (const f of readdirSync(artsDir)) {
+      if (!f.endsWith('.json')) continue;
+      const id = f.slice(0, -5);
+      let a;
+      try { a = JSON.parse(readFileSync(`${artsDir}/${f}`, 'utf8')); } catch { continue; }
+      if (!a.ai) continue;
+      const { summary, category, importance, deadline } = a.ai;
+      aiMap[id] = {
+        summary: summary ?? '',
+        category: category ?? '其他',
+        importance: importance ?? '低',
+        deadline: deadline ?? null,
+        deadline_note: a.ai.deadline_note ?? null,
+      };
+      const aPath = pathForm(a.url);
+      const ctx = urlCtx.get(aPath) ?? baseCtx.get(aPath.split('/').pop() ?? '') ?? {};
+      if (deadline?.date && Date.parse(deadline.date) >= today) {
+        deadlines.push({
+          item: deadline.item ?? '',
+          date: deadline.date,
+          evidence: deadline.evidence ?? '',
+          title: a.title ?? '',
+          article_id: id,
+          url: a.url ?? '',
+          time: a.time ?? null,
+          source: a.source ?? ctx.site_name ?? '',
+          column: ctx.column_name ?? '',
+        });
+      }
+      const t = Date.parse(String(a.time ?? ''));
+      const isImportant = importance === '高' || importance === '中';
+      const recent = Number.isFinite(t) ? today - t <= WEEK : true;
+      if (isImportant && recent) {
+        important.push({
+          title: a.title ?? '',
+          article_id: id,
+          url: a.url ?? '',
+          time: a.time ?? null,
+          source: a.source ?? ctx.site_name ?? '',
+          column: ctx.column_name ?? '',
+          summary: summary ?? '',
+          category: category ?? '其他',
+          importance,
+          deadline: deadline ?? null,
+        });
+      }
+    }
+  }
+  deadlines.sort((x, y) => x.date.localeCompare(y.date));
+  important.sort((x, y) => String(y.time ?? '').localeCompare(String(x.time ?? '')));
+  const summary = {
+    version: 1,
+    last_updated: now(),
+    deadlines,
+    important,
+    ai_map: aiMap,
+  };
+  mkdirSync(dataDir, { recursive: true });
+  writeFileSync(`${dataDir}/summary.json`, JSON.stringify(summary, null, 2));
 }
 
 /** 校新闻网栏目爬取（自研 CMS：index.htm/indexN.htm 翻页 + hash 链接文章） */
@@ -312,7 +425,8 @@ async function main() {
     }
   }
   writeIndex(opts.dataDir);
-  console.log(`[out  ] ${opts.dataDir}（index.json 已刷新）`);
+  writeSummary(opts.dataDir);
+  console.log(`[out  ] ${opts.dataDir}（index.json + summary.json 已刷新）`);
 }
 
 // 直接运行时才执行 main（被 enrich.mjs 等导入时不执行）

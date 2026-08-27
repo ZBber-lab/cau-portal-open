@@ -75,3 +75,42 @@ export async function readCloudJson<T = any>(rel: string, token?: string): Promi
     return null
   }
 }
+
+// ---- 已读状态（localStorage；键 dsh.cau-portal.read.v1，存文章 id 数组）----
+
+const READ_KEY = 'dsh.cau-portal.read.v1'
+
+export function loadReadSet(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(READ_KEY) || '[]')
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function saveReadSet(ids: string[]) {
+  try {
+    localStorage.setItem(READ_KEY, JSON.stringify(ids))
+  } catch {
+    /* 隐私模式等写入失败时静默 */
+  }
+}
+
+/** 标记单条已读；返回最新已读集合 */
+export function markRead(id: string): string[] {
+  const cur = loadReadSet()
+  if (!id || cur.includes(id)) return cur
+  const next = [...cur, id]
+  saveReadSet(next)
+  return next
+}
+
+/** 批量标记已读；返回最新已读集合 */
+export function markAllRead(ids: string[]): string[] {
+  const cur = loadReadSet()
+  const next = [...cur]
+  for (const id of ids) if (id && !next.includes(id)) next.push(id)
+  saveReadSet(next)
+  return next
+}

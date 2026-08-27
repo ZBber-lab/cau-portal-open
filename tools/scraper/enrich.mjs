@@ -5,7 +5,7 @@ import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolveApiKey, enrichArticle, costOf, logUsage } from './ai.mjs';
 import { sleep } from './fetch.mjs';
-import { writeIndex } from './crawl.mjs';
+import { writeIndex, writeSummary } from './crawl.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const arg = (n, d) => {
@@ -72,7 +72,8 @@ async function main() {
   }
   console.log(`[done ] 成功 ${done}/${candidates.length}，本次花费 ≈ ${cost.toFixed(4)} 元`);
   writeIndex(dataDir);
-  console.log(`[out  ] ${dataDir}（index.json 已刷新）`);
+  writeSummary(dataDir);
+  console.log(`[out  ] ${dataDir}（index.json + summary.json 已刷新）`);
 }
 
 main();
