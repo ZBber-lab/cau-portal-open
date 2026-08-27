@@ -5,10 +5,11 @@
  * 形态=右侧全高抽屉、打开时聊天栏让位收缩（body.dsh-cau-drawer-open）；规格 SPEC §7.2 定稿。
  * 未读口径：AI 重要（高/中）+近 7 天；打开即读（计数即时减一）；tertiary 计数无红点。
  */
-import { useEffect, useRef, useState } from 'react'
+import { Component, useEffect, useRef, useState } from 'react'
 import { HomeView } from './panel-home'
 import { ColumnView } from './panel-column'
 import { ArticleView } from './panel-article'
+import { CauSettings } from './settings'
 import {
   loadSettings,
   saveSettings,
@@ -17,6 +18,23 @@ import {
   loadFollow,
   loadDeadlineOps,
 } from './data'
+
+/** 设置页错误边界：出错了显示错误文字（便于定位），不再静默白屏 */
+class CauSettingsBoundary extends Component<any, { err: any }> {
+  state = { err: null }
+  static getDerivedStateFromError(err: any) {
+    return { err }
+  }
+  componentDidCatch(err: any) {
+    console.error('[cau-portal settings]', err)
+  }
+  render() {
+    if (this.state.err) {
+      return <div className="dsh-cau_setErr">设置页加载出错：{String(this.state.err?.message || this.state.err)}</div>
+    }
+    return this.props.children
+  }
+}
 
 type View =
   | { name: 'home' }
@@ -152,6 +170,7 @@ export function CauPanel(props: {
   const [stack, setStack] = useState<View[]>([{ name: 'home' }])
   const [metaTime, setMetaTime] = useState('')
   const [unread, setUnread] = useState(0)
+  const [showSettings, setShowSettings] = useState(false)
 
   // 头部更新时间 + 初始未读
   useEffect(() => {
@@ -207,30 +226,46 @@ export function CauPanel(props: {
     <div ref={rootRef} className="dsh-cau_panel" role="dialog" aria-label="农大门户">
       <div className="dsh-cau_panelHead">
         <span className="dsh-cau_panelEmblem" dangerouslySetInnerHTML={{ __html: emblem }} />
-        <span className="dsh-cau_panelTitle">农大门户</span>
-        {metaTime && <span className="dsh-cau_panelMeta">更新 {metaTime}</span>}
+        <span className="dsh-cau_panelTitle">农大门户{showSettings ? ' · 设置' : ''}</span>
+        {!showSettings && metaTime && <span className="dsh-cau_panelMeta">更新 {metaTime}</span>}
+        <button
+          type="button"
+          className="dsh-cau_panelTab"
+          aria-pressed={showSettings}
+          onClick={() => setShowSettings((v) => !v)}
+        >
+          {showSettings ? '返回首页' : '设置'}
+        </button>
         <button type="button" className="dsh-cau_panelClose" aria-label="关闭" onClick={onClose}>✕</button>
       </div>
       <div className="dsh-cau_panelBody">
-        {view.name === 'home' && (
-          <HomeView
-            onOpenColumn={openColumn}
-            onOpenArticle={(id, sibs, idx) => openArticle(id, undefined, undefined, sibs, idx)}
-            onViewArchive={() => setStack((s) => [...s, { name: 'archive' }])}
-            onViewFollow={() => setStack((s) => [...s, { name: 'follow' }])}
-          />
+        {showSettings ? (
+          <CauSettingsBoundary>
+            <CauSettings />
+          </CauSettingsBoundary>
+        ) : (
+          <>
+            {view.name === 'home' && (
+              <HomeView
+                onOpenColumn={openColumn}
+                onOpenArticle={(id, sibs, idx) => openArticle(id, undefined, undefined, sibs, idx)}
+                onViewArchive={() => setStack((s) => [...s, { name: 'archive' }])}
+                onViewFollow={() => setStack((s) => [...s, { name: 'follow' }])}
+              />
+            )}
+            {view.name === 'site' && (
+              <ColumnView site={view.site} onBack={back} onOpenArticle={(id, sibs, idx) => openArticle(id, undefined, undefined, sibs, idx)} onOpenColumn={openColumn} />
+            )}
+            {view.name === 'column' && (
+              <ColumnView site={view.site} column={view.column} onBack={back} onOpenArticle={(id, sibs, idx) => openArticle(id, undefined, undefined, sibs, idx)} onOpenColumn={openColumn} />
+            )}
+            {view.name === 'article' && (
+              <ArticleView articleId={view.id} siteName={view.siteName} columnName={view.columnName} onBack={back} onOpenArticle={replaceArticle} siblings={view.siblings} index={view.index} />
+            )}
+            {view.name === 'archive' && <ArchiveView onBack={back} onOpenArticle={(id) => openArticle(id)} />}
+            {view.name === 'follow' && <FollowView onBack={back} onOpenArticle={(id) => openArticle(id)} />}
+          </>
         )}
-        {view.name === 'site' && (
-          <ColumnView site={view.site} onBack={back} onOpenArticle={(id, sibs, idx) => openArticle(id, undefined, undefined, sibs, idx)} onOpenColumn={openColumn} />
-        )}
-        {view.name === 'column' && (
-          <ColumnView site={view.site} column={view.column} onBack={back} onOpenArticle={(id, sibs, idx) => openArticle(id, undefined, undefined, sibs, idx)} onOpenColumn={openColumn} />
-        )}
-        {view.name === 'article' && (
-          <ArticleView articleId={view.id} siteName={view.siteName} columnName={view.columnName} onBack={back} onOpenArticle={replaceArticle} siblings={view.siblings} index={view.index} />
-        )}
-        {view.name === 'archive' && <ArchiveView onBack={back} onOpenArticle={(id) => openArticle(id)} />}
-        {view.name === 'follow' && <FollowView onBack={back} onOpenArticle={(id) => openArticle(id)} />}
       </div>
       <div className="dsh-cau_panelFoot">数据来自 GitHub 云端 · 每 30 分钟自动更新 · 关注无上限 · 待办可留存/归档</div>
     </div>
@@ -251,6 +286,9 @@ body.dsh-cau-drawer-open .pI_x6G_centerCol,body.dsh-cau-drawer-open div[class$="
 .dsh-cau_panelMeta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#888)}
 .dsh-cau_panelClose{flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;font-size:13px;line-height:1}
 .dsh-cau_panelClose:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05));color:var(--dsw-alias-label-primary,#111)}
+.dsh-cau_panelTab{flex:none;height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.14));border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);font-size:11px;cursor:pointer;white-space:nowrap}
+.dsh-cau_panelTab:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05));color:var(--dsw-alias-label-primary,#111)}
+.dsh-cau_panelTab[aria-pressed="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.06));color:var(--dsw-alias-label-primary,#111);border-color:var(--cau-brand,#008038)}
 .dsh-cau_panelBody{flex:1;min-height:0;overflow-y:auto;padding:4px 12px 12px;scrollbar-width:thin;scrollbar-color:var(--dsw-alias-scrollbar-bg-l2,rgba(0,0,0,.2)) transparent}
 .dsh-cau_panelBody::-webkit-scrollbar{width:8px}
 .dsh-cau_panelBody::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2,rgba(0,0,0,.2));border-radius:4px}

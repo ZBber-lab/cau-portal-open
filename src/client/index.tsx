@@ -8,6 +8,11 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { CauPanel, PANEL_CSS, fetchUnreadCount } from './panel'
+import { SETTINGS_CSS } from './settings'
+import { bindCtx } from './ctx'
+import { CtxBar, CTXBAR_CSS } from './ctxbar'
+import { registerToolViews, TOOLVIEW_CSS } from './toolview'
+import { subscribeBus, getOpenRequest } from './bus'
 
 // 校徽 SVG（currentColor 版）由 build.mjs 以文本内联（占位符替换）
 const emblemSvg = '__CAU_EMBLEM_SVG__'
@@ -20,6 +25,9 @@ const CSS = `
 .dsh-cau_label{flex:1;min-width:0;margin-left:9px;font-size:13px;line-height:18px;color:var(--dsw-alias-label-primary,#e6e8eb);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
 .dsh-cau_count{flex:none;margin-left:6px;padding:0 6px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));font-size:11px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
 ${PANEL_CSS}
+${SETTINGS_CSS}
+${CTXBAR_CSS}
+${TOOLVIEW_CSS}
 `
 
 function CauButton(props: any) {
@@ -82,7 +90,7 @@ function CauButton(props: any) {
   )
 }
 
-export const inject = ['slots']
+export const inject = ['slots', 'sessions', 'modelDirectories']
 
 export function apply(ctx: any) {
   ctx.effect(() => {
@@ -108,4 +116,8 @@ export function apply(ctx: any) {
       ),
     'cau-portal: sidebar button',
   )
+
+  // 设置页做成面板内的「设置」页签（用户定案：不进全局 Settings）。
+  // 这里只绑定 ctx 供面板树/设置页使用；设置页签名见 panel.tsx（settings 视图）。
+  bindCtx(ctx)
 }

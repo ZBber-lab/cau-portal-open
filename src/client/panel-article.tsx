@@ -6,7 +6,16 @@
  * 数据：data/articles/<id>.json（经数据层读取；ai 已内联在文章文件）。
  */
 import { useEffect, useState } from 'react'
-import { readArticle, loadFollow, saveFollow, loadDeadlineOps, setDeadlineOp, isFollowed } from './data'
+import {
+  readArticle,
+  loadFollow,
+  saveFollow,
+  loadDeadlineOps,
+  setDeadlineOp,
+  isFollowed,
+  enrichArticle,
+  loadSettings,
+} from './data'
 
 const idOf = (it: { article_id?: string; url?: string }) => it.article_id || it.url || ''
 
@@ -29,9 +38,14 @@ export function ArticleView(props: {
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
   const [followed, setFollowed] = useState(false)
   const [deadlineOp, setDeadlineOpState] = useState<string | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiOut, setAiOut] = useState<any | null>(null)
+  const [aiErr, setAiErr] = useState('')
 
   const reload = async () => {
     setPhase('loading')
+    setAiOut(null)
+    setAiErr('')
     const a = await readArticle(articleId)
     if (!a) {
       setPhase('error')
@@ -46,6 +60,19 @@ export function ArticleView(props: {
   useEffect(() => {
     void reload()
   }, [articleId])
+
+  const runEnrich = async () => {
+    setAiBusy(true)
+    setAiErr('')
+    const s = loadSettings()
+    const out = await enrichArticle(articleId, {
+      provider: s.monitorModel?.provider,
+      model: s.monitorModel?.model,
+    })
+    setAiBusy(false)
+    if (out?.ok) setAiOut(out.result)
+    else setAiErr(String(out?.error || '加工失败'))
+  }
 
   const toggleFollowNow = () => {
     const cur = loadFollow()
@@ -111,6 +138,37 @@ export function ArticleView(props: {
                 <span>AI 摘要</span>
               </div>
               <div className="dsh-cau_asumText">{art.ai.summary}</div>
+            </div>
+          )}
+
+          {!art.ai?.summary && !aiOut && (
+            <div className="dsh-cau_asummary">
+              <div className="dsh-cau_asumHead">
+                <span className="dsh-cau_secMark" />
+                <span>AI 摘要</span>
+              </div>
+              <div className="dsh-cau_asumText dsh-cau_empty">本文暂无 AI 加工（摘要/分类/重要度/deadline）。</div>
+              <div className="dsh-cau_aactions">
+                <button type="button" className="dsh-cau_aBtn" disabled={aiBusy} onClick={() => void runEnrich()}>
+                  {aiBusy ? '加工中…' : '✨ AI 补摘要'}
+                </button>
+              </div>
+              {aiErr && <div className="dsh-cau_setErr">{aiErr}</div>}
+            </div>
+          )}
+
+          {aiOut && (
+            <div className="dsh-cau_asummary">
+              <div className="dsh-cau_asumHead">
+                <span className="dsh-cau_secMark" />
+                <span>AI 摘要（本次会话内生成）</span>
+              </div>
+              {aiOut.summary && <div className="dsh-cau_asumText">{aiOut.summary}</div>}
+              <div className="dsh-cau_ameta">
+                {aiOut.category && <span>分类：{aiOut.category}</span>}
+                {aiOut.importance && <span>重要度：{aiOut.importance}</span>}
+                {aiOut.deadline_note && <span className="dsh-cau_setErr">{aiOut.deadline_note}</span>}
+              </div>
             </div>
           )}
 
