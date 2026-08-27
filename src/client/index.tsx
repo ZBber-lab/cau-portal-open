@@ -59,6 +59,13 @@ function CauButton(props: any) {
     }
   }, [open])
 
+  // 阶段6：聊天区 toolview 卡片「在面板中打开」→ 展开抽屉（面板挂载后自行跳文章）
+  useEffect(() => {
+    return subscribeBus(() => {
+      if (getOpenRequest()) setOpen(true)
+    })
+  }, [])
+
   return (
     <>
       <div
@@ -93,6 +100,34 @@ function CauButton(props: any) {
 export const inject = ['slots', 'sessions', 'modelDirectories']
 
 export function apply(ctx: any) {
+  // 共享校徽（供上下文条/引用 chip 复用；build 的 emblem token 只在此文件替换）
+  ;(window as any).__CAU_EMBLEM__ = emblemSvg
+
+  // 全局错误浮层：插件/面板出错时在屏幕左下角显示红字（原生 DOM，React 崩了也留着）
+  ctx.effect(() => {
+    const onErr = (e: any) => {
+      const m = String(e?.message || e?.error?.message || e?.reason?.message || e?.reason || e || '')
+      if (!m) return
+      let el = document.getElementById('dsh-cau-errbar')
+      if (!el) {
+        el = document.createElement('div')
+        el.id = 'dsh-cau-errbar'
+        el.setAttribute(
+          'style',
+          'position:fixed;left:8px;bottom:40px;z-index:99999;max-width:72vw;padding:8px 12px;border-radius:8px;background:rgba(160,30,30,.94);color:#fff;font:11px/16px sans-serif;white-space:pre-wrap;box-shadow:0 2px 10px rgba(0,0,0,.3)',
+        )
+        document.body.appendChild(el)
+      }
+      el.textContent = 'cau-portal 错误: ' + m
+    }
+    window.addEventListener('error', onErr)
+    window.addEventListener('unhandledrejection', onErr)
+    return () => {
+      window.removeEventListener('error', onErr)
+      window.removeEventListener('unhandledrejection', onErr)
+    }
+  }, 'cau-portal: error overlay')
+
   ctx.effect(() => {
     const style = document.createElement('style')
     style.setAttribute('data-dsh-plugin', 'cau-portal')
@@ -120,4 +155,14 @@ export function apply(ctx: any) {
   // 设置页做成面板内的「设置」页签（用户定案：不进全局 Settings）。
   // 这里只绑定 ctx 供面板树/设置页使用；设置页签名见 panel.tsx（settings 视图）。
   bindCtx(ctx)
+
+  // 阶段6：阅读上下文附加条（conversation.input.dock，会话级）
+  ctx.slots.inject(
+    'conversation.input.dock',
+    () => ctx.slots.register({ name: 'conversation.input.dock', id: 'cau-context', order: 50 }, CtxBar),
+    'cau-portal: context bar',
+  )
+
+  // 阶段6：工具结果新闻卡片（tool.call.toolview，按 mcp__cau__* 键控）
+  registerToolViews(ctx)
 }

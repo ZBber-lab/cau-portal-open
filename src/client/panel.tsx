@@ -18,6 +18,7 @@ import {
   loadFollow,
   loadDeadlineOps,
 } from './data'
+import { getOpenRequest, clearOpenRequest, subscribeBus } from './bus'
 
 /** 设置页错误边界：出错了显示错误文字（便于定位），不再静默白屏 */
 class CauSettingsBoundary extends Component<any, { err: any }> {
@@ -171,6 +172,7 @@ export function CauPanel(props: {
   const [metaTime, setMetaTime] = useState('')
   const [unread, setUnread] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
+  const view = stack[stack.length - 1]
 
   // 头部更新时间 + 初始未读
   useEffect(() => {
@@ -188,6 +190,37 @@ export function CauPanel(props: {
   useEffect(() => {
     onUnreadChange?.(unread)
   }, [unread, onUnreadChange])
+
+  // 阶段6：聊天区 toolview 卡片「在面板中打开」→ 跳转到文章
+  useEffect(() => {
+    return subscribeBus(() => {
+      try {
+        const req = getOpenRequest()
+        if (req && req.id) {
+          if (!(view?.name === 'article' && view.id === req.id)) openArticle(req.id)
+          clearOpenRequest()
+        }
+      } catch (e) {
+        console.error('[cau-portal] open', e)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view?.name, view?.id])
+
+  // 阶段6：面板挂载时，若有尚未消费的「在面板中打开」请求，先跳到对应文章
+  //（面板关闭时点击卡片 → 展开抽屉发生在发信号之后，订阅回调收不到已过信号，故此处补一次）
+  useEffect(() => {
+    try {
+      const req = getOpenRequest()
+      if (req && req.id) {
+        openArticle(req.id)
+        clearOpenRequest()
+      }
+    } catch (e) {
+      console.error('[cau-portal] open-on-mount', e)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 点击外部（面板与按钮之外）/ Esc 关闭
   useEffect(() => {
@@ -218,7 +251,6 @@ export function CauPanel(props: {
       return [...s, { name: 'article', id, back: top, siblings, index }]
     })
 
-  const view = stack[stack.length - 1]
   const openColumn = (site: string, column: string | null) =>
     setStack((s) => [...s, column ? { name: 'column', site, column } : { name: 'site', site }])
 
@@ -384,6 +416,8 @@ body.dsh-cau-drawer-open .pI_x6G_centerCol,body.dsh-cau-drawer-open div[class$="
 .dsh-cau_aBtn{display:inline-flex;align-items:center;padding:5px 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.16));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#111);font-size:12px;cursor:pointer;text-decoration:none}
 .dsh-cau_aBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}
 .dsh-cau_aBtnOn{border-color:color-mix(in srgb,var(--cau-brand) 45%,transparent);color:var(--cau-brand)}
+.dsh-cau_aBtnPrimary{background:var(--dsw-alias-state-business-primary,#4176e6);border-color:transparent;color:#fff}
+.dsh-cau_aBtnPrimary:hover{background:var(--dsw-alias-state-business-primary,#4176e6);opacity:.92}
 .dsh-cau_anav{display:flex;justify-content:space-between;margin-top:12px}
 .dsh-cau_anavBtn{flex:none;padding:5px 10px;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-state-business-primary,#4176e6);font-size:12px;cursor:pointer}
 .dsh-cau_anavBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}

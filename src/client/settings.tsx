@@ -140,12 +140,6 @@ export function CauSettings(props: any) {
     saveSettings(next)
   }
 
-  const setAutoAttach = (v: boolean) => {
-    const next = { ...settings, autoAttach: v }
-    setSettings(next)
-    saveSettings(next)
-  }
-
   // ---- ④ 用量 ----
   const [usage, setUsage] = useState<Record<string, { calls: number; prompt: number; completion: number; cached: number; cost: number }> | null>(null)
   const [usageErr, setUsageErr] = useState('')
@@ -311,15 +305,12 @@ export function CauSettings(props: any) {
 
       {/* ③ 面板偏好 */}
       <div className="dsh-cau_setBlock">
-        <div className="dsh-cau_setTitle">面板偏好</div>
-        <label className="dsh-cau_setCheck">
-          <input
-            type="checkbox"
-            checked={settings.autoAttach !== false}
-            onChange={(e) => setAutoAttach(e.target.checked)}
-          />
-          打开文章时自动附加阅读上下文（阶段6 上线后生效）
-        </label>
+        <div className="dsh-cau_setTitle">阅读上下文引用</div>
+        <div className="dsh-cau_infoCard">
+          <span className="dsh-cau_setDesc">
+            在文章阅读页点「<b>引用到对话</b>」，会把该文章作为上下文引用到聊天输入框上方（直观 chip），并在提问草稿里注入标记行；发送后引用自动解除，不影响下一次提问。点击引用条的 × 可随时手动移除。
+          </span>
+        </div>
       </div>
 
       {/* ④ 用量 */}

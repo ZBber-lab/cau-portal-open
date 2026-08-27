@@ -16,6 +16,7 @@ import {
   enrichArticle,
   loadSettings,
 } from './data'
+import { addAttached, removeAttached, hasAttached } from './bus'
 
 const idOf = (it: { article_id?: string; url?: string }) => it.article_id || it.url || ''
 
@@ -32,8 +33,9 @@ export function ArticleView(props: {
   onOpenArticle: (id: string, siblings?: { id: string; title: string }[], index?: number) => void
   siblings?: { id: string; title: string }[]
   index?: number
+  onTitle?: (title: string) => void
 }) {
-  const { articleId, siteName, columnName, onBack, onOpenArticle, siblings, index } = props
+  const { articleId, siteName, columnName, onBack, onOpenArticle, siblings, index, onTitle } = props
   const [art, setArt] = useState<any | null>(null)
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
   const [followed, setFollowed] = useState(false)
@@ -55,6 +57,8 @@ export function ArticleView(props: {
     setPhase('ready')
     setFollowed(isFollowed(articleId))
     setDeadlineOpState(loadDeadlineOps()[articleId] || null)
+    setQuoted(hasAttached(articleId))
+    if (a.title) onTitle?.(a.title)
   }
 
   useEffect(() => {
@@ -72,6 +76,19 @@ export function ArticleView(props: {
     setAiBusy(false)
     if (out?.ok) setAiOut(out.result)
     else setAiErr(String(out?.error || '加工失败'))
+  }
+
+  // 引用到对话：追加这篇（可多篇）；点击切换引用/取消
+  const [quoted, setQuoted] = useState(false)
+  const attachToChat = () => {
+    if (!art?.title) return
+    if (hasAttached(articleId)) {
+      removeAttached(articleId)
+      setQuoted(false)
+    } else {
+      addAttached({ id: articleId, title: art.title, source: art.source || siteName || '' })
+      setQuoted(true)
+    }
   }
 
   const toggleFollowNow = () => {
@@ -189,6 +206,13 @@ export function ArticleView(props: {
                 查看原文 ↗
               </a>
             )}
+            <button
+              type="button"
+              className={'dsh-cau_aBtn' + (quoted ? ' dsh-cau_aBtnOn' : ' dsh-cau_aBtnPrimary')}
+              onClick={attachToChat}
+            >
+              {quoted ? '已引用 ✓（点此取消）' : '引用到对话'}
+            </button>
             <button
               type="button"
               className={'dsh-cau_aBtn' + (followed ? ' dsh-cau_aBtnOn' : '')}
