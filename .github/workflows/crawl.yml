@@ -2,7 +2,7 @@ name: crawl
 
 on:
   schedule:
-    - cron: '*/30 0-15 * * *'
+        - cron: '*/30 0-15 * * *'  # Runs every 30 minutes, between 00:00 and 15:59 re-register
   workflow_dispatch: {}
 
 permissions:
