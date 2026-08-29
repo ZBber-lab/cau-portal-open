@@ -5,7 +5,7 @@
  * 加入/取消关注（无上限）+ 待办类文章的 留存/归档。
  * 数据：data/articles/<id>.json（经数据层读取；ai 已内联在文章文件）。
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   readArticleMeta,
   cacheFollowArticle,
@@ -17,6 +17,7 @@ import {
   isPruned,
   enrichArticle,
   loadSettings,
+  loadModules,
 } from './data'
 import { addAttached, removeAttached, hasAttached } from './bus'
 
@@ -38,6 +39,7 @@ export function ArticleView(props: {
   onTitle?: (title: string) => void
 }) {
   const { articleId, siteName, columnName, onBack, onOpenArticle, siblings, index, onTitle } = props
+  const mods = useMemo(() => loadModules(), [])
   const [art, setArt] = useState<any | null>(null)
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
   const [followed, setFollowed] = useState(false)
@@ -159,7 +161,7 @@ export function ArticleView(props: {
             {fromCache && <span className="dsh-cau_acacheTag">本地缓存</span>}
           </div>
 
-          {art.ai?.summary && (
+          {mods.ai && art.ai?.summary && (
             <div className="dsh-cau_asummary">
               <div className="dsh-cau_asumHead">
                 <span className="dsh-cau_secMark" />
@@ -169,7 +171,7 @@ export function ArticleView(props: {
             </div>
           )}
 
-          {!art.ai?.summary && !aiOut && (
+          {mods.ai && !art.ai?.summary && !aiOut && (
             <div className="dsh-cau_asummary">
               <div className="dsh-cau_asumHead">
                 <span className="dsh-cau_secMark" />
@@ -185,7 +187,7 @@ export function ArticleView(props: {
             </div>
           )}
 
-          {aiOut && (
+          {mods.ai && aiOut && (
             <div className="dsh-cau_asummary">
               <div className="dsh-cau_asumHead">
                 <span className="dsh-cau_secMark" />
@@ -217,20 +219,24 @@ export function ArticleView(props: {
                 查看原文 ↗
               </a>
             )}
-            <button
-              type="button"
-              className={'dsh-cau_aBtn' + (quoted ? ' dsh-cau_aBtnOn' : ' dsh-cau_aBtnPrimary')}
-              onClick={attachToChat}
-            >
-              {quoted ? '已引用 ✓（点此取消）' : '引用到对话'}
-            </button>
-            <button
-              type="button"
-              className={'dsh-cau_aBtn' + (followed ? ' dsh-cau_aBtnOn' : '')}
-              onClick={toggleFollowNow}
-            >
-              {followed ? '已关注 ⭐' : '加入关注'}
-            </button>
+            {mods.context && (
+              <button
+                type="button"
+                className={'dsh-cau_aBtn' + (quoted ? ' dsh-cau_aBtnOn' : ' dsh-cau_aBtnPrimary')}
+                onClick={attachToChat}
+              >
+                {quoted ? '已引用 ✓（点此取消）' : '引用到对话'}
+              </button>
+            )}
+            {mods.deadline && (
+              <button
+                type="button"
+                className={'dsh-cau_aBtn' + (followed ? ' dsh-cau_aBtnOn' : '')}
+                onClick={toggleFollowNow}
+              >
+                {followed ? '已关注 ⭐' : '加入关注'}
+              </button>
+            )}
             {hasDeadline && (
               <>
                 <button

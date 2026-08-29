@@ -67,7 +67,8 @@ async function serverProxyText(rel: string, token: string): Promise<string> {
 
 /** 读取 data/ 下相对子路径的文本；未配置令牌时抛错 */
 export async function readCloudText(rel: string, token?: string): Promise<string> {
-  const t = token || loadSettings().githubToken
+  if (!loadModules().cloud) throw new Error('数据源已在设置中禁用')
+  const t = token || activeTokenValues()[0] || loadSettings().githubToken
   if (!t) throw new Error('未配置 GitHub 只读令牌')
   try {
     return await ghFetchText(rel, t)
@@ -157,7 +158,7 @@ export function isPruned(id: string): boolean {
  * 并记入本机已删集合。云端将在下轮抓取（≤2 小时）真正删除。
  */
 export async function queuePruneRequest(newIds: string[], token?: string): Promise<{ ok: boolean; total: number; error?: string }> {
-  const t = token || loadSettings().githubToken
+  const t = token || activeTokenValues()[0] || loadSettings().githubToken
   if (!t) return { ok: false, total: 0, error: '未配置 GitHub 令牌' }
   const clean = (newIds || []).filter((x) => typeof x === 'string' && x)
   if (!clean.length) return { ok: false, total: 0, error: '未选择要删除的数据' }
@@ -175,6 +176,85 @@ export async function queuePruneRequest(newIds: string[], token?: string): Promi
   } catch (e: any) {
     return { ok: false, total: 0, error: String(e?.message || e) }
   }
+}
+
+// ---- 功能模块开关（设置页分组卡片右上角；键 dsh.cau-portal.modules.v1）----
+
+export type ModuleKey = 'ai' | 'context' | 'deadline' | 'cloud' | 'portal'
+
+const MODULES_KEY = 'dsh.cau-portal.modules.v1'
+
+export const DEFAULT_MODULES: Record<ModuleKey, boolean> = {
+  ai: true,
+  context: true,
+  deadline: true,
+  cloud: true,
+  portal: true,
+}
+
+export function loadModules(): Record<ModuleKey, boolean> {
+  try {
+    const v = JSON.parse(localStorage.getItem(MODULES_KEY) || '{}')
+    return { ...DEFAULT_MODULES, ...(v && typeof v === 'object' ? v : {}) }
+  } catch {
+    return { ...DEFAULT_MODULES }
+  }
+}
+
+export function saveModules(m: Record<ModuleKey, boolean>) {
+  try {
+    localStorage.setItem(MODULES_KEY, JSON.stringify(m))
+  } catch {
+    /* 静默 */
+  }
+}
+
+// ---- 令牌登记（设置页令牌管理；键 dsh.cau-portal.tokens.v1，兼容旧 githubToken/keyExpiries）----
+
+export type TokenRecord = {
+  id: string
+  name: string
+  usage: string
+  value: string
+  expires: string
+  adminUrl: string
+  enabled: boolean
+}
+
+const TOKENS_KEY = 'dsh.cau-portal.tokens.v1'
+
+export function loadTokens(): TokenRecord[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(TOKENS_KEY) || 'null')
+    if (Array.isArray(v)) return v.filter((x) => x && typeof x.id === 'string')
+  } catch {
+    /* fallthrough */
+  }
+  // 旧版迁移（展示层读取，不主动重写存储）
+  const s = loadSettings()
+  const legacy: TokenRecord[] = []
+  if (s.githubToken)
+    legacy.push({ id: 'github-read', name: 'GitHub 数据令牌', usage: '读取云端数据（面板/MCP）', value: s.githubToken, expires: s.keyExpiries?.github || '', adminUrl: 'https://github.com/settings/personal-access-tokens', enabled: true })
+  if (s.keyExpiries?.bridge)
+    legacy.push({ id: 'bridge', name: '调度桥令牌', usage: 'cron-job.org 触发 Actions（登记过期日，值不在本机）', value: '', expires: s.keyExpiries.bridge, adminUrl: 'https://github.com/settings/personal-access-tokens', enabled: true })
+  if (s.keyExpiries?.push)
+    legacy.push({ id: 'push', name: '推送令牌（临时）', usage: '本地推送脚本用（登记过期日，值不在本机）', value: '', expires: s.keyExpiries.push, adminUrl: 'https://github.com/settings/personal-access-tokens', enabled: true })
+  return legacy
+}
+
+export function saveTokens(list: TokenRecord[]) {
+  try {
+    localStorage.setItem(TOKENS_KEY, JSON.stringify(list))
+  } catch {
+    /* 静默 */
+  }
+}
+
+/** 启用的、有值的令牌值集合 */
+export function activeTokenValues(): string[] {
+  return loadTokens()
+    .filter((t) => t.enabled && t.value)
+    .map((t) => t.value)
 }
 
 // ---- 已读状态（localStorage；键 dsh.cau-portal.read.v1，存文章 id 数组）----
@@ -435,6 +515,86 @@ export function summarizeUsage(rows: { ts: string; role: string; prompt_tokens?:
     a.cost += typeof r.cost_yuan === 'number' ? r.cost_yuan : 0
   }
   return agg
+}
+
+// ---- 设置页：用量按日聚合 + 全局提醒 ----
+
+export type UsageRow = {
+  ts: string
+  role: string
+  prompt?: number
+  completion?: number
+  cached?: number
+  cost?: number
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadTokens?: number
+}
+
+/** 合并云端 usage.jsonl（角色 enrich）与本机按需日志（on-demand） */
+export async function loadUsageRows(): Promise<UsageRow[]> {
+  const rows: UsageRow[] = []
+  try {
+    const text = await readCloudText('data/usage.jsonl')
+    for (const line of String(text).split('\n')) {
+      if (!line.trim()) continue
+      try {
+        const o = JSON.parse(line)
+        rows.push({ ...o, role: o.role || 'enrich' })
+      } catch {
+        /* 跳过坏行 */
+      }
+    }
+  } catch {
+    /* 云端可能不存在 */
+  }
+  for (const r of loadUsageLog()) rows.push(r)
+  return rows
+}
+
+const localDay = (v: string | number | Date) => new Date(v).toLocaleDateString('en-CA')
+
+/** 近 N 天按日聚合（补齐无数据天；metric: calls|prompt|completion|cost） */
+export function buildDailyUsage(rows: UsageRow[], days: number, metric: 'calls' | 'prompt' | 'completion' | 'cost'): { label: string; value: number }[] {
+  const map: Record<string, { label: string; calls: number; prompt: number; completion: number; cost: number }> = {}
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400e3)
+    map[localDay(d)] = { label: d.toISOString().slice(5, 10), calls: 0, prompt: 0, completion: 0, cost: 0 }
+  }
+  for (const r of rows) {
+    const k = r.ts ? localDay(r.ts) : ''
+    const slot = map[k]
+    if (!slot) continue
+    slot.calls += 1
+    slot.prompt += r.prompt ?? r.inputTokens ?? 0
+    slot.completion += r.completion ?? r.outputTokens ?? 0
+    slot.cost += Number(r.cost ?? r.cost_yuan ?? 0)
+  }
+  return Object.values(map).map((v) => ({ label: v.label, value: v[metric] }))
+}
+
+/** 全局配置提醒：error=基本需求不满足（红条）；warn=注意项（黄条） */
+export function computeAlerts(): { level: 'error' | 'warn'; text: string }[] {
+  const out: { level: 'error' | 'warn'; text: string }[] = []
+  const mods = loadModules()
+  const tokens = loadTokens()
+  const hasActiveValue = tokens.some((t) => t.enabled && t.value)
+  if (!hasActiveValue) out.push({ level: 'error', text: '未配置有效令牌：面板无法读取云端数据（设置 → 令牌管理）' })
+  if (!mods.cloud) out.push({ level: 'error', text: '数据源已禁用：插件将无法读取云端数据' })
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  for (const t of tokens) {
+    if (!t.expires) continue
+    const d = Date.parse(t.expires)
+    if (!Number.isFinite(d)) continue
+    const left = Math.floor((d.getTime() - Date.now()) / 86400e3)
+    if (left < 0) out.push({ level: 'error', text: `令牌「${t.name}」已过期（${t.expires}），请前往续期` })
+    else if (left <= 30) out.push({ level: 'warn', text: `令牌「${t.name}」将于 ${left} 天后过期（${t.expires}）` })
+  }
+  if (!mods.ai) out.push({ level: 'warn', text: 'AI 摘要已禁用：文章页不显示摘要与补摘要' })
+  if (!mods.context) out.push({ level: 'warn', text: '引用协同已禁用：引用按钮与上下文条已隐藏' })
+  if (!mods.deadline) out.push({ level: 'warn', text: '待办与关注已禁用：首页不显示待办卡/关注入口' })
+  return out
 }
 
 /**

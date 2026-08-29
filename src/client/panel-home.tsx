@@ -5,7 +5,7 @@
  * 数据：index.json + summary.json（缓存由调用方/本组件直接读云端，量小）。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadReadSet, markAllRead, loadFollow, saveFollow, loadDeadlineOps, setDeadlineOp, isPruned } from './data'
+import { readCloudJson, loadReadSet, markAllRead, loadFollow, saveFollow, loadDeadlineOps, setDeadlineOp, isPruned, loadModules, computeAlerts } from './data'
 
 type DeadlineItem = { item: string; date: string; title: string; article_id?: string; url?: string; column?: string; source?: string; time?: string | null }
 
@@ -40,6 +40,8 @@ export function HomeView(props: {
   const [follow, setFollow] = useState<any[]>(() => loadFollow())
   const [ops, setOps] = useState<Record<string, any>>(() => loadDeadlineOps())
   const [needToken, setNeedToken] = useState(false)
+  const mods = useMemo(() => loadModules(), [])
+  const errAlerts = useMemo(() => computeAlerts().filter((a) => a.level === 'error'), [mods])
 
   const load = async () => {
     setPhase('loading')
@@ -125,7 +127,15 @@ export function HomeView(props: {
             <div className="dsh-cau_hint">⭐ 待办与要闻聚合暂不可用（云端 summary.json 未就绪），其余功能正常。</div>
           )}
 
+          {errAlerts.map((a, i) => (
+            <div key={i} className="dsh-cau_hint dsh-cau_hintErr">
+              <span className="dsh-cau_alertDot" />
+              {a.text}
+            </div>
+          ))}
+
           {/* 待办截止 */}
+          {mods.deadline && (
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
@@ -163,6 +173,7 @@ export function HomeView(props: {
               ))}
             </div>
           </div>
+          )}
 
           {/* 要闻 */}
           <div className="dsh-cau_sec">
@@ -208,6 +219,7 @@ export function HomeView(props: {
           </div>
 
           {/* 关注栏 */}
+          {mods.deadline && (
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
@@ -234,6 +246,7 @@ export function HomeView(props: {
               ))}
             </div>
           </div>
+          )}
 
           {/* 栏目频道 */}
           <div className="dsh-cau_sec">
