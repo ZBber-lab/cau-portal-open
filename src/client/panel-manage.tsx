@@ -39,6 +39,7 @@ export function ManageView(props: { onBack: () => void }) {
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState<'all' | 'old' | 'new'>('all')
   const [siteFilter, setSiteFilter] = useState('')
+  const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const [done, setDone] = useState('')
@@ -92,8 +93,10 @@ export function ManageView(props: { onBack: () => void }) {
     if (filter === 'old') list = list.filter((r) => r.isOld)
     if (filter === 'new') list = list.filter((r) => !r.isOld)
     if (siteFilter) list = list.filter((r) => r.siteKey === siteFilter)
+    const q = query.trim().toLowerCase()
+    if (q) list = list.filter((r) => (r.title || '').toLowerCase().includes(q) || (r.url || '').toLowerCase().includes(q))
     return list
-  }, [rows, filter, siteFilter])
+  }, [rows, filter, siteFilter, query])
 
   const oldCount = useMemo(() => rows.filter((r) => r.isOld).length, [rows])
   const sites = useMemo(() => {
@@ -159,6 +162,13 @@ export function ManageView(props: { onBack: () => void }) {
       {phase === 'ready' && (
         <>
           <div className="dsh-cau_mgToolbar">
+            <input
+              className="dsh-cau_mgSearch"
+              type="search"
+              placeholder="搜索标题或链接…（与筛选叠加）"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
             <div className="dsh-cau_mgFilters">
               {(['all', 'old', 'new'] as const).map((k) => (
                 <button key={k} type="button" className={'dsh-cau_mgChip' + (filter === k ? ' on' : '')} onClick={() => setFilter(k)}>
