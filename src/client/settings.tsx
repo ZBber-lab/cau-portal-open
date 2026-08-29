@@ -45,6 +45,9 @@ export const SETTINGS_CSS = `
 .dsh-cau_setBanner{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--dsw-alias-state-warn,rgba(255,180,0,.5));border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-state-warn,#ffb400) 10%,transparent);font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary,#9aa4b2)}
 .dsh-cau_setBannerDot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-warn,#ffb400)}
 .dsh-cau_setWarn{font-size:12px;line-height:17px;color:var(--dsw-alias-state-warn,#ffb400)}
+.dsh-cau_links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.dsh-cau_link{display:inline-flex;align-items:center;padding:5px 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.16));border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary,#e6e8eb);font-size:11px;text-decoration:none;cursor:pointer}
+.dsh-cau_link:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
 `
 
 const ROLE_LABEL: Record<string, string> = {
@@ -58,6 +61,34 @@ function fmtNum(n: number): string {
   if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'
   if (n >= 1e4) return (n / 1e4).toFixed(1) + 'w'
   return String(n)
+}
+
+/** 距离过期日的剩余天数；过期/无效返回 null（配合 status 用） */
+function daysUntil(dateStr: string | undefined): number | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return null
+  return Math.ceil((d.getTime() - Date.now()) / 86400e3)
+}
+
+/** 密钥 y 相关网页快捷入口 */
+const KEY_LINKS: { key: string; label: string; url: string }[] = [
+  { key: 'github-read', label: 'GitHub 令牌管理', url: 'https://github.com/settings/personal-access-tokens' },
+  { key: 'repo', label: '数据仓库', url: 'https://github.com/zhouxuanting52-lab/cau-portal' },
+  { key: 'actions', label: '定时抓取 Actions', url: 'https://github.com/zhouxuanting52-lab/cau-portal/actions' },
+  { key: 'cron', label: 'cron-job.org', url: 'https://console.cron-job.org/jobs' },
+  { key: 'edu', label: '学生包申请', url: 'https://education.github.com/discount_requests/application' },
+  { key: 'ds', label: 'DeepSeek 平台', url: 'https://platform.deepseek.com' },
+  { key: 'portal', label: '统一门户', url: 'https://one.cau.edu.cn' },
+]
+
+/** 展示用：某 key 的时限状态（颜色+文案） */
+function keyStatusLabel(expiry: string | undefined): { cls: string; text: string } {
+  const n = daysUntil(expiry)
+  if (n == null) return { cls: 'dsh-cau_setHint', text: '未设置过期日' }
+  if (n < 0) return { cls: 'dsh-cau_setErr', text: `已过期 ${-n} 天` }
+  if (n <= 7) return { cls: 'dsh-cau_setWarn', text: `${n} 天后过期` }
+  return { cls: 'dsh-cau_setOk', text: `${n} 天后过期` }
 }
 
 export function CauSettings(props: any) {
@@ -140,6 +171,18 @@ export function CauSettings(props: any) {
     saveSettings(next)
   }
 
+  const setKeyExpiry = (key: string, date: string) => {
+    const next = { ...settings, keyExpiries: { ...(settings.keyExpiries || {}), [key]: date } }
+    setSettings(next)
+    saveSettings(next)
+  }
+
+  // 到期预警：任意 key 临近(≤7天)/已过期
+  const expiring = Object.keys((settings as any).keyExpiries || {}).filter((k) => {
+    const cls = keyStatusLabel((settings as any).keyExpiries?.[k]).cls
+    return cls === 'dsh-cau_setWarn' || cls === 'dsh-cau_setErr'
+  })
+
   // ---- ④ 用量 ----
   const [usage, setUsage] = useState<Record<string, { calls: number; prompt: number; completion: number; cached: number; cost: number }> | null>(null)
   const [usageErr, setUsageErr] = useState('')
@@ -186,6 +229,12 @@ export function CauSettings(props: any) {
           <span>有 {missing.length} 项未配置：{missing.join('、')}</span>
         </div>
       )}
+      {expiring.length > 0 && (
+        <div className="dsh-cau_setBanner">
+          <span className="dsh-cau_setBannerDot" />
+          <span>⚠ 有 {expiring.length} 个密钥临近到期/已过期：{expiring.join('、')}。可点下方「密钥与重要链接」去续期。</span>
+        </div>
+      )}
 
       {/* ① 令牌 */}
       <div className="dsh-cau_setBlock">
@@ -216,6 +265,19 @@ export function CauSettings(props: any) {
           >
             保存
           </button>
+        </div>
+        <div className="dsh-cau_setRow">
+          <span className="dsh-cau_setLabel">过期日期</span>
+          <input
+            className="dsh-cau_setInput"
+            style={{ maxWidth: 180 }}
+            type="date"
+            value={(settings.keyExpiries as any)?.github || ''}
+            onChange={(e) => setKeyExpiry('github', e.target.value)}
+          />
+          <span className={keyStatusLabel((settings.keyExpiries as any)?.github).cls}>
+            {keyStatusLabel((settings.keyExpiries as any)?.github).text}
+          </span>
         </div>
         {savedFlash && <span className="dsh-cau_setOk">已保存 ✓</span>}
         {!settings.githubToken && (
@@ -367,6 +429,34 @@ export function CauSettings(props: any) {
             文章页对未加工的文章提供「AI 补摘要」：调用插件服务端路由（DSH 已配置的模型），浏览器不存任何 API key、无 CORS 问题；结果仅本次会话内显示，不回写云端。
           </span>
           <span className="dsh-cau_setHint">触发位置：文章阅读页摘要区（无 AI 摘要时出现按钮）。</span>
+        </div>
+      </div>
+
+      {/* 密钥与重要链接 */}
+      <div className="dsh-cau_setBlock">
+        <div className="dsh-cau_setTitle">密钥与重要链接</div>
+        <div className="dsh-cau_setDesc">记录各 key 的过期日以便到期提醒（选填，用于提前续期）；常用页面一键直达。</div>
+        {['push', 'bridge'].map((k) => (
+          <div className="dsh-cau_setRow" key={k}>
+            <span className="dsh-cau_setLabel">{k === 'push' ? '推送令牌(临时)' : '桥令牌(临时)'}</span>
+            <input
+              className="dsh-cau_setInput"
+              style={{ maxWidth: 180 }}
+              type="date"
+              value={(settings.keyExpiries as any)?.[k] || ''}
+              onChange={(e) => setKeyExpiry(k, e.target.value)}
+            />
+            <span className={keyStatusLabel((settings.keyExpiries as any)?.[k]).cls}>
+              {keyStatusLabel((settings.keyExpiries as any)?.[k]).text}
+            </span>
+          </div>
+        ))}
+        <div className="dsh-cau_links">
+          {KEY_LINKS.map((l) => (
+            <a className="dsh-cau_link" key={l.key} href={l.url} target="_blank" rel="noreferrer">
+              {l.label} ↗
+            </a>
+          ))}
         </div>
       </div>
 

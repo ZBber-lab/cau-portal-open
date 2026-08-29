@@ -1,8 +1,8 @@
 /**
  * cau-portal 面板（阶段4 第4步 批②/③：全套浏览）。
- * 右侧全高抽屉 + 导航栈：L0 首页（panel-home）→ L1 栏目页（panel-column，站点/栏目）→
- * L2 文章阅读（panel-article）+ 归档/关注 视图。
- * 形态=右侧全高抽屉、打开时聊天栏让位收缩（body.dsh-cau-drawer-open）；规格 SPEC §7.2 定稿。
+ * 圆角毛玻璃卡片浮层（右缘留边距、垂直居中 540px/74vh）+ 导航栈：
+ * L0 首页（panel-home）→ L1 栏目页（panel-column，站点/栏目）→ L2 文章阅读（panel-article）+ 归档/关注 视图。
+ * 头部有「固定」开关（固定后点外部/Esc 不关闭，仅 ✕ 关）。
  * 未读口径：AI 重要（高/中）+近 7 天；打开即读（计数即时减一）；tertiary 计数无红点。
  */
 import { Component, useEffect, useRef, useState } from 'react'
@@ -101,6 +101,38 @@ function shortTime(iso: string | null | undefined): string {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+/**
+ * 测量「上方栏」（会话头部：标题行 + 对话/轨迹标签）高度，让面板从它下方开始。
+ * 优先实测会话头部组件（.wSkVaW_header，DSH 随版本可能换 hash，故保留结构兜底）；
+ * 失败退回 56px（会话头部常见高度）+ 默认 12px。
+ */
+function measureTopInset(): number {
+  try {
+    const header = document.querySelector('.wSkVaW_header') as HTMLElement | null
+    if (header) {
+      const r = header.getBoundingClientRect()
+      if (r.height > 0 && r.height < 400) return Math.ceil(r.top + r.height) + 8
+    }
+    const frame = document.querySelector('.pI_x6G_frame') as HTMLElement | null
+    if (frame) {
+      const r = frame.getBoundingClientRect()
+      if (r.top > 0) return Math.ceil(r.top) + 8
+    }
+    const col = document.querySelector('.pI_x6G_centerCol') as HTMLElement | null
+    if (col) {
+      const first = col.firstElementChild as HTMLElement | null
+      if (first) {
+        const fr = first.getBoundingClientRect()
+        const colH = col.getBoundingClientRect().height || window.innerHeight
+        if (fr.height > 0 && fr.height < colH * 0.5) return Math.ceil(fr.height) + 8
+      }
+    }
+  } catch {
+    /* noop */
+  }
+  return 56
+}
+
 // ---- 归档视图（已归档待办）----
 function ArchiveView(props: { onBack: () => void; onOpenArticle: (id: string) => void }) {
   const [rows, setRows] = useState<any[]>([])
@@ -163,16 +195,26 @@ function FollowView(props: { onBack: () => void; onOpenArticle: (id: string) => 
 export function CauPanel(props: {
   outsideIgnore?: HTMLElement | null
   emblem: string
+  nameSvg: string
   onClose: () => void
   onUnreadChange?: (n: number) => void
 }) {
-  const { outsideIgnore, emblem, onClose, onUnreadChange } = props
+  const { outsideIgnore, emblem, nameSvg, onClose, onUnreadChange } = props
   const rootRef = useRef<HTMLDivElement>(null)
   const [stack, setStack] = useState<View[]>([{ name: 'home' }])
   const [metaTime, setMetaTime] = useState('')
   const [unread, setUnread] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
+  const [pinned, setPinned] = useState(() => !!loadSettings().panelPinned)
+  const [topInset, setTopInset] = useState(() => measureTopInset())
   const view = stack[stack.length - 1]
+
+  const togglePinned = () =>
+    setPinned((p) => {
+      const next = !p
+      saveSettings({ ...loadSettings(), panelPinned: next })
+      return next
+    })
 
   // 头部更新时间 + 初始未读
   useEffect(() => {
@@ -225,12 +267,14 @@ export function CauPanel(props: {
   // 点击外部（面板与按钮之外）/ Esc 关闭
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
+      if (pinned) return
       const t = e.target as Node
       if (rootRef.current?.contains(t)) return
       if (outsideIgnore?.contains(t)) return
       onClose()
     }
     const onKey = (e: KeyboardEvent) => {
+      if (pinned) return
       if (e.key === 'Escape') onClose()
     }
     document.addEventListener('mousedown', onDoc)
@@ -239,7 +283,7 @@ export function CauPanel(props: {
       document.removeEventListener('mousedown', onDoc)
       document.removeEventListener('keydown', onKey)
     }
-  }, [outsideIgnore, onClose])
+  }, [outsideIgnore, onClose, pinned])
 
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s))
   const openArticle = (id: string, siteName?: string, columnName?: string, siblings?: { id: string; title: string }[], index?: number) =>
@@ -255,11 +299,25 @@ export function CauPanel(props: {
     setStack((s) => [...s, column ? { name: 'column', site, column } : { name: 'site', site }])
 
   return (
-    <div ref={rootRef} className="dsh-cau_panel" role="dialog" aria-label="农大门户">
+    <div ref={rootRef} className="dsh-cau_panel" role="dialog" aria-label="农大门户" style={{ ['--cau-panel-top' as any]: `${topInset}px` }}>
       <div className="dsh-cau_panelHead">
         <span className="dsh-cau_panelEmblem" dangerouslySetInnerHTML={{ __html: emblem }} />
-        <span className="dsh-cau_panelTitle">农大门户{showSettings ? ' · 设置' : ''}</span>
+        <span className="dsh-cau_panelName">
+          <span className="dsh-cau_panelNameImg" dangerouslySetInnerHTML={{ __html: nameSvg }} />
+          {showSettings && <span className="dsh-cau_panelTitle">设置</span>}
+        </span>
         {!showSettings && metaTime && <span className="dsh-cau_panelMeta">更新 {metaTime}</span>}
+        <button
+          type="button"
+          className="dsh-cau_panelPin"
+          data-pinned={pinned}
+          aria-pressed={pinned}
+          aria-label={pinned ? '取消固定面板' : '固定面板'}
+          title={pinned ? '取消固定（点击外部/Esc 会关闭）' : '固定面板（点击外部/Esc 不关闭）'}
+          onClick={togglePinned}
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></svg>
+        </button>
         <button
           type="button"
           className="dsh-cau_panelTab"
@@ -305,19 +363,26 @@ export function CauPanel(props: {
 }
 
 export const PANEL_CSS = `
-.dsh-cau_panel{position:fixed;top:0;right:0;bottom:0;z-index:30;display:flex;flex-direction:column;width:var(--cau-drawer-w,480px);max-width:calc(100vw - 64px);background:var(--dsw-specific-menu,#fff);border-left:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.08));border-radius:12px 0 0 12px;box-shadow:var(--dsw-shadow-lv3,0 8px 28px rgba(0,0,0,.16));overflow:hidden;animation:dsh-cau-slide .2s ease-out;--cau-brand:#008038}
+.dsh-cau_panel{position:fixed;top:var(--cau-panel-top,12px);right:12px;bottom:12px;z-index:30;display:flex;flex-direction:column;width:var(--cau-panel-w,540px);max-width:calc(100vw - 48px);background:color-mix(in srgb,var(--dsw-specific-menu,#fff) 90%,transparent);backdrop-filter:blur(18px) saturate(1.15);-webkit-backdrop-filter:blur(18px) saturate(1.15);border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.1));border-radius:16px;box-shadow:var(--dsw-shadow-lv3,0 8px 28px rgba(0,0,0,.18));overflow:hidden;animation:dsh-cau-fadein .16s ease-out;--cau-brand:#008038}
 body[data-ds-dark-theme] .dsh-cau_panel{--cau-brand:#00b856}
-body.dsh-cau-drawer-open{--cau-drawer-w:max(0px,min(480px,calc(100vw - 640px)))}
-body.dsh-cau-drawer-open .pI_x6G_centerCol,body.dsh-cau-drawer-open div[class$="_centerCol"]{margin-right:var(--cau-drawer-w);transition:margin-right var(--ds-transition-duration-slow,.2s) var(--ds-ease-in-out,ease-out)}
-@keyframes dsh-cau-slide{from{transform:translateX(100%);opacity:.4}to{transform:translateX(0);opacity:1}}
+body.dsh-cau-drawer-open{--cau-panel-w:max(0px,min(540px,calc(100vw - 640px)))}
+body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-panel-w) + 24px);transition:margin-right var(--ds-transition-duration-slow,.2s) var(--ds-ease-in-out,ease-out)}
+@keyframes dsh-cau-fadein{from{opacity:0}to{opacity:1}}
 @keyframes dsh-cau-spin{to{transform:rotate(360deg)}}
 .dsh-cau_panelHead{flex:none;display:flex;align-items:center;height:44px;padding:0 12px;gap:8px;border-bottom:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.06))}
 .dsh-cau_panelEmblem{flex:none;display:flex;color:var(--cau-brand)}
 .dsh-cau_panelEmblem svg{display:block;height:18px;width:auto}
-.dsh-cau_panelTitle{flex:1;min-width:0;font-size:14px;font-weight:500;color:var(--dsw-alias-label-primary,#111);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-cau_panelName{flex:1;min-width:0;display:flex;align-items:center;gap:6px;overflow:hidden}
+.dsh-cau_panelNameImg{flex:none;display:flex;align-items:center}
+.dsh-cau_panelNameImg svg{display:block;width:auto;height:22px}
+.dsh-cau_panelTitle{flex:none;font-size:13px;font-weight:500;color:var(--dsw-alias-label-secondary,#555);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-cau_panelMeta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#888)}
 .dsh-cau_panelClose{flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);cursor:pointer;font-size:13px;line-height:1}
 .dsh-cau_panelClose:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05));color:var(--dsw-alias-label-primary,#111)}
+.dsh-cau_panelPin{flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#888);cursor:pointer}
+.dsh-cau_panelPin:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05));color:var(--dsw-alias-label-primary,#111)}
+.dsh-cau_panelPin svg{display:block;height:15px;width:auto}
+.dsh-cau_panelPin[data-pinned='true']{color:var(--cau-brand)}
 .dsh-cau_panelTab{flex:none;height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.14));border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);font-size:11px;cursor:pointer;white-space:nowrap}
 .dsh-cau_panelTab:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05));color:var(--dsw-alias-label-primary,#111)}
 .dsh-cau_panelTab[aria-pressed="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.06));color:var(--dsw-alias-label-primary,#111);border-color:var(--cau-brand,#008038)}
@@ -368,7 +433,7 @@ body.dsh-cau-drawer-open .pI_x6G_centerCol,body.dsh-cau-drawer-open div[class$="
 .dsh-cau_impTitle{flex:1;min-width:0;font-size:13px;line-height:18px;color:var(--dsw-alias-label-primary,#111);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-cau_impSummary{font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary,#555);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .dsh-cau_impMeta{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
-.dsh-cau_followBtn{flex:none;align-self:flex-start;height:24px;min-width:24px;padding:0 4px;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#999);font-size:15px;line-height:24px;cursor:pointer}
+.dsh-cau_followBtn{flex:none;align-self:flex-start;height:24px;min-width:24px;margin-right:10px;padding:0 4px;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#999);font-size:15px;line-height:24px;cursor:pointer}
 .dsh-cau_followBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}
 .dsh-cau_followBtn.dsh-cau_on{color:var(--cau-brand)}
 .dsh-cau_badge{flex:none;font-size:10px;line-height:16px;padding:0 5px;border-radius:4px;font-weight:500}

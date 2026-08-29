@@ -11,6 +11,10 @@ export type SettingsV1 = {
   monitorModel?: { provider: string; model: string } | null
   /** 打开文章自动附加阅读上下文（阶段6 消费，默认开） */
   autoAttach?: boolean
+  /** 各 key/令牌的过期日（YYYY-MM-DD），用于时限提醒；键约定如 github/bridge/push */
+  keyExpiries?: Record<string, string>
+  /** 面板「固定」开关（固定后点外部/Esc 不关闭，仅 ✕ 关） */
+  panelPinned?: boolean
 }
 
 const SETTINGS_KEY = 'dsh.cau-portal.settings.v1'

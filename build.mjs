@@ -18,6 +18,10 @@ mkdirSync(join(here, 'lib'), { recursive: true })
 
 const EMBLEM_TOKEN = "'__CAU_EMBLEM_SVG__'"
 const emblem = readFileSync(join(here, 'assets/brand-svg/cau-emblem.svg'), 'utf8')
+const NAME_TOKEN = "'__CAU_NAME_SVG__'"
+const nameSvg = readFileSync(join(here, 'assets/brand-svg/cau-name-green.svg'), 'utf8')
+const NAME_CURRENT_TOKEN = "'__CAU_NAME_CURRENT_SVG__'"
+const nameSvgCurrent = readFileSync(join(here, 'assets/brand-svg/cau-name.svg'), 'utf8')
 
 function transpileTs(srcText) {
   return ts.transpileModule(srcText, {
@@ -58,6 +62,14 @@ if (!clientSrc.includes(EMBLEM_TOKEN)) {
   throw new Error('client source is missing the emblem placeholder token')
 }
 clientSrc = clientSrc.replace(EMBLEM_TOKEN, JSON.stringify(emblem))
+if (!clientSrc.includes(NAME_TOKEN)) {
+  throw new Error('client source is missing the name placeholder token')
+}
+clientSrc = clientSrc.replace(NAME_TOKEN, JSON.stringify(nameSvg))
+if (!clientSrc.includes(NAME_CURRENT_TOKEN)) {
+  throw new Error('client source is missing the name-current placeholder token')
+}
+clientSrc = clientSrc.replace(NAME_CURRENT_TOKEN, JSON.stringify(nameSvgCurrent))
 const clientOut = inlineLocalRequires(transpileTs(clientSrc), join(here, 'src/client'))
 const clientBanner =
   "window.__ModuleLoader__.load({ id: 'cau-portal', factory: (require) => { var module = { exports: {} }; var exports = module.exports;"

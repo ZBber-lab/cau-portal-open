@@ -14,16 +14,22 @@ import { CtxBar, CTXBAR_CSS } from './ctxbar'
 import { registerToolViews, TOOLVIEW_CSS } from './toolview'
 import { subscribeBus, getOpenRequest } from './bus'
 
-// 校徽 SVG（currentColor 版）由 build.mjs 以文本内联（占位符替换）
+// 校徽 SVG（currentColor 版）、校名题字 SVG（官方绿版）与题字 currentColor 版由 build.mjs 以文本内联（占位符替换）
 const emblemSvg = '__CAU_EMBLEM_SVG__'
+const nameSvg = '__CAU_NAME_SVG__'
+const nameSvgCurrent = '__CAU_NAME_CURRENT_SVG__'
 
 const CSS = `
-.dsh-cau_btnRow{display:flex;align-items:center;justify-content:center;box-sizing:border-box;height:42px;padding:0 8px;min-width:0}
-.dsh-cau_btn{position:relative;flex:none;display:flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-secondary,#9aa4b2);cursor:pointer}
-.dsh-cau_btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,#e6e8eb)}
-.dsh-cau_btn svg{display:block;width:auto;height:22px}
-.dsh-cau_label{flex:1;min-width:0;margin-left:9px;font-size:13px;line-height:18px;color:var(--dsw-alias-label-primary,#e6e8eb);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
-.dsh-cau_count{flex:none;margin-left:6px;padding:0 6px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));font-size:11px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
+.dsh-cau_pillRow{display:flex;align-items:center;box-sizing:border-box;height:42px;padding:0 6px;min-width:0}
+.dsh-cau_pill{--cau-brand:#008038;flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:7px;height:34px;padding:0 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.09));border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.045));color:var(--dsw-alias-label-primary,#e6e8eb);cursor:pointer;transition:background .15s ease,border-color .15s ease;text-align:left}
+body[data-ds-dark-theme] .dsh-cau_pill{--cau-brand:#00b856}
+.dsh-cau_pill:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.09));border-color:var(--dsw-alias-border-l3,rgba(255,255,255,.18));color:var(--dsw-alias-label-primary,#e6e8eb)}
+.dsh-cau_pill[aria-expanded='true']{color:var(--cau-brand);border-color:color-mix(in srgb,var(--cau-brand) 55%,transparent);background:color-mix(in srgb,var(--cau-brand) 12%,transparent)}
+.dsh-cau_pill[aria-expanded='true']:hover{color:var(--cau-brand);border-color:color-mix(in srgb,var(--cau-brand) 75%,transparent)}
+.dsh-cau_pill svg{display:block;width:auto;height:18px;flex:none}
+.dsh-cau_pillName{flex:1;min-width:0;display:flex;align-items:center;overflow:hidden;color:var(--dsw-alias-label-primary,#e6e8eb)}
+.dsh-cau_pillName svg{display:block;width:auto;height:16px}
+.dsh-cau_pillCount{flex:none;padding:0 7px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));font-size:11px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
 ${PANEL_CSS}
 ${SETTINGS_CSS}
 ${CTXBAR_CSS}
@@ -51,7 +57,7 @@ function CauButton(props: any) {
     }
   }, [])
 
-  // 抽屉开合 → body 类（驱动聊天栏让位重构）
+  // 面板开合 → body 类（驱动聊天区让位收缩，页面充实饱满、不盖对话）
   useEffect(() => {
     document.body.classList.toggle('dsh-cau-drawer-open', open)
     return () => {
@@ -68,27 +74,25 @@ function CauButton(props: any) {
 
   return (
     <>
-      <div
-        className="dsh-cau_btnRow"
-        ref={rowRef}
-        title={wide ? undefined : count > 0 ? `农大门户 · ${count} 条未读` : '农大门户'}
-      >
+      <div className="dsh-cau_pillRow" ref={rowRef}>
         <button
           type="button"
-          className="dsh-cau_btn"
+          className="dsh-cau_pill"
           aria-label="农大门户"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
+          title={wide ? undefined : count > 0 ? `农大门户 · ${count} 条未读` : '农大门户'}
         >
           <span dangerouslySetInnerHTML={{ __html: emblemSvg }} />
+          {wide && <span className="dsh-cau_pillName" dangerouslySetInnerHTML={{ __html: nameSvgCurrent }} />}
+          {wide && count > 0 && <span className="dsh-cau_pillCount">{count}</span>}
         </button>
-        {wide && <span className="dsh-cau_label">农大门户</span>}
-        {wide && count > 0 && <span className="dsh-cau_count">{count}</span>}
       </div>
       {open && (
         <CauPanel
           outsideIgnore={rowRef.current}
           emblem={emblemSvg}
+          nameSvg={nameSvg}
           onClose={() => setOpen(false)}
           onUnreadChange={setCount}
         />

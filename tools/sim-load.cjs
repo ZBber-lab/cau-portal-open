@@ -2,6 +2,7 @@
 const fs = require('fs')
 let captured = null
 const reactStub = {
+  Component: class Component { constructor(p) { this.props = p; this.state = {} } },
   useEffect: () => {},
   useMemo: (fn) => fn(),
   useRef: () => ({ current: null }),
@@ -30,15 +31,16 @@ const mod = captured.factory(requireStub)
 const ok = (cond, msg) => { if (!cond) throw new Error(msg) }
 ok(Array.isArray(mod.inject) && mod.inject.includes('slots'), 'inject 缺失')
 ok(typeof mod.apply === 'function', 'apply 缺失')
-// apply(ctx) 应该能跑通（effect + slots.inject 注册）
+// apply(ctx) 应该能跑通（effect + slots.inject 注册多处）
 let effectCalls = 0
-let slotRegistered = null
+const registered = []
 const ctx = {
   effect: (fn) => { effectCalls++; return () => {} },
-  slots: { inject: (name, cb) => { slotRegistered = cb() }, register: (meta, comp) => ({ meta, comp }) },
+  slots: { inject: (name, cb) => { registered.push(cb()) }, register: (meta, comp) => ({ meta, comp }) },
 }
 mod.apply(ctx)
-ok(effectCalls === 1, 'ctx.effect 未注入样式')
-ok(slotRegistered && slotRegistered.meta.id === 'cau-portal', 'slot 注册失败')
-console.log('[sim ok] id=cau-portal inject=[' + mod.inject.join(',') + '] apply→effect×' + effectCalls + ' slot=' + slotRegistered.meta.name)
+ok(effectCalls >= 1, 'ctx.effect 未注入')
+const sidebarRow = registered.find((r) => r && r.meta && r.meta.name === 'sidebar.footer.action' && r.meta.id === 'cau-portal')
+ok(!!sidebarRow, 'sidebar.footer.action 槽未注册')
+console.log('[sim ok] id=cau-portal inject=[' + mod.inject.join(',') + '] apply→effect×' + effectCalls + ' slots=' + registered.map((r) => r && r.meta.name + (r.meta.id ? ':' + r.meta.id : '') + (r.meta.key ? ':' + r.meta.key : '')).join(','))
 console.log('[sim ok] bundle 大小 ' + (src.length / 1024).toFixed(1) + ' KB')
