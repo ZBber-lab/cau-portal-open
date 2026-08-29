@@ -276,7 +276,10 @@ export function CauSettings(props: any) {
   const monitor = settings.monitorModel || null
   const selGroup = groups.find((g) => g.id === monitor?.provider) || groups[0] || null
   const selModel = selGroup?.models?.find((m: any) => m.id === monitor?.model) || null
-  const pickModel = (provider: string, model: string) => upd({ ...settings, monitorModel: { provider, model } })
+  const pickModel = (provider: string, model: string) => {
+    upd({ ...settings, monitorModel: { provider, model } })
+    flash()
+  }
 
   // 用量
   const [rows, setRows] = useState<any[] | null>(null)

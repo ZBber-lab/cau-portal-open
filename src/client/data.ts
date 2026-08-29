@@ -68,7 +68,7 @@ async function serverProxyText(rel: string, token: string): Promise<string> {
 /** 读取 data/ 下相对子路径的文本；未配置令牌时抛错 */
 export async function readCloudText(rel: string, token?: string): Promise<string> {
   if (!loadModules().cloud) throw new Error('数据源已在设置中禁用')
-  const t = token || activeTokenValues()[0] || loadSettings().githubToken
+  const t = token || activeTokenValues()[0]
   if (!t) throw new Error('未配置 GitHub 只读令牌')
   try {
     return await ghFetchText(rel, t)
@@ -158,7 +158,7 @@ export function isPruned(id: string): boolean {
  * 并记入本机已删集合。云端将在下轮抓取（≤2 小时）真正删除。
  */
 export async function queuePruneRequest(newIds: string[], token?: string): Promise<{ ok: boolean; total: number; error?: string }> {
-  const t = token || activeTokenValues()[0] || loadSettings().githubToken
+  const t = token || activeTokenValues()[0]
   if (!t) return { ok: false, total: 0, error: '未配置 GitHub 令牌' }
   const clean = (newIds || []).filter((x) => typeof x === 'string' && x)
   if (!clean.length) return { ok: false, total: 0, error: '未选择要删除的数据' }
@@ -584,6 +584,7 @@ export function computeAlerts(): { level: 'error' | 'warn'; text: string }[] {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   for (const t of tokens) {
+    if (!t.enabled) continue // 停用的令牌不参与到期提醒
     if (!t.expires) continue
     const d = Date.parse(t.expires)
     if (!Number.isFinite(d)) continue

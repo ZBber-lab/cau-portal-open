@@ -64,6 +64,15 @@ export function ArticleView(props: {
     setFollowed(isFollowed(articleId))
     setDeadlineOpState(loadDeadlineOps()[articleId] || null)
     setQuoted(hasAttached(articleId))
+    // autoAttach：打开文章时自动附加阅读上下文（设置 → 面板偏好；已手动引用的不重复）
+    try {
+      if (loadSettings().autoAttach && !hasAttached(articleId) && r.article.title) {
+        addAttached({ id: articleId, title: r.article.title, source: r.article.source || siteName || '' })
+        setQuoted(true)
+      }
+    } catch {
+      /* 附加失败不影响阅读 */
+    }
     if (r.article.title) onTitle?.(r.article.title)
   }
 
