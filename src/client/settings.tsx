@@ -35,8 +35,8 @@ export const SETTINGS_CSS = `
 .dsh-cau_alertDot{flex:none;width:8px;height:8px;margin-top:4px;border-radius:50%;background:currentColor}
 /* ---- 分组卡片 ---- */
 .dsh-cau_cards{display:flex;flex-direction:column;gap:10px}
-.dsh-cau_card{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.03));cursor:pointer;transition:border-color .12s ease}
-.dsh-cau_card:hover{border-color:color-mix(in srgb,var(--cau-brand,#008038) 55%,transparent)}
+.dsh-cau_setCard{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.03));cursor:pointer;transition:border-color .12s ease}
+.dsh-cau_setCard:hover{border-color:color-mix(in srgb,var(--cau-brand,#008038) 55%,transparent)}
 .dsh-cau_cardMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .dsh-cau_cardName{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary,#e6e8eb)}
 .dsh-cau_cardIcon{flex:none;font-size:15px;line-height:1}
@@ -79,8 +79,8 @@ export const SETTINGS_CSS = `
 /* ---- 用量图 ---- */
 .dsh-cau_chart{display:block;width:100%;height:150px;color:var(--dsw-alias-label-secondary,#9aa4b2)}
 .dsh-cau_chips{display:flex;flex-wrap:wrap;gap:6px}
-.dsh-cau_chip{height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary,#9aa4b2);font-size:11px;cursor:pointer}
-.dsh-cau_chip.on{background:color-mix(in srgb,var(--cau-brand,#008038) 14%,transparent);border-color:var(--cau-brand,#008038);color:var(--cau-brand,#00b856)}
+.dsh-cau_setChip{height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary,#9aa4b2);font-size:11px;cursor:pointer}
+.dsh-cau_setChip.on{background:color-mix(in srgb,var(--cau-brand,#008038) 14%,transparent);border-color:var(--cau-brand,#008038);color:var(--cau-brand,#00b856)}
 .dsh-cau_usageTable{width:100%;border-collapse:collapse;font-size:12px;color:var(--dsw-alias-label-secondary,#9aa4b2)}
 .dsh-cau_usageTable th,.dsh-cau_usageTable td{padding:6px 8px;border-bottom:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.08));text-align:right;white-space:nowrap}
 .dsh-cau_usageTable th:first-child,.dsh-cau_usageTable td:first-child{text-align:left}
@@ -419,7 +419,7 @@ export function CauSettings(props: any) {
         <div className="dsh-cau_setDesc">分项管理各功能与凭据；每项可独立启用/禁用，关键项缺失会在此提醒。</div>
         <div className="dsh-cau_cards">
           {cards.map((c) => (
-            <div key={c.name} className="dsh-cau_card" role="button" tabIndex={0} onClick={() => setPage(c.page)} onKeyDown={(e) => e.key === 'Enter' && setPage(c.page)}>
+            <div key={c.name} className="dsh-cau_setCard" role="button" tabIndex={0} onClick={() => setPage(c.page)} onKeyDown={(e) => e.key === 'Enter' && setPage(c.page)}>
               <div className="dsh-cau_cardMain">
                 <span className="dsh-cau_cardName">
                   <span className="dsh-cau_cardIcon">{c.icon}</span>
@@ -502,14 +502,14 @@ export function CauSettings(props: any) {
             <div className="dsh-cau_setDesc">默认近 30 天；时间跨度与指标可切换（云端管道 + 本机按需合计）。</div>
             <div className="dsh-cau_chips">
               {[7, 30, 90].map((d) => (
-                <button key={d} type="button" className={'dsh-cau_chip' + (days === d ? ' on' : '')} onClick={() => setDays(d)}>
+                <button key={d} type="button" className={'dsh-cau_setChip' + (days === d ? ' on' : '')} onClick={() => setDays(d)}>
                   {d} 天
                 </button>
               ))}
             </div>
             <div className="dsh-cau_chips">
               {(['calls', 'prompt', 'completion', 'cost'] as const).map((m) => (
-                <button key={m} type="button" className={'dsh-cau_chip' + (metric === m ? ' on' : '')} onClick={() => setMetric(m)}>
+                <button key={m} type="button" className={'dsh-cau_setChip' + (metric === m ? ' on' : '')} onClick={() => setMetric(m)}>
                   {METRIC_UNIT[m]}
                 </button>
               ))}
