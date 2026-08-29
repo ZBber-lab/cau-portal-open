@@ -587,7 +587,7 @@ export function computeAlerts(): { level: 'error' | 'warn'; text: string }[] {
     if (!t.expires) continue
     const d = Date.parse(t.expires)
     if (!Number.isFinite(d)) continue
-    const left = Math.floor((d.getTime() - Date.now()) / 86400e3)
+    const left = Math.floor((d - Date.now()) / 86400e3)
     if (left < 0) out.push({ level: 'error', text: `令牌「${t.name}」已过期（${t.expires}），请前往续期` })
     else if (left <= 30) out.push({ level: 'warn', text: `令牌「${t.name}」将于 ${left} 天后过期（${t.expires}）` })
   }
