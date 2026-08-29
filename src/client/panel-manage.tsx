@@ -32,6 +32,31 @@ function daysAgo(s: string | null | undefined): number | null {
   return Math.max(0, Math.floor((Date.now() - t) / 86400000))
 }
 
+/** 关键词高亮：命中片段包 <mark>；q 空时原样返回 */
+function highlight(text: string, q: string): React.ReactNode {
+  const t = String(text ?? '')
+  const ql = q.trim().toLowerCase()
+  if (!ql) return t
+  const lower = t.toLowerCase()
+  const parts: React.ReactNode[] = []
+  let i = 0
+  let idx = lower.indexOf(ql, i)
+  let k = 0
+  while (idx >= 0 && k < 30) {
+    if (idx > i) parts.push(t.slice(i, idx))
+    parts.push(
+      <span key={k} className="dsh-cau_mgHl">
+        {t.slice(idx, idx + ql.length)}
+      </span>,
+    )
+    k++
+    i = idx + ql.length
+    idx = lower.indexOf(ql, i)
+  }
+  if (i < t.length) parts.push(t.slice(i))
+  return parts.length ? parts : t
+}
+
 export function ManageView(props: { onBack: () => void }) {
   const { onBack } = props
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -238,13 +263,14 @@ export function ManageView(props: { onBack: () => void }) {
                       <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggle(r.id)} />
                       <span className="dsh-cau_mgRowMain">
                         <span className="dsh-cau_mgRowTitle">
-                          {r.title}
+                          {highlight(r.title, query)}
                           {r.followed && <span className="dsh-cau_mgStar" title="关注中">★</span>}
                         </span>
                         <span className="dsh-cau_mgRowSub">
                           {r.colName}
                           {r.date ? ` · ${r.date}` : ''}
                           {r.isOld && <span className="dsh-cau_mgOld">超过 2 个月</span>}
+                          {r.url && <span className="dsh-cau_mgRowUrl">{highlight(r.url, query)}</span>}
                         </span>
                       </span>
                     </label>

@@ -531,4 +531,6 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_mgStar{color:var(--dsw-alias-state-warn,#c77d00);margin-left:4px}
 .dsh-cau_mgRowSub{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
 .dsh-cau_mgOld{padding:0 5px;border-radius:4px;background:color-mix(in srgb,var(--dsw-alias-state-warn,#f59e0b) 14%,transparent);color:var(--dsw-alias-state-warn,#c77d00)}
+.dsh-cau_mgHl{color:var(--cau-brand);font-weight:600;background:color-mix(in srgb,var(--cau-brand) 12%,transparent);border-radius:3px;padding:0 1px}
+.dsh-cau_mgRowUrl{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 `
