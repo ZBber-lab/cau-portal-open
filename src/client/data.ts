@@ -84,6 +84,99 @@ export async function readCloudJson<T = any>(rel: string, token?: string): Promi
   }
 }
 
+// ---- 数据管理：删除请求队列（面板勾选 → 云端 data/prune-request.json，下轮抓取执行）----
+// 客户端只读令牌本身含 Contents 读写，写清单文件与读同权限边界；删除动作由 Actions 在下轮
+// crawl 中执行（router 逻辑见 tools/scraper/prune.mjs），无并发冲突。
+
+export type PruneRequest = { version: number; requested_at: string | null; ids: string[] }
+
+const PRUNE_REQUEST_REL = 'data/prune-request.json'
+const PRUNED_KEY = 'dsh.cau-portal.pruned.v1'
+
+/** 读取 GitHub 文件元信息（sha + 解码文本）；文件不存在返回空 */
+async function ghFetchShaAndText(rel: string, token: string): Promise<{ sha: string; text: string }> {
+  const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'cau-portal-panel' },
+  })
+  if (res.status === 404) return { sha: '', text: '' }
+  if (!res.ok) throw new Error(`GitHub ${res.status}`)
+  const j = await res.json()
+  let text = ''
+  try {
+    text = decodeURIComponent(escape(atob(String(j.content || ''))))
+  } catch { /* base64 解码失败：忽略 */ }
+  return { sha: String(j.sha || ''), text }
+}
+
+/** 写 GitHub 文件（Contents API PUT；存在时带 sha 防覆盖） */
+async function ghPutText(rel: string, token: string, content: string, sha: string): Promise<void> {
+  const body: any = {
+    message: 'data: prune request (panel)',
+    content: btoa(unescape(encodeURIComponent(content))),
+    branch: GH_BRANCH,
+  }
+  if (sha) body.sha = sha
+  const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${rel}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'cau-portal-panel',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`GitHub write ${res.status}`)
+}
+
+/** 本机「已删除」集合（删除后立即隐藏；键 dsh.cau-portal.pruned.v1） */
+export function loadPrunedSet(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(PRUNED_KEY) || '[]')
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function savePrunedSet(ids: string[]) {
+  try {
+    localStorage.setItem(PRUNED_KEY, JSON.stringify(ids.slice(-5000)))
+  } catch {
+    /* 静默 */
+  }
+}
+
+/** 该条目是否已被删除（本地软过滤用；id 为文章 base 或 URL） */
+export function isPruned(id: string): boolean {
+  return loadPrunedSet().includes(id)
+}
+
+/**
+ * 提交删除请求：条目 id（文章文件名 xxxx.json 或 URL）写入云端清单（合并去重），
+ * 并记入本机已删集合。云端将在下轮抓取（≤2 小时）真正删除。
+ */
+export async function queuePruneRequest(newIds: string[], token?: string): Promise<{ ok: boolean; total: number; error?: string }> {
+  const t = token || loadSettings().githubToken
+  if (!t) return { ok: false, total: 0, error: '未配置 GitHub 令牌' }
+  const clean = (newIds || []).filter((x) => typeof x === 'string' && x)
+  if (!clean.length) return { ok: false, total: 0, error: '未选择要删除的数据' }
+  try {
+    const meta = await ghFetchShaAndText(PRUNE_REQUEST_REL, t)
+    let prev: string[] = []
+    try {
+      const p = JSON.parse(meta.text)
+      if (Array.isArray(p?.ids)) prev = p.ids.filter((x: any) => typeof x === 'string')
+    } catch { /* 旧/坏清单按空处理 */ }
+    const merged = [...new Set([...prev, ...clean])]
+    await ghPutText(PRUNE_REQUEST_REL, t, JSON.stringify({ version: 1, requested_at: new Date().toISOString(), ids: merged }, null, 2), meta.sha)
+    savePrunedSet([...new Set([...loadPrunedSet(), ...clean])])
+    return { ok: true, total: merged.length }
+  } catch (e: any) {
+    return { ok: false, total: 0, error: String(e?.message || e) }
+  }
+}
+
 // ---- 已读状态（localStorage；键 dsh.cau-portal.read.v1，存文章 id 数组）----
 
 const READ_KEY = 'dsh.cau-portal.read.v1'
@@ -171,6 +264,62 @@ export function isFollowed(id: string): boolean {
   return loadFollow().some((x) => x.id === id)
 }
 
+// ---- 关注文章本地缓存（键 dsh.cau-portal.followcache.v1）----
+// 云端数据只保留近 N 天（tools/scraper/prune.mjs 裁剪）；关注时把整篇快照存本机，
+// 云端裁剪后关注文章仍可完整阅读（文章页显示「本地缓存」徽标），无需云同步。
+
+export type FollowCacheEntry = { cached_at: number; article: any }
+
+const FOLLOW_CACHE_KEY = 'dsh.cau-portal.followcache.v1'
+
+export function loadFollowCacheAll(): Record<string, FollowCacheEntry> {
+  try {
+    const v = JSON.parse(localStorage.getItem(FOLLOW_CACHE_KEY) || '{}')
+    return v && typeof v === 'object' ? v : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveFollowCacheAll(m: Record<string, FollowCacheEntry>) {
+  try {
+    localStorage.setItem(FOLLOW_CACHE_KEY, JSON.stringify(m))
+  } catch {
+    /* 静默（配额不足时丢弃缓存，不影响主体功能） */
+  }
+}
+
+/** 关注时存整篇快照；传 null 则清除（取消关注时调用） */
+export function cacheFollowArticle(id: string, article: any | null) {
+  const m = loadFollowCacheAll()
+  if (article) m[id] = { cached_at: Date.now(), article }
+  else delete m[id]
+  saveFollowCacheAll(m)
+}
+
+/** 读单篇关注缓存（无则 null） */
+export function readFollowCache(id: string): any | null {
+  return loadFollowCacheAll()[id]?.article ?? null
+}
+
+/** 一次性补齐关注缓存：对尚未缓存的关注文章尝试从云端拉取快照（面板挂载时静默调用） */
+export async function backfillFollowCaches(token?: string): Promise<number> {
+  const follow = loadFollow()
+  const cache = loadFollowCacheAll()
+  let got = 0
+  for (const f of follow) {
+    if (!f?.id || (cache[f.id] && cache[f.id].article)) continue
+    const art = await readCloudJson(`data/articles/${f.id}.json`, token)
+    if (art) {
+      cache[f.id] = { cached_at: Date.now(), article: art }
+      got++
+    }
+    // 云端已裁剪的旧关注：跳过（该文章仅在关注时之外无快照，阅读时走「已过保留期」提示）
+  }
+  if (got) saveFollowCacheAll(cache)
+  return got
+}
+
 // ---- 待办留存/归档（localStorage；键 dsh.cau-portal.deadline.v1，article_id → 'pin'|'archive'|null）----
 // 用户手动决定某条待办是「保留(驻留)」还是「归档」；不同人关注不同
 
@@ -206,10 +355,24 @@ export function setDeadlineOp(id: string, op: DeadlineOp): Record<string, Deadli
 
 // ---- 便捷读取：文章 / 栏目 feed（相对 data/）----
 
-/** 读取单篇文章（data/articles/<id>.json）；失败返回 null */
+/** 读取文章（含缓存兜底）：云端无（已过保留期/404）时回退本地关注缓存；失败返回 null */
 export function readArticle(id: string, token?: string): Promise<any | null> {
   if (!id) return Promise.resolve(null)
-  return readCloudJson(`data/articles/${id}.json`, token)
+  return readArticleMeta(id, token).then((r) => r?.article ?? null)
+}
+
+/** 读取文章并标记来源：{article, cached}（cached=true 表示来自本地关注缓存） */
+export async function readArticleMeta(id: string, token?: string): Promise<{ article: any; cached: boolean } | null> {
+  if (!id) return null
+  try {
+    const art = await readCloudJson(`data/articles/${id}.json`, token)
+    if (art) return { article: art, cached: false }
+  } catch {
+    /* 网络/解析异常 → 走本地缓存兜底 */
+  }
+  const cached = readFollowCache(id)
+  if (cached) return { article: cached, cached: true }
+  return null
 }
 
 /** 读取某栏目 feed（data/feed/<site>__<column>.json） */

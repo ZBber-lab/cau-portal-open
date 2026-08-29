@@ -5,7 +5,7 @@
  * 数据：index.json + summary.json（缓存由调用方/本组件直接读云端，量小）。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadReadSet, markAllRead, loadFollow, saveFollow, loadDeadlineOps, setDeadlineOp } from './data'
+import { readCloudJson, loadReadSet, markAllRead, loadFollow, saveFollow, loadDeadlineOps, setDeadlineOp, isPruned } from './data'
 
 type DeadlineItem = { item: string; date: string; title: string; article_id?: string; url?: string; column?: string; source?: string; time?: string | null }
 
@@ -58,13 +58,16 @@ export function HomeView(props: {
     void load()
   }, [])
 
-  const important = useMemo(() => (summary?.important || []).slice(0, 10), [summary])
+  const important = useMemo(
+    () => (summary?.important || []).filter((it: any) => !isPruned(it.article_id || it.url)).slice(0, 10),
+    [summary],
+  )
 
   const deadlines = useMemo(() => {
     const all = (summary?.deadlines || [])
       .map((d: DeadlineItem) => ({ d, n: daysLeft(d.date) }))
       .filter((x: any) => Number.isFinite(x.n) && x.n >= 0 && x.n <= 7)
-    const notArchived = all.filter((x: any) => ops[x.d.article_id || x.d.url] !== 'archive')
+    const notArchived = all.filter((x: any) => !isPruned(x.d.article_id || x.d.url) && ops[x.d.article_id || x.d.url] !== 'archive')
     const pinned = notArchived.filter((x: any) => ops[x.d.article_id || x.d.url] === 'pin')
     const rest = notArchived.filter((x: any) => ops[x.d.article_id || x.d.url] !== 'pin')
     return [...pinned, ...rest].slice(0, 8)

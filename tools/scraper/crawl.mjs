@@ -12,6 +12,7 @@ import { fetchText, sleep } from './fetch.mjs';
 import { parseListPage, parseDataproxy } from './parse-list.mjs';
 import { parseArticle } from './parse-article.mjs';
 import { parseNewsListPage, parseNewsArticle } from './parse-news.mjs';
+import { pruneData } from './prune.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const arg = (name, def) => {
@@ -423,6 +424,14 @@ async function main() {
       for (const e of r.errors.slice(0, 5)) console.log(`        ! ${e}`);
       for (const w of r.warns.slice(0, 3)) console.log(`        ~ ${w}`);
     }
+  }
+  // 数据管理：执行面板「数据管理」提交的删除清单（prune-request.json；无清单不删，不自动按时间窗清理）
+  try {
+    const pruned = pruneData(opts.dataDir, { mode: 'request' });
+    if (pruned.articles_removed > 0 || pruned.items_removed > 0 || pruned.from_request > 0)
+      console.log(`[prune] ${JSON.stringify(pruned)}`);
+  } catch (e) {
+    console.log(`[prune] 删除清单处理跳过（不影响抓取）：${e?.message ?? e}`);
   }
   writeIndex(opts.dataDir);
   writeSummary(opts.dataDir);

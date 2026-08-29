@@ -7,12 +7,14 @@
  */
 import { useEffect, useState } from 'react'
 import {
-  readArticle,
+  readArticleMeta,
+  cacheFollowArticle,
   loadFollow,
   saveFollow,
   loadDeadlineOps,
   setDeadlineOp,
   isFollowed,
+  isPruned,
   enrichArticle,
   loadSettings,
 } from './data'
@@ -43,22 +45,24 @@ export function ArticleView(props: {
   const [aiBusy, setAiBusy] = useState(false)
   const [aiOut, setAiOut] = useState<any | null>(null)
   const [aiErr, setAiErr] = useState('')
+  const [fromCache, setFromCache] = useState(false)
 
   const reload = async () => {
     setPhase('loading')
     setAiOut(null)
     setAiErr('')
-    const a = await readArticle(articleId)
-    if (!a) {
+    const r = await readArticleMeta(articleId)
+    if (!r) {
       setPhase('error')
       return
     }
-    setArt(a)
+    setArt(r.article)
+    setFromCache(r.cached)
     setPhase('ready')
     setFollowed(isFollowed(articleId))
     setDeadlineOpState(loadDeadlineOps()[articleId] || null)
     setQuoted(hasAttached(articleId))
-    if (a.title) onTitle?.(a.title)
+    if (r.article.title) onTitle?.(r.article.title)
   }
 
   useEffect(() => {
@@ -103,6 +107,8 @@ export function ArticleView(props: {
       ]
     saveFollow(next)
     setFollowed(idx < 0)
+    // 关注 → 存整篇本地快照（云端保留期外仍可读）；取消 → 清除快照
+    cacheFollowArticle(articleId, idx < 0 ? art : null)
   }
 
   const hasDeadline = !!(art?.ai?.deadline && art?.ai?.deadline.date)
@@ -127,7 +133,11 @@ export function ArticleView(props: {
       )}
       {phase === 'error' && (
         <div className="dsh-cau_msg">
-          <div className="dsh-cau_msgText">文章读取失败（正文可能尚未抓取入库，可点下方「查看原文」）。</div>
+          <div className="dsh-cau_msgText">
+            {isPruned(articleId)
+              ? '该数据已被删除（数据管理模式）。'
+              : '文章读取失败（正文可能尚未抓取入库，或已被删除）。'}
+          </div>
           {art && art.url ? (
             <a className="dsh-cau_msgBtn" href={art.url} target="_blank" rel="noreferrer">
               查看原文
@@ -146,6 +156,7 @@ export function ArticleView(props: {
             {art.source && <span>{art.source}</span>}
             {art.time && <span>{fmt(art.time)}</span>}
             {art.is_image_only && <span className="dsh-cau_aimgTag">纯图公告</span>}
+            {fromCache && <span className="dsh-cau_acacheTag">本地缓存</span>}
           </div>
 
           {art.ai?.summary && (

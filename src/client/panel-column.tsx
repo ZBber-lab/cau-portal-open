@@ -5,7 +5,7 @@
  * 数据：index.json（站点/栏目目录）+ summary.json（ai_map 徽章与筛选）+ feed/<site>__<col>.json。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadReadSet, readFeed } from './data'
+import { readCloudJson, loadReadSet, readFeed, isPruned } from './data'
 
 type Row = {
   id: string
@@ -76,6 +76,7 @@ export function ColumnView(props: {
     for (const f of feeds) {
       for (const it of f.items || []) {
         const id = articleId(it)
+        if (isPruned(id)) continue // 已被用户删除（管理模式）→ 隐藏
         out.push({
           id,
           url: it.url || '',
