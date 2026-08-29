@@ -35,7 +35,7 @@
 
 ## GitHub Actions
 
-- 北京时间 8:00–23:00 每 30 分钟自动抓取 + AI 加工，变更提交回本仓库（无需电脑开机）。
+- 北京时间 8:00–23:00 每 2 小时自动抓取 + AI 加工（cron-job.org 定时触发 GitHub Actions），变更提交回本仓库（无需电脑开机）。
 - 需要仓库 Secret：`DEEPSEEK_API_KEY`（缺省时抓取照常、AI 加工跳过）。
 
 ## 接入 DSH

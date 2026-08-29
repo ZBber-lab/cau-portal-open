@@ -357,7 +357,7 @@ export function CauPanel(props: {
           </>
         )}
       </div>
-      <div className="dsh-cau_panelFoot">数据来自 GitHub 云端 · 每 30 分钟自动更新 · 关注无上限 · 待办可留存/归档</div>
+      <div className="dsh-cau_panelFoot">数据来自 GitHub 云端 · 每 2 小时自动更新 · 关注无上限 · 待办可留存/归档</div>
     </div>
   )
 }
