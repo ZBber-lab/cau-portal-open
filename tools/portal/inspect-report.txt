@@ -1,0 +1,48 @@
+✅ 会话有效，用户=2024321010211
+
+===== [1] 门户落地页 https://one.cau.edu.cn/tp_up/view?m=up =====
+HTTP 200  bytes=31866  final=https://one.cau.edu.cn/tp_up/view?m=up
+title=综合服务平台
+
+===== [2] 链接总数 10，通知类 2 =====
+  全部通知 -> /tp_up/view?m=up#act=up/pim/allpim
+  全部通知 -> /tp_up/view?m=up#act=up/pim/allpim
+-- 全部链接样例(前 30) --
+  [学校主页] https://www.cau.edu.cn/
+  [组织机构] /tp_up/view?m=up#act=up/unit
+  [学校制度] http://dzb.cau.edu.cn/col/col25667/index.html
+  [办事大厅] https://onehall.cau.edu.cn/tp_fp/view?m=fp#act=fp/formHome
+  [数据之窗] https://onelook.cau.edu.cn
+  [全部通知] /tp_up/view?m=up#act=up/pim/allpim
+  [教师网页] https://faculty.cau.edu.cn
+  [注销] /tp_up/logout
+  [注销] /tp_up/logout
+  [全部通知] /tp_up/view?m=up#act=up/pim/allpim
+
+===== [3] scripts=10 iframes=0 =====
+  https://one.cau.edu.cn/tp_up/resource/js/common/plugins/jquery/jquery.min.js?v=v2.998142
+  https://one.cau.edu.cn/tp_up/resource/js/sys/uacm/msgcenter/msgcenter_brief.js?v=v2.998142
+  https://one.cau.edu.cn/tp_up/resource/plugin/all.mini.js?v=v2.998142
+  https://one.cau.edu.cn/tp_up/resource/plugin/layui/layui.all.js?v=v2.998142
+  https://one.cau.edu.cn/tp_up/resource/plugin/My97DatePicker/WdatePicker.js?v=v2.998142
+  https://one.cau.edu.cn/tp_up/resource/plugin/common.js?v=v2.998142
+  https://one.cau.edu.cn/tp_up/resource/js/sys/theme/theme.js?v=v2.998142
+  https://one.cau.edu.cn/tp_up/resource/js/common/actions.js?v=v2.998142
+  https://one.cau.edu.cn/tp_up/resource/js/common/menu.js?v=v2.998142
+  https://one.cau.edu.cn/tp_up/resource/js/up/feedback/feedback.js?v=v2.998142
+-- api线索 --
+
+===== [4] 子路径探测 =====
+  [404] /tp_up/pc/home  loc=-  ct=text/html;charset=UTF-8
+  [404] /tp_up/pc/notice  loc=-  ct=text/html;charset=UTF-8
+  [404] /tp_up/pc/index  loc=-  ct=text/html;charset=UTF-8
+  [404] /tp_up/notice  loc=-  ct=text/html;charset=UTF-8
+  [404] /tp_up/news  loc=-  ct=text/html;charset=UTF-8
+  [404] /tp_up/message  loc=-  ct=text/html;charset=UTF-8
+  [404] /tp_up/api/notice  loc=-  ct=text/html;charset=UTF-8
+  [404] /tp_up/api/portal/notice  loc=-  ct=text/html;charset=UTF-8
+  [404] /portal/api/notice  loc=-  ct=-
+  [404] /portal/notice  loc=-  ct=-
+  [404] /am/notice  loc=-  ct=text/html
+  [404] /notice  loc=-  ct=text/html
+  [404] /news  loc=-  ct=text/html

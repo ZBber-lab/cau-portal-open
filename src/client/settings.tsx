@@ -360,10 +360,16 @@ export function CauSettings(props: any) {
       }
       if (j.loggedIn) {
         setPortalState('ok')
-        setPortalMsg(`已登录 ✓ 账号 ${j.user || '?'}（会话保存于本机，过期可自动重登）`)
+        setPortalMsg(`已登录 ✓ 账号 ${j.user || '?'}（会话保存于本机${j.auto ? '，本次已自动重登' : ''}）`)
+      } else if (j.state === 'unknown') {
+        setPortalState('fail')
+        setPortalMsg(j.error || '无法连接门户（网络波动），稍后再试')
+      } else if (j.state === 'none') {
+        setPortalState('idle')
+        setPortalMsg('未登录。填入账号密码后点「一键登录」。')
       } else if (j.accountSaved) {
         setPortalState('idle')
-        setPortalMsg(`密码已保存（账号 ${j.user || '?'}），但登录态已过期——点「一键登录」自动重登`)
+        setPortalMsg(`密码已保存（账号 ${j.user || '?'}）${j.error ? '，自动重登未成功：' + j.error : '，但登录态未建立——点「一键登录」重试'}`)
       } else {
         setPortalState('idle')
         setPortalMsg('未登录。填入账号密码后点「一键登录」。')

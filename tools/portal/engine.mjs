@@ -60,16 +60,26 @@ export class CookieJar {
   }
 }
 
-/* ---------------- 带 CookieJar 的 fetch ---------------- */
+/* ---------------- 带 CookieJar 的 fetch（含网络抖动重试） ---------------- */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function f(url, { jar = null, redirect = 'follow', method = 'GET', body = null, headers = {} } = {}) {
   const h = { 'User-Agent': UA, ...headers };
   if (jar) {
     const c = jar.headerFor(url);
     if (c) h['Cookie'] = c;
   }
-  const r = await fetch(url, { method, redirect, headers: h, body, signal: AbortSignal.timeout(25000) });
-  if (jar) jar.store(url, r.headers.getSetCookie ? r.headers.getSetCookie() : splitSetCookie(r.headers.get('set-cookie')));
-  return r;
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await fetch(url, { method, redirect, headers: h, body, signal: AbortSignal.timeout(25000) });
+      if (jar) jar.store(url, r.headers.getSetCookie ? r.headers.getSetCookie() : splitSetCookie(r.headers.get('set-cookie')));
+      return r;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 2) await sleep(600 * (attempt + 1));
+    }
+  }
+  throw lastErr;
 }
 function splitSetCookie(v) { return v ? v.split(/,(?=[^;,]+=)/) : []; }
 
@@ -98,20 +108,28 @@ export function clearSession() {
 }
 function accountPassword(a) { return Buffer.from(a.pwd_b64, 'base64').toString('utf8'); }
 
-/* ---------------- 状态汇总（供面板显示，不触发重登） ---------------- */
-export async function statusInfo() {
+/* ---------------- 状态汇总（供面板显示；过期自动重登可选） ---------------- */
+export async function statusInfo({ autoReLogin = true } = {}) {
   const acc = loadAccount();
   const s = loadSession();
-  let valid = false;
-  if (s && Array.isArray(s.cookies) && s.cookies.length) {
-    try { valid = (await checkSession(s)).valid; } catch { valid = false; }
+  const chk = await checkSession(s);
+  if (chk.valid) {
+    const cur = loadSession();
+    return { loggedIn: true, user: cur?.user || s?.user || acc?.username || null, accountSaved: !!acc, sessionAt: cur?.saved_at || s?.saved_at || null };
   }
-  return {
-    loggedIn: valid,
-    user: (valid && s?.user) || acc?.username || null,
-    accountSaved: !!acc && !!acc?.username && !!acc?.pwd_b64,
-    sessionAt: s?.saved_at || null,
-  };
+  if (chk.reason === 'net-err') {
+    return { loggedIn: false, state: 'unknown', error: '无法连接门户（网络波动），稍后重试', accountSaved: !!acc, user: s?.user || acc?.username || null };
+  }
+  if (chk.reason === 'no-session') {
+    return { loggedIn: false, state: 'none', error: '本机暂未登录门户', accountSaved: !!acc, user: acc?.username || null };
+  }
+  // 过期/异常 → 用存档密码自动重登
+  if (autoReLogin && acc) {
+    const res = await login(acc.username, accountPassword(acc));
+    if (res.ok) return { loggedIn: true, user: acc.username, accountSaved: true, auto: true, sessionAt: res.session?.saved_at };
+    return { loggedIn: false, state: 'expired', error: '自动重登失败：' + res.message, accountSaved: true, user: acc.username };
+  }
+  return { loggedIn: false, state: 'expired', accountSaved: !!acc, user: s?.user || acc?.username || null };
 }
 
 /* ---------------- 登录 ---------------- */
@@ -204,32 +222,45 @@ export async function login(username, password, { save = true } = {}) {
 function stripTags(s) { return (s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); }
 
 /* ---------------- 登录态探活 / 自动重登 ---------------- */
-// 用已存会话试探门户：200 且不回 SSO = 有效
-export async function checkSession(session = loadSession()) {
+// 用已存会话试探门户：跟随重定向链（CASTGC 有效时 SSO 会自动换发新 ticket 实现会话自愈）；
+// 网络故障区分于「确已过期」。
+export async function checkSession(session = loadSession(), { renew = true } = {}) {
   if (!session || !Array.isArray(session.cookies) || !session.cookies.length) return { valid: false, reason: 'no-session' };
   const jar = new CookieJar();
   jar.cookies = session.cookies;
-  const r = await f(SERVICE_URL, { jar, redirect: 'manual' });
-  if (r.status === 302) {
-    const loc = r.headers.get('location') || '';
-    if (loc.includes('tpass')) return { valid: false, reason: 'expired', jar };
-    const r2 = await f(loc, { jar, redirect: 'manual' });
-    if (r2.status === 200) return { valid: true, jar };
-    if ((r2.headers.get('location') || '').includes('tpass')) return { valid: false, reason: 'expired', jar };
-    return { valid: false, reason: `unexpected-${r2.status}`, jar };
+  try {
+    let cur = SERVICE_URL;
+    for (let i = 0; i < 6; i++) {
+      const r = await f(cur, { jar, redirect: 'manual' });
+      if (r.status === 302 || r.status === 303) {
+        const loc = r.headers.get('location') || '';
+        if (!loc) return { valid: false, reason: `unexpected-${r.status}`, jar };
+        cur = loc.startsWith('http') ? loc : new URL(loc, cur).href;
+        continue;
+      }
+      const t = await r.text();
+      const finalUrl = r.url;
+      if (finalUrl.startsWith(PORTAL_HOST) && !finalUrl.includes('tpass') && !t.includes('loginForm')) {
+        // 自愈：若重定向途中换发了新会话 cookie（CASTGC 换发），写回以延长有效期
+        if (renew && JSON.stringify(jar.cookies) !== JSON.stringify(session.cookies)) {
+          saveSession({ ...session, saved_at: new Date().toISOString(), cookies: jar.cookies });
+        }
+        return { valid: true, jar };
+      }
+      if (t.includes('loginForm')) return { valid: false, reason: 'expired', jar };
+      return { valid: false, reason: 'unexpected-page', jar };
+    }
+    return { valid: false, reason: 'redirect-limit', jar };
+  } catch (e) {
+    return { valid: false, reason: 'net-err', error: String(e?.message || e) };
   }
-  if (r.status === 200) {
-    const t = await r.text();
-    if (t.includes('loginForm')) return { valid: false, reason: 'expired', jar };
-    return { valid: true, jar };
-  }
-  return { valid: false, reason: `unexpected-${r.status}`, jar };
 }
 
 // 确保有效会话（过期→用存档密码自动重登；无存档→抛错等用户）
 export async function ensureSession({ allowRelogin = true } = {}) {
   const cur = await checkSession();
   if (cur.valid) return { ok: true, session: loadSession() };
+  if (cur.reason === 'net-err') return { ok: false, message: '无法连接门户（网络波动），稍后重试' };
   const acc = loadAccount();
   if (allowRelogin && acc) {
     const res = await login(acc.username, accountPassword(acc));
