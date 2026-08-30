@@ -19,6 +19,10 @@ import {
   buildDailyUsage,
   summarizeUsage,
   computeAlerts,
+  loadRules,
+  saveRules,
+  newRuleId,
+  type WatchRule,
   type TokenRecord,
   type ModuleKey,
 } from './data'
@@ -442,6 +446,30 @@ export function CauSettings(props: any) {
     }
   }
 
+  // ---------- 关注规则 + 系统通知 ----------
+  const [rules, setRules] = useState<WatchRule[]>(() => loadRules())
+  const [ruleDraft, setRuleDraft] = useState<{ keyword: string; source: string; minImportance: string }>({ keyword: '', source: '', minImportance: '' })
+  const [notifyStatus, setNotifyStatus] = useState<string>(() => (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'))
+  const persistRules = (next: WatchRule[]) => {
+    setRules(next)
+    saveRules(next)
+  }
+  const addRule = () => {
+    const k = ruleDraft.keyword.trim()
+    if (!k) return
+    persistRules([
+      ...rules,
+      {
+        id: newRuleId(),
+        keyword: k.slice(0, 30),
+        source: ruleDraft.source.trim().slice(0, 30) || undefined,
+        minImportance: ruleDraft.minImportance ? (ruleDraft.minImportance as '高' | '中') : undefined,
+        enabled: true,
+      },
+    ])
+    setRuleDraft({ keyword: '', source: '', minImportance: '' })
+  }
+
   // ---------- 首页卡片 ----------
   const tokBadge = (() => {
     const err = tokens.some((t) => t.enabled && t.expires && daysUntil(t.expires) != null && daysUntil(t.expires)! < 0)
@@ -761,6 +789,84 @@ export function CauSettings(props: any) {
           <div className="dsh-cau_setBlock">
             <div className="dsh-cau_setTitle">待办提醒 · 关注</div>
             <div className="dsh-cau_setDesc">首页「待办卡」展示未过期截止事项（≤7 天），支持留存/归档；关注无上限，文章页 ★ 加入。关闭本模块后待办卡与关注入口隐藏。</div>
+          </div>
+          <div className="dsh-cau_setBlock">
+            <div className="dsh-cau_setTitle">🎯 关注规则（关键词/来源订阅）</div>
+            <div className="dsh-cau_setDesc">命中的通知在首页「今日要览」标 🎯、可触发系统通知（下方开关）。规则保存于本机浏览器；关键示例：推免、选课、奖学金、成绩、土地学院、教务处…</div>
+            <div className="dsh-cau_tokList">
+              {rules.length === 0 && <div className="dsh-cau_setHint">暂无规则。添加关键词后会标出所有来源命中的条目（多规则取并集）。</div>}
+              {rules.map((r) => (
+                <div key={r.id} className="dsh-cau_tok">
+                  <div className="dsh-cau_tokMain">
+                    <span className="dsh-cau_tokName">
+                      {r.keyword}
+                      {!r.enabled && <span className="dsh-cau_cardBadge off">已停用</span>}
+                    </span>
+                    <span className="dsh-cau_tokMeta">
+                      {r.source ? `来源含「${r.source}」` : '全部来源'}
+                      {r.minImportance ? ` · 重要度≥${r.minImportance === '高' ? '高' : '高/中'}` : ' · 不限重要度'}
+                    </span>
+                  </div>
+                  <div className="dsh-cau_tokActs">
+                    <button type="button" className="dsh-cau_tokBtn" onClick={() => persistRules(rules.map((x) => (x.id === r.id ? { ...x, enabled: !x.enabled } : x)))}>
+                      {r.enabled ? '停用' : '启用'}
+                    </button>
+                    <button type="button" className="dsh-cau_tokBtn danger" onClick={() => persistRules(rules.filter((x) => x.id !== r.id))}>
+                      删除
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="dsh-cau_infoCard">
+              <div className="dsh-cau_setRow">
+                <span className="dsh-cau_setLabel">关键词</span>
+                <input className="dsh-cau_setInput" placeholder="如：推免 / 选课 / 奖学金 / 土地学院" value={ruleDraft.keyword} onChange={(e) => setRuleDraft({ ...ruleDraft, keyword: e.target.value })} />
+              </div>
+              <div className="dsh-cau_setRow">
+                <span className="dsh-cau_setLabel">来源含</span>
+                <input className="dsh-cau_setInput" placeholder="可空（如 教务处 / 团委 / 土地）" value={ruleDraft.source} onChange={(e) => setRuleDraft({ ...ruleDraft, source: e.target.value })} />
+                <span className="dsh-cau_setLabel" style={{ flex: 'none' }}>重要度</span>
+                <select className="dsh-cau_setSelect" value={ruleDraft.minImportance} onChange={(e) => setRuleDraft({ ...ruleDraft, minImportance: e.target.value })}>
+                  <option value="">不限</option>
+                  <option value="中">高或中</option>
+                  <option value="高">只要高</option>
+                </select>
+              </div>
+              <div className="dsh-cau_setRow">
+                <button type="button" className="dsh-cau_setBtn" disabled={!ruleDraft.keyword.trim()} onClick={addRule}>
+                  添加规则
+                </button>
+                {rules.length > 0 && (
+                  <button type="button" className="dsh-cau_setBtn danger" onClick={() => persistRules([])}>
+                    清空全部
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="dsh-cau_setBlock">
+            <div className="dsh-cau_setTitle">🔔 系统通知（可选）</div>
+            <div className="dsh-cau_setDesc">页面开着（不限是否打开面板）时每 10 分钟检查：命中关注规则或新增高重要通知即弹系统通知。首次需点「请求通知授权」。</div>
+            <label className="dsh-cau_setCheck">
+              <input type="checkbox" checked={!!settings.notifyOn} onChange={(e) => upd({ ...settings, notifyOn: e.target.checked })} />
+              启用系统通知
+            </label>
+            <div className="dsh-cau_setRow">
+              <button
+                type="button"
+                className="dsh-cau_setBtn"
+                onClick={() => {
+                  if (typeof Notification === 'undefined') return
+                  Notification.requestPermission().then((p) => setNotifyStatus(p))
+                }}
+              >
+                请求通知授权
+              </button>
+              <span className="dsh-cau_setHint">
+                {notifyStatus === 'granted' ? '已授权 ✓' : notifyStatus === 'denied' ? '已被拒绝（需在浏览器站点设置中允许通知）' : notifyStatus === 'unsupported' ? '当前环境不支持通知' : '未授权'}
+              </span>
+            </div>
           </div>
           <div className="dsh-cau_setBlock">
             <div className="dsh-cau_setTitle">面板固定</div>

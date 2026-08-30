@@ -15,6 +15,8 @@ export type SettingsV1 = {
   keyExpiries?: Record<string, string>
   /** 面板「固定」开关（固定后点外部/Esc 不关闭，仅 ✕ 关） */
   panelPinned?: boolean
+  /** 系统通知开关（命中关注规则/高重要时弹浏览器通知；默认关） */
+  notifyOn?: boolean
 }
 
 const SETTINGS_KEY = 'dsh.cau-portal.settings.v1'
@@ -768,4 +770,72 @@ export async function enrichArticle(id: string, opts?: { provider?: string; mode
     })
   }
   return data
+}
+
+// ---- 关注规则（关键词/来源订阅；键 dsh.cau-portal.rules.v1）----
+export type WatchRule = {
+  id: string
+  /** 关键词（匹配标题/来源/栏目，忽略大小写） */
+  keyword: string
+  /** 来源/部门包含（可空=不限） */
+  source?: string
+  /** 重要度下限：'高'=只要高；'中'=高或中；可空=不限 */
+  minImportance?: '高' | '中'
+  enabled: boolean
+}
+const RULES_KEY = 'dsh.cau-portal.rules.v1'
+export function loadRules(): WatchRule[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RULES_KEY) || '[]')
+    return Array.isArray(v) ? v.filter((r) => r && r.id && r.keyword) : []
+  } catch { return [] }
+}
+export function saveRules(list: WatchRule[]) {
+  try { localStorage.setItem(RULES_KEY, JSON.stringify(list.slice(0, 60))) } catch { /* 静默 */ }
+}
+export function newRuleId() { return 'r-' + Math.random().toString(36).slice(2, 9) }
+
+/** 规则命中：keyword（标题/来源/栏目含）+ source 含 + 重要度下限 */
+export function matchRules(rules: WatchRule[], item: { title?: string; source?: string; column?: string; importance?: string }): WatchRule[] {
+  if (!rules || !rules.length) return []
+  const text = `${item.title || ''} ${item.source || ''} ${item.column || ''}`.toLowerCase()
+  return rules.filter((r) => {
+    if (!r.enabled || !r.keyword) return false
+    if (!text.includes(r.keyword.toLowerCase())) return false
+    if (r.source && !String(item.source || '').toLowerCase().includes(r.source.toLowerCase())) return false
+    if (r.minImportance === '高' && item.importance !== '高') return false
+    if (r.minImportance === '中' && item.importance !== '高' && item.importance !== '中') return false
+    return true
+  })
+}
+
+// ---- 通知去重水位（键 dsh.cau-portal.notifyseen.v1：已通知过的条目 id）----
+const NOTIFY_SEEN_KEY = 'dsh.cau-portal.notifyseen.v1'
+export function loadNotifySeen(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(NOTIFY_SEEN_KEY) || '[]')) } catch { return new Set() }
+}
+export function saveNotifySeen(ids: Set<string>) {
+  try { localStorage.setItem(NOTIFY_SEEN_KEY, JSON.stringify([...ids].slice(-400))) } catch { /* 静默 */ }
+}
+
+/**
+ * 计算本次应通知的条目（供系统通知轮询）：
+ * - importance 高 且 3 天内发布，或命中关注规则（同样 3 天内发布）
+ * - id 不在 seen（已通知过的不重复）
+ */
+export function computeNewAlerts(summary: any, rules: WatchRule[], seen: Set<string>): any[] {
+  const items: any[] = summary?.important || []
+  const out: any[] = []
+  const limit = Date.now() - 72 * 3600 * 1000
+  for (const it of items) {
+    const id = it.article_id || it.url
+    if (!id || seen.has(id)) continue
+    const t = Date.parse(String(it.time || ''))
+    if (!Number.isFinite(t) || t < limit) continue
+    const ruleHit = matchRules(rules, it).length > 0
+    if (it.importance !== '高' && !ruleHit) continue
+    out.push({ ...it, id, rule_hit: ruleHit })
+    if (out.length >= 5) break
+  }
+  return out
 }

@@ -21,6 +21,8 @@ import {
   addCustomMine,
   mineDeadlineOf,
   migrateMineFromPin,
+  loadRules,
+  matchRules,
 } from './data'
 
 type DeadlineItem = { item: string; date: string; title: string; article_id?: string; url?: string; column?: string; source?: string; time?: string | null }
@@ -117,6 +119,27 @@ export function HomeView(props: {
     [summary, ops],
   )
 
+  // ---------- 今日要览（主动察觉层：高重要新进 · 3天内截止 · 关注规则命中） ----------
+  const watchRules = useMemo(() => loadRules().filter((r) => r.enabled), [])
+  const overview = useMemo(() => {
+    const imp = (summary?.important || []).filter((it: any) => !isPruned(it.article_id || it.url))
+    const cut = Date.now() - 3 * 86400000
+    const recentOk = (t: any) => {
+      const x = Date.parse(String(t || ''))
+      return !Number.isFinite(x) || x >= cut
+    }
+    const high = imp.filter((it: any) => it.importance === '高' && recentOk(it.time))
+    const hits = imp.filter((it: any) => matchRules(watchRules, it).length > 0 && recentOk(it.time))
+    const dueSoon = (summary?.deadlines || []).filter((d: any) => ops[d.article_id || d.url] !== 'archive').filter((d: any) => {
+      const n = daysLeft(d.date)
+      return Number.isFinite(n) && n >= 0 && n <= 3
+    })
+    const top = [...high.map((it: any) => ({ ...it, tag: 'high' })), ...hits.map((it: any) => ({ ...it, tag: 'hit' }))]
+      .filter((v: any, i: number, arr: any[]) => arr.findIndex((x) => (x.article_id || x.url) === (v.article_id || v.url)) === i)
+      .slice(0, 3)
+    return { high: high.length, due: dueSoon.length, hits: hits.length, top }
+  }, [summary, watchRules, ops])
+
   const archiveCount = useMemo(
     () => (summary?.deadlines || []).filter((d: DeadlineItem) => ops[d.article_id || d.url] === 'archive').length,
     [summary, ops],
@@ -169,6 +192,27 @@ export function HomeView(props: {
             <div className="dsh-cau_hint">⭐ 待办与要闻聚合暂不可用（云端 summary.json 未就绪），其余功能正常。</div>
           )}
 
+          {/* 📌 今日要览：打开面板第一眼（高重要新进 · 即将截止 · 关注规则命中） */}
+          {(overview.high > 0 || overview.due > 0 || overview.hits > 0) && (
+            <div className="dsh-cau_ov">
+              <span className="dsh-cau_ovTitle">📌 今日要览</span>
+              {overview.high > 0 && <span className="dsh-cau_ovChip hl">高重要新进 {overview.high}</span>}
+              {overview.due > 0 && <span className="dsh-cau_ovChip due">⏰ 3 天内截止 {overview.due}</span>}
+              {overview.hits > 0 && <span className="dsh-cau_ovChip hit">🎯 命中关注 {overview.hits}</span>}
+              {overview.top.length > 0 && (
+                <div className="dsh-cau_ovList">
+                  {overview.top.map((it: any) => (
+                    <span key={String(it.article_id || it.url)} className="dsh-cau_ovRow" onClick={() => openArt(it.article_id || it.url, it.title, [], 0)}>
+                      <em>{it.tag === 'high' ? '高' : '🎯'}</em>
+                      <span className="dsh-cau_ovTitleTxt">{it.title}</span>
+                      <i>{[it.column, it.source].filter(Boolean).join(' · ')}</i>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 我的事项（人工精选大卡） + 全部待办入口 */}
           {mods.deadline && (
             <div className="dsh-cau_sec">
@@ -194,9 +238,10 @@ export function HomeView(props: {
                     const mm = /^\d{4}-(\d{1,2})-(\d{1,2})/.exec(String(date || ''))
                     const n = date ? daysLeft(String(date)) : Number.NaN
                     const expired = Number.isFinite(n) && n < 0
+                    const urgent = Number.isFinite(n) && n >= 0 && n <= 3
                     const canArticle = !String(id).startsWith('custom-')
                     return (
-                      <div key={id} className={'dsh-cau_mineCard' + (expired ? ' expired' : '')}>
+                      <div key={id} className={'dsh-cau_mineCard' + (expired ? ' expired' : urgent ? (n <= 1 ? ' due' : ' soon') : '')}>
                         <div className="dsh-cau_mineDate">
                           {mm ? (
                             <>
@@ -371,6 +416,7 @@ export function HomeView(props: {
                       <span className="dsh-cau_impTop">
                         <span className="dsh-cau_impTitle">{it.title}</span>
                         <ImpBadge level={it.importance} />
+                        {matchRules(watchRules, it).length > 0 && <span className="dsh-cau_impHit" title="命中关注规则">🎯</span>}
                       </span>
                       {it.summary && <span className="dsh-cau_impSummary">{it.summary}</span>}
                       <span className="dsh-cau_impMeta">{[it.column, it.source, fmtCn(it.time)].filter(Boolean).join(' · ')}</span>

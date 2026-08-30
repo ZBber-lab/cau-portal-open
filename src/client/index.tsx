@@ -13,6 +13,14 @@ import { bindCtx } from './ctx'
 import { CtxBar, CTXBAR_CSS } from './ctxbar'
 import { registerToolViews, TOOLVIEW_CSS } from './toolview'
 import { subscribeBus, getOpenRequest } from './bus'
+import {
+  loadSettings,
+  loadRules,
+  loadNotifySeen,
+  saveNotifySeen,
+  computeNewAlerts,
+  readCloudJson,
+} from './data'
 
 // 校徽 SVG（currentColor 版）、校名题字 SVG（官方绿版）与题字 currentColor 版由 build.mjs 以文本内联（占位符替换）
 const emblemSvg = '__CAU_EMBLEM_SVG__'
@@ -169,4 +177,36 @@ export function apply(ctx: any) {
 
   // 阶段6：工具结果新闻卡片（tool.call.toolview，按 mcp__cau__* 键控）
   registerToolViews(ctx)
+
+  // 阶段5.5：系统通知轮询（高重要/命中关注规则 → 浏览器通知；面板开不开都生效，需页面开着 + 用户授权）
+  ctx.effect(() => {
+    if (typeof Notification === 'undefined') return
+    const runNotify = async () => {
+      try {
+        const s = loadSettings()
+        if (!s.notifyOn || Notification.permission !== 'granted') return
+        const summary = await readCloudJson('data/summary.json').catch(() => null)
+        if (!summary?.important) return
+        const rules = loadRules()
+        const seen = loadNotifySeen()
+        const alerts = computeNewAlerts(summary, rules, seen)
+        if (!alerts.length) return
+        for (const a of alerts) {
+          seen.add(a.id)
+          try {
+            new Notification(`农大门户 · ${a.rule_hit ? '🎯 关注命中' : '高重要'}：${String(a.title || '').slice(0, 42)}`, {
+              body: [a.column, a.source, a.time ? String(a.time).slice(0, 10) : '', a.summary ? String(a.summary).slice(0, 90) : '']
+                .filter(Boolean)
+                .join(' · '),
+              tag: 'cau-portal-' + a.id,
+            })
+          } catch { /* 单个通知失败忽略 */ }
+        }
+        saveNotifySeen(seen)
+      } catch { /* 静默（无令牌/网络波动时跳过本轮） */ }
+    }
+    void runNotify()
+    const t = window.setInterval(() => void runNotify(), 10 * 60 * 1000)
+    return () => window.clearInterval(t)
+  }, 'cau-portal: notify watcher')
 }

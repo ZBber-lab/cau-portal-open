@@ -430,11 +430,33 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_breadPath{flex:1;min-width:0;font-size:11px;color:var(--dsw-alias-label-tertiary,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-cau_dlRow{padding:6px 8px;border-radius:6px}
 .dsh-cau_dlRow:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.04))}
+.dsh-cau_dlRow.soon{background:color-mix(in srgb,var(--dsw-alias-state-warn,#ffb400) 7%,transparent)}
+.dsh-cau_dlRow.due{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 8%,transparent)}
+.dsh-cau_dlRow.soon .dsh-cau_dlDate{color:var(--dsw-alias-state-warn,#b8860b)}
+.dsh-cau_dlRow.due .dsh-cau_dlDate{color:var(--dsw-alias-state-error-primary,#e5484d)}
 /* ---- 我的事项大卡 + 全部待办入口 ---- */
 .dsh-cau_mineGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:10px}
 .dsh-cau_mineCard{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid color-mix(in srgb,var(--cau-brand,#008038) 30%,transparent);border-radius:12px;background:color-mix(in srgb,var(--cau-brand,#008038) 6%,transparent);cursor:pointer;transition:border-color .12s ease,background .12s ease}
 .dsh-cau_mineCard:hover{border-color:color-mix(in srgb,var(--cau-brand,#008038) 60%,transparent);background:color-mix(in srgb,var(--cau-brand,#008038) 9%,transparent)}
 .dsh-cau_mineCard.expired{border-color:var(--dsw-alias-border-inverted,rgba(15,17,21,.12));background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.03))}
+.dsh-cau_mineCard.soon{border-color:color-mix(in srgb,var(--dsw-alias-state-warn,#ffb400) 55%,transparent);background:color-mix(in srgb,var(--dsw-alias-state-warn,#ffb400) 8%,transparent)}
+.dsh-cau_mineCard.due{border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 60%,transparent);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 9%,transparent)}
+.dsh-cau_mineCard.soon .dsh-cau_mineDay{color:var(--dsw-alias-state-warn,#ffb400)}
+.dsh-cau_mineCard.due .dsh-cau_mineDay{color:var(--dsw-alias-state-error-primary,#e5484d)}
+/* 今日要览（主动察觉层） */
+.dsh-cau_ov{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--cau-brand,#008038) 35%,transparent);border-radius:12px;background:color-mix(in srgb,var(--cau-brand,#008038) 7%,transparent)}
+.dsh-cau_ovTitle{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#e6e8eb)}
+.dsh-cau_ovChip{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));color:var(--dsw-alias-label-secondary,#9aa4b2)}
+.dsh-cau_ovChip.hl{color:var(--dsw-alias-state-error-primary,#e5484d);border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 45%,transparent)}
+.dsh-cau_ovChip.due{color:var(--dsw-alias-state-warn,#ffb400);border-color:color-mix(in srgb,var(--dsw-alias-state-warn,#ffb400) 45%,transparent)}
+.dsh-cau_ovChip.hit{color:var(--cau-brand,#008038);border-color:color-mix(in srgb,var(--cau-brand,#008038) 45%,transparent)}
+.dsh-cau_ovList{display:flex;flex-direction:column;gap:2px;width:100%;margin-top:2px}
+.dsh-cau_ovRow{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary,#9aa4b2);cursor:pointer;border-radius:6px}
+.dsh-cau_ovRow:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.05))}
+.dsh-cau_ovRow em{flex:none;font-style:normal;font-size:10px;padding:1px 6px;border-radius:999px;background:color-mix(in srgb,var(--cau-brand,#008038) 16%,transparent);color:var(--cau-brand,#008038)}
+.dsh-cau_ovRow .dsh-cau_ovTitleTxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary,#e6e8eb)}
+.dsh-cau_ovRow i{flex:none;font-style:normal;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#8b95a5)}
+.dsh-cau_impHit{flex:none;font-size:11px}
 .dsh-cau_mineDate{display:flex;align-items:baseline;gap:6px}
 .dsh-cau_mineDay{font-size:30px;font-weight:700;line-height:1;color:var(--cau-brand,#008038)}
 .dsh-cau_mineCard.expired .dsh-cau_mineDay{color:var(--dsw-alias-label-tertiary,#888)}

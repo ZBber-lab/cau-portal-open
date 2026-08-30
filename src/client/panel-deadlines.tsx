@@ -80,7 +80,7 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
             const id = d.article_id || d.url
             const mined = !!mine[id]
             return (
-              <div className="dsh-cau_dlRow" key={id}>
+              <div className={'dsh-cau_dlRow' + (n <= 1 ? ' due' : n <= 3 ? ' soon' : '')} key={id}>
                 <div className="dsh-cau_dlTop">
                   <span className="dsh-cau_dlItem">{d.item || '截止事项'}</span>
                   <span className="dsh-cau_dlDate">
