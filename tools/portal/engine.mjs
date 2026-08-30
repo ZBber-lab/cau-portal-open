@@ -271,13 +271,17 @@ export async function ensureSession({ allowRelogin = true } = {}) {
 }
 
 /* ---------------- 带会话抓取助手 ---------------- */
-export async function sessionFetch(path, { follow = true, body = null, method = 'GET', jar = null } = {}) {
+export async function sessionFetch(path, { follow = true, body = null, method = 'GET', jar = null, headers = {} } = {}) {
   const j = jar || new CookieJar();
   if (!jar) {
     const s = loadSession();
     if (s && Array.isArray(s.cookies)) j.cookies = s.cookies;
   }
   const url = path.startsWith('http') ? path : PORTAL_HOST + path;
-  return f(url, { jar: j, redirect: follow ? 'follow' : 'manual', method, body,
-    headers: body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {} });
+  // 注意：调用方显式传入的 headers 必须原样透传（曾经覆盖成表单头导致业务接口 415 假象，实测要精确 application/json）
+  const merged = body ? {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    ...headers,
+  } : { ...headers };
+  return f(url, { jar: j, redirect: follow ? 'follow' : 'manual', method, body, headers: merged });
 }
