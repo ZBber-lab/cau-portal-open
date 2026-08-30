@@ -346,6 +346,7 @@ export function CauSettings(props: any) {
   const [portalUser, setPortalUser] = useState('')
   const [portalPwd, setPortalPwd] = useState('')
   const [portalState, setPortalState] = useState<'idle' | 'loading' | 'ok' | 'fail'>('idle')
+  const [portalAct, setPortalAct] = useState<'login' | 'sync' | 'status' | 'clear' | ''>('')
   const [portalMsg, setPortalMsg] = useState('')
   const fetchPortalStatus = async () => {
     setPortalState('loading')
@@ -420,8 +421,9 @@ export function CauSettings(props: any) {
     }
   }
   const doPortalSync = async () => {
+    setPortalAct('sync')
     setPortalState('loading')
-    setPortalMsg('同步中（抓取→推送，约 1-2 分钟）…')
+    setPortalMsg('同步中（抓取→推送，首次约 1-3 分钟；期间请勿关闭面板）…')
     try {
       const r = await fetch('/api/cau/portal/sync', { method: 'POST' })
       const j = await r.json()
@@ -435,6 +437,8 @@ export function CauSettings(props: any) {
     } catch (e: any) {
       setPortalState('fail')
       setPortalMsg('同步请求失败：' + String(e?.message || e))
+    } finally {
+      setPortalAct('')
     }
   }
 
@@ -801,7 +805,7 @@ export function CauSettings(props: any) {
             <input id="cauPortalPwd" className="dsh-cau_setInput" type="password" value={portalPwd} onChange={(e) => setPortalPwd(e.target.value)} placeholder="密码（仅提交本机服务端）" autoComplete="new-password" />
             <div className="dsh-cau_setRow">
               <button type="button" className="dsh-cau_setBtn" disabled={portalState === 'loading'} onClick={() => void doPortalLogin()}>
-                {portalState === 'loading' ? '登录中…' : '🔑 一键登录 / 测试'}
+                {portalState === 'loading' ? (portalAct === 'sync' ? '同步中…' : '登录中…') : '🔑 一键登录 / 测试'}
               </button>
               <button type="button" className="dsh-cau_setBtn" disabled={portalState === 'loading'} onClick={() => void doPortalSync()}>
                 ⟳ 立即同步校内通知
@@ -813,6 +817,7 @@ export function CauSettings(props: any) {
                 查看登录状态
               </button>
             </div>
+            {portalState === 'loading' && portalMsg && <span className="dsh-cau_setWarn">{portalMsg}</span>}
             {portalState === 'ok' && <span className="dsh-cau_setOk">{portalMsg}</span>}
             {portalState === 'fail' && <span className="dsh-cau_setErr">{portalMsg}</span>}
             {portalState === 'idle' && portalMsg && <span className="dsh-cau_setHint">{portalMsg}</span>}

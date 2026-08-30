@@ -1,16 +1,22 @@
 // tools/portal/sync.mjs — 门户同步编排（服务端调用）：抓取 → git 提交 portal 数据文件 → 推送 GitHub
-// 原则：只提交 portal 专属文件（feed/portal__notices.json + 新增 portal 文章文件），
+// 原则：只提交 portal 专属文件（feed/portal__notices.json + 未跟踪的 portal 文章文件），
 //       绝不触碰 Actions 管理的 index.json/summary.json/其他站点文件（冲突面极小）；
-//       推送冲突 → pull --rebase → 重试（最多 3 次）。令牌从环境变量或 profile yml 运行时读取，不落盘不打印。
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+//       推送冲突 → pull --rebase → 重试（最多 3 次）。
+// 安全：令牌从环境变量或 profile yml 运行时读取，不落盘不打印；密码/会话不参与。
+// 性能：git 一律【异步】调用（绝不用 execFileSync——会冻结整个 dsh web 事件循环，实测事故）。
+import { existsSync, readFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { runPortalCrawl } from './crawl-portal.mjs';
 
+const execFileAsync = promisify(execFile);
 const _dir = dirname(fileURLToPath(import.meta.url));
 const REPO = 'https://github.com/zhouxuanting52-lab/cau-portal.git';
 const REPO_BRANCH = 'main';
+const GIT_USER = 'cau-portal-bot';
+const GIT_EMAIL = 'cau-portal@users.noreply.github.com';
 
 function tokenFromEnvOrYml() {
   if (process.env.CAU_GITHUB_TOKEN) return process.env.CAU_GITHUB_TOKEN;
@@ -33,18 +39,31 @@ export function syncDir() {
   return process.env.CAU_PORTAL_SYNC_DIR || join(process.env.USERPROFILE || 'C:\\Users\\1', '.dsh', 'profiles', 'web', 'cau-portal-sync');
 }
 
-function git(args, { cwd = null, timeoutMs = 180000 } = {}) {
-  const env = { ...process.env };
+/** 异步 git（带令牌注入 + 直连失败自动回退代理） */
+async function git(args, { cwd = null, timeoutMs = 240000, tryProxy = true } = {}) {
+  const baseEnv = { ...process.env };
   const tok = tokenFromEnvOrYml();
   if (tok) {
-    env.GIT_CONFIG_COUNT = '1';
-    env.GIT_CONFIG_KEY_0 = `url.https://x-access-token:${tok}@github.com/.insteadOf`;
-    env.GIT_CONFIG_VALUE_0 = 'https://github.com/';
+    baseEnv.GIT_CONFIG_COUNT = '1';
+    baseEnv.GIT_CONFIG_KEY_0 = `url.https://x-access-token:${tok}@github.com/.insteadOf`;
+    baseEnv.GIT_CONFIG_VALUE_0 = 'https://github.com/';
   }
+  const run = (env) =>
+    execFileAsync('git', args, { encoding: 'utf8', env, cwd: cwd || undefined, timeout: timeoutMs, windowsHide: true, maxBuffer: 16 * 1024 * 1024 })
+      .then((r) => r.stdout)
+      .catch((e) => {
+        const err = new Error(`${String(e?.stderr || e?.message || e).replace(/\s+/g, ' ').slice(0, 400)}`);
+        err.raw = e;
+        throw err;
+      });
   try {
-    return execFileSync('git', args, { encoding: 'utf8', env, cwd: cwd || undefined, timeout: timeoutMs, windowsHide: true });
+    return await run(baseEnv);
   } catch (e) {
-    throw new Error(`git ${(args || []).join(' ').slice(0, 60)} 失败: ${String(e?.stderr || e?.message || e).replace(/\s+/g, ' ').slice(0, 300)}`);
+    if (tryProxy && /ECONNREFUSED|ETIMEDOUT|ENETUNREACH|Could not resolve|Failed to connect|Operation timed out/i.test(String(e?.raw?.message || e.message))) {
+      const envP = { ...baseEnv, http_proxy: 'http://127.0.0.1:7994', https_proxy: 'http://127.0.0.1:7994' };
+      return await run(envP);
+    }
+    throw e;
   }
 }
 
@@ -57,41 +76,51 @@ function resSummary(res) {
   return { new_items: res?.new ?? 0, new_articles: res?.new_articles ?? 0, feed_items: res?.feed_items ?? 0, total: res?.total ?? 0 };
 }
 
-/** 一次完整同步：抓取 + 提交 portal 专属文件 + 推送（重试 3 次） */
+/** 确保克隆就绪（残缺克隆删除重来；身份配置一次） */
+async function ensureClone(dir) {
+  if (!existsSync(join(dir, '.git'))) {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    await git(['clone', '--depth', '1', REPO, dir], { timeoutMs: 600000 }); // 客户端在 dir 外，clone 目标=dir
+  }
+  await git(['config', 'user.name', GIT_USER], { cwd: dir });
+  await git(['config', 'user.email', GIT_EMAIL], { cwd: dir });
+}
+
+/** 一次完整同步：拉取 + 抓取 + 提交 portal 专属文件 + 推送（冲突重试 3 次） */
 export async function syncPortal() {
   if (syncing) return { ok: false, error: '已有同步在进行中' };
   syncing = true;
   try {
     const dir = syncDir();
-    mkdirSync(dir, { recursive: true });
-    if (!existsSync(join(dir, '.git'))) {
-      git(['clone', '--depth', '1', REPO, dir], { timeoutMs: 300000 });
-    } else {
-      // 先拉远端（拿 Actions 最新产物；失败不阻塞抓取，push 时再处理）
-      try { git(['pull', '--rebase', 'origin', REPO_BRANCH], { cwd: dir }); } catch { /* 留到 push 阶段 */ }
-    }
+    await ensureClone(dir);
+    // 拉远端（拿 Actions 最新产物；失败不阻塞抓取，push 时再处理）
+    try { await git(['pull', '--rebase', 'origin', REPO_BRANCH], { cwd: dir, timeoutMs: 300000 }); } catch { /* 留到 push 阶段 */ }
 
     const res = await runPortalCrawl({ dataDir: join(dir, 'data') });
     if (!res.ok) return { ok: false, error: res.error };
 
-    const feedRel = 'data/feed/portal__notices.json';
-    const targets = [feedRel, ...(res.new_article_files || [])];
-    git(['add', ...targets], { cwd: dir });
-    const st = git(['status', '--short'], { cwd: dir });
+    // 只提交 portal 专属文件：feed + data/ 下所有未跟踪文件（= 本工具新建的 portal 文章文件）
+    const untracked = (await git(['ls-files', '--others', '--exclude-standard', 'data/'], { cwd: dir }))
+      .split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    const targets = ['data/feed/portal__notices.json', ...untracked];
+    if (targets.length > 1) await git(['add', ...targets], { cwd: dir });
+
+    const st = await git(['status', '--short'], { cwd: dir });
     if (!st.trim()) return { ok: false, error: '无变更', ...resSummary(res) };
 
     const commitMsg = `data: portal sync ${new Date().toISOString().slice(0, 10)} (items ${res.new}, articles ${res.new_articles})`;
-    git(['commit', '-m', commitMsg], { cwd: dir });
+    await git(['commit', '-m', commitMsg], { cwd: dir });
 
     // push（冲突 → pull --rebase → 重试）
     let lastErr = '';
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        git(['push', 'origin', `HEAD:${REPO_BRANCH}`], { cwd: dir, timeoutMs: 300000 });
+        await git(['push', 'origin', `HEAD:${REPO_BRANCH}`], { cwd: dir, timeoutMs: 300000 });
         return { ok: true, pushed: true, ...resSummary(res), last_updated: new Date().toISOString() };
       } catch (e) {
         lastErr = String(e?.message || e);
-        try { git(['pull', '--rebase', 'origin', REPO_BRANCH], { cwd: dir, timeoutMs: 300000 }); } catch { /* 下次重试 */ }
+        try { await git(['pull', '--rebase', 'origin', REPO_BRANCH], { cwd: dir, timeoutMs: 300000 }); } catch { /* 下次重试 */ }
         await sleep(1500 * (attempt + 1));
       }
     }
@@ -121,7 +150,7 @@ export async function startPortalScheduler({ onResult = null } = {}) {
       writeState({ ok: r.ok, why });
       if (onResult) try { onResult({ ok: r.ok, why, new_items: r.new_items ?? 0, error: r.error ?? null }); } catch { /* 忽略 */ }
     } catch (e) {
-      writeState({ ok: false, why, error: String(e?.message || e) });
+      writeState({ ok: false, why, error: String(e?.message || e).slice(0, 300) });
     }
   };
   // 启动补抓：距上次成功同步 >6h 才跑（关机期间漏掉的恢复）
