@@ -433,6 +433,103 @@ export function setDeadlineOp(id: string, op: DeadlineOp): Record<string, Deadli
   return m
 }
 
+// ---- 我的事项（人工精选待办；键 dsh.cau-portal.mine.v1）----
+// 语义：用户从待办列表/文章页「⭐ 我的事项」加入；大卡展示、大号截止日期；
+// 加入时自动同步进关注列表；支持自定义截止时间（仅显示层覆盖 AI 提取值）；
+// 过期仍保留显示（灰+已过期）直至用户手动移除。
+
+export type MineItem = {
+  added_at: number
+  title: string
+  url: string
+  source?: string
+  column?: string
+  /** 原（AI 提取）截止日 YYYY-MM-DD */
+  deadline?: string
+  /** 自定义截止日（覆盖 deadline；仅本机显示层） */
+  custom_deadline?: string
+}
+
+const MINE_KEY = 'dsh.cau-portal.mine.v1'
+
+export function loadMine(): Record<string, MineItem> {
+  try {
+    const v = JSON.parse(localStorage.getItem(MINE_KEY) || '{}')
+    return v && typeof v === 'object' ? v : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveMine(m: Record<string, MineItem>) {
+  try {
+    localStorage.setItem(MINE_KEY, JSON.stringify(m))
+  } catch {
+    /* 静默 */
+  }
+}
+
+/** 从旧版 deadlineOps 的 pin 迁移（一次性） */
+export function migrateMineFromPin() {
+  const m = loadMine()
+  const ops = loadDeadlineOps()
+  let changed = false
+  for (const [id, op] of Object.entries(ops)) {
+    if (op === 'pin' && !m[id]) {
+      m[id] = { added_at: Date.now(), title: '', url: '' }
+      changed = true
+    }
+  }
+  if (changed) saveMine(m)
+}
+
+export function isMine(id: string): boolean {
+  return !!loadMine()[id]
+}
+
+/** 加入我的事项（同步进关注列表 + 异步补本地全文快照） */
+export async function addMine(id: string, item: { title: string; url: string; deadline?: string; source?: string; column?: string }): Promise<void> {
+  migrateMineFromPin()
+  const m = loadMine()
+  if (!m[id]) {
+    m[id] = { added_at: Date.now(), title: item.title, url: item.url, deadline: item.deadline, source: item.source, column: item.column }
+    saveMine(m)
+  }
+  // 同步进关注列表（无上限；重复自动去重）
+  const cur = loadFollow()
+  if (!cur.some((x) => x.id === id)) {
+    saveFollow([{ id, title: item.title, url: item.url, time: null, source: item.source, column: item.column, importance: undefined, summary: undefined }, ...cur])
+  }
+  // 异步补本地全文快照（成功则缓存，失败静默）
+  try {
+    const art = await readArticle(id)
+    if (art) cacheFollowArticle(id, art)
+  } catch {
+    /* 静默 */
+  }
+}
+
+/** 移出我的事项（不影响关注列表，关注须在关注区另行取消） */
+export function removeMine(id: string) {
+  const m = loadMine()
+  if (!m[id]) return
+  delete m[id]
+  saveMine(m)
+}
+
+/** 自定义截止日（空串=恢复 AI 提取值） */
+export function setMineDeadline(id: string, date: string) {
+  const m = loadMine()
+  if (!m[id]) return
+  m[id].custom_deadline = date || undefined
+  saveMine(m)
+}
+
+/** 显示用截止日：custom 优先 */
+export function mineDeadlineOf(m: MineItem): string | null {
+  return m.custom_deadline || m.deadline || null
+}
+
 // ---- 便捷读取：文章 / 栏目 feed（相对 data/）----
 
 /** 读取文章（含缓存兜底）：云端无（已过保留期/404）时回退本地关注缓存；失败返回 null */

@@ -5,7 +5,22 @@
  * 数据：index.json + summary.json（缓存由调用方/本组件直接读云端，量小）。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadReadSet, markAllRead, loadFollow, saveFollow, loadDeadlineOps, setDeadlineOp, isPruned, loadModules } from './data'
+import {
+  readCloudJson,
+  loadReadSet,
+  markAllRead,
+  loadFollow,
+  saveFollow,
+  loadDeadlineOps,
+  setDeadlineOp,
+  isPruned,
+  loadModules,
+  loadMine,
+  removeMine,
+  setMineDeadline,
+  mineDeadlineOf,
+  migrateMineFromPin,
+} from './data'
 
 type DeadlineItem = { item: string; date: string; title: string; article_id?: string; url?: string; column?: string; source?: string; time?: string | null }
 
@@ -31,14 +46,18 @@ export function HomeView(props: {
   onOpenArticle: (id: string, siblings: { id: string; title: string }[], index: number) => void
   onViewArchive: () => void
   onViewFollow: () => void
+  onViewDeadlines: () => void
 }) {
-  const { onOpenColumn, onOpenArticle, onViewArchive, onViewFollow } = props
+  const { onOpenColumn, onOpenArticle, onViewArchive, onViewFollow, onViewDeadlines } = props
   const [phase, setPhase] = useState<'loading' | 'maybe-token' | 'error' | 'ready'>('loading')
   const [indexJson, setIndexJson] = useState<any>(null)
   const [summary, setSummary] = useState<any>(null)
   const [readSet, setReadSet] = useState<string[]>(() => loadReadSet())
   const [follow, setFollow] = useState<any[]>(() => loadFollow())
   const [ops, setOps] = useState<Record<string, any>>(() => loadDeadlineOps())
+  const [mine, setMine] = useState<Record<string, any>>(() => loadMine())
+  const [mineEdit, setMineEdit] = useState<string | null>(null)
+  const [mineDraft, setMineDraft] = useState('')
   const [needToken, setNeedToken] = useState(false)
   const mods = useMemo(() => loadModules(), [])
 
@@ -52,6 +71,8 @@ export function HomeView(props: {
     }
     setIndexJson(idx)
     setSummary(sum)
+    migrateMineFromPin()
+    setMine(loadMine())
     setPhase('ready')
   }
 
@@ -64,15 +85,23 @@ export function HomeView(props: {
     [summary],
   )
 
-  const deadlines = useMemo(() => {
-    const all = (summary?.deadlines || [])
-      .map((d: DeadlineItem) => ({ d, n: daysLeft(d.date) }))
-      .filter((x: any) => Number.isFinite(x.n) && x.n >= 0 && x.n <= 7)
-    const notArchived = all.filter((x: any) => !isPruned(x.d.article_id || x.d.url) && ops[x.d.article_id || x.d.url] !== 'archive')
-    const pinned = notArchived.filter((x: any) => ops[x.d.article_id || x.d.url] === 'pin')
-    const rest = notArchived.filter((x: any) => ops[x.d.article_id || x.d.url] !== 'pin')
-    return [...pinned, ...rest].slice(0, 8)
-  }, [summary, ops])
+  /** 我的事项：精选大卡（标题/日期快照 + 云端 deadline 富集；含已过期） */
+  const mineRows = useMemo(() => {
+    const dlById = new Map((summary?.deadlines || []).map((d: any) => [d.article_id || d.url, d]))
+    return Object.entries(mine)
+      .map(([id, m]: any) => {
+        const d = dlById.get(id)
+        const date = mineDeadlineOf(m) || d?.date || null
+        return { id, title: m.title || d?.title || '(事项)', date, column: m.column || d?.column || '' }
+      })
+      .sort((a: any, b: any) => String(b.date || '9999-12-31').localeCompare(String(a.date || '9999-12-31')))
+  }, [mine, summary])
+
+  /** 全部未过期截止数（未归档） */
+  const allDeadlines = useMemo(
+    () => (summary?.deadlines || []).filter((d: DeadlineItem) => ops[d.article_id || d.url] !== 'archive').length,
+    [summary, ops],
+  )
 
   const archiveCount = useMemo(
     () => (summary?.deadlines || []).filter((d: DeadlineItem) => ops[d.article_id || d.url] === 'archive').length,
@@ -126,45 +155,103 @@ export function HomeView(props: {
             <div className="dsh-cau_hint">⭐ 待办与要闻聚合暂不可用（云端 summary.json 未就绪），其余功能正常。</div>
           )}
 
-          {/* 待办截止 */}
+          {/* 我的事项（人工精选大卡） + 全部待办入口 */}
           {mods.deadline && (
-          <div className="dsh-cau_sec">
-            <div className="dsh-cau_secHead">
-              <span className="dsh-cau_secMark" />
-              <span className="dsh-cau_secTitle">⏰ 待办截止</span>
-              {archiveCount > 0 && (
-                <button type="button" className="dsh-cau_textBtn" onClick={onViewArchive}>
-                  归档 {archiveCount}
-                </button>
-              )}
-            </div>
-            <div className="dsh-cau_card">
-              {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
-              {summary && deadlines.length === 0 && <div className="dsh-cau_empty">未来 7 天暂无截止事项</div>}
-              {deadlines.map(({ d, n }: any) => (
-                <div className="dsh-cau_dlRow" key={d.article_id || d.url}>
-                  <div className="dsh-cau_dlTop">
-                    <span className="dsh-cau_dlItem">{d.item || '截止事项'}</span>
-                    <span className="dsh-cau_dlDate">{fmtCn(d.date)} · {n === 0 ? '今天' : `剩 ${n} 天`}</span>
-                    {d.column && <span className="dsh-cau_dlCol">{d.column}</span>}
-                  </div>
-                  <div className="dsh-cau_dlTitleWrap">
-                    <span className="dsh-cau_dlTitle" title={d.title} onClick={() => openArt(d.article_id || d.url, d.title, [], 0)}>
-                      {d.title}
-                    </span>
-                    <span className="dsh-cau_dlAct">
-                      <button type="button" className={'dsh-cau_textBtn' + (ops[d.article_id || d.url] === 'pin' ? ' dsh-cau_on' : '')} onClick={() => setOps(setDeadlineOp(d.article_id || d.url, ops[d.article_id || d.url] === 'pin' ? null : 'pin'))}>
-                        留存
-                      </button>
-                      <button type="button" className={'dsh-cau_textBtn' + (ops[d.article_id || d.url] === 'archive' ? ' dsh-cau_on' : '')} onClick={() => setOps(setDeadlineOp(d.article_id || d.url, ops[d.article_id || d.url] === 'archive' ? null : 'archive'))}>
-                        归档
-                      </button>
-                    </span>
-                  </div>
+            <div className="dsh-cau_sec">
+              <div className="dsh-cau_secHead">
+                <span className="dsh-cau_secMark" />
+                <span className="dsh-cau_secTitle">⭐ 我的事项</span>
+                {allDeadlines > 0 && (
+                  <button type="button" className="dsh-cau_textBtn" onClick={onViewDeadlines}>
+                    全部待办 {allDeadlines} ›
+                  </button>
+                )}
+              </div>
+              {mineRows.length === 0 ? (
+                <div className="dsh-cau_empty">在「全部待办」或文章页点「⭐ 我的事项」，精选事项会以大卡突出显示在这里（并自动出现在关注区）。</div>
+              ) : (
+                <div className="dsh-cau_mineGrid">
+                  {mineRows.map(({ id, title, date, column }: any) => {
+                    const mm = /^\d{4}-(\d{1,2})-(\d{1,2})/.exec(String(date || ''))
+                    const n = date ? daysLeft(String(date)) : Number.NaN
+                    const expired = Number.isFinite(n) && n < 0
+                    return (
+                      <div key={id} className={'dsh-cau_mineCard' + (expired ? ' expired' : '')} onClick={() => openArt(id, title, [], 0)}>
+                        <div className="dsh-cau_mineDate">
+                          {mm ? (
+                            <>
+                              <span className="dsh-cau_mineDay">{+mm[2]}</span>
+                              <span className="dsh-cau_mineYM">{+mm[1]}月</span>
+                            </>
+                          ) : (
+                            <span className="dsh-cau_mineYM">未设日期</span>
+                          )}
+                          <span className="dsh-cau_mineCount">{!Number.isFinite(n) ? '—' : expired ? '已过期' : n === 0 ? '今天' : `剩 ${n} 天`}</span>
+                        </div>
+                        <div className="dsh-cau_mineTitle">{title}</div>
+                        <div className="dsh-cau_mineFoot">
+                          {column && <span className="dsh-cau_mineCol">{column}</span>}
+                          <span className="dsh-cau_mineActs">
+                            <button
+                              type="button"
+                              className="dsh-cau_textBtn"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setMineEdit(id)
+                                setMineDraft(String(date || ''))
+                              }}
+                            >
+                              ✎ 日期
+                            </button>
+                            <button
+                              type="button"
+                              className="dsh-cau_textBtn"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeMine(id)
+                                setMine(loadMine())
+                              }}
+                            >
+                              ☆ 移出
+                            </button>
+                          </span>
+                        </div>
+                        {mineEdit === id && (
+                          <div className="dsh-cau_mineEdit" onClick={(e) => e.stopPropagation()}>
+                            <input className="dsh-cau_setInput" style={{ maxWidth: 160 }} type="date" value={mineDraft} onChange={(e) => setMineDraft(e.target.value)} />
+                            <button
+                              type="button"
+                              className="dsh-cau_textBtn"
+                              onClick={() => {
+                                setMineDeadline(id, mineDraft)
+                                setMine(loadMine())
+                                setMineEdit(null)
+                              }}
+                            >
+                              保存
+                            </button>
+                            <button type="button" className="dsh-cau_textBtn" onClick={() => setMineEdit(null)}>
+                              取消
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
-              ))}
+              )}
+              <div className="dsh-cau_deadlineEntry">
+                <span className="dsh-cau_deadlineEntryMain" role="button" onClick={onViewDeadlines}>
+                  📋 全部待办（含所有截止事项）
+                  <span className="dsh-cau_deadlineEntryArrow">筛选与查看 ›</span>
+                </span>
+                {archiveCount > 0 && (
+                  <button type="button" className="dsh-cau_textBtn" onClick={onViewArchive}>
+                    归档 {archiveCount}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
           )}
 
           {/* 要闻 */}

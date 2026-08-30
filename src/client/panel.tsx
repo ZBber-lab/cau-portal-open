@@ -10,6 +10,7 @@ import { HomeView } from './panel-home'
 import { ColumnView } from './panel-column'
 import { ArticleView } from './panel-article'
 import { ManageView } from './panel-manage'
+import { DeadlinesView } from './panel-deadlines'
 import { CauSettings } from './settings'
 import {
   loadSettings,
@@ -350,6 +351,7 @@ export function CauPanel(props: {
                 onOpenArticle={(id, sibs, idx) => openArticle(id, undefined, undefined, sibs, idx)}
                 onViewArchive={() => setStack((s) => [...s, { name: 'archive' }])}
                 onViewFollow={() => setStack((s) => [...s, { name: 'follow' }])}
+                onViewDeadlines={() => setStack((s) => [...s, { name: 'deadlines' }])}
               />
             )}
             {view.name === 'site' && (
@@ -364,6 +366,7 @@ export function CauPanel(props: {
             {view.name === 'archive' && <ArchiveView onBack={back} onOpenArticle={(id) => openArticle(id)} />}
             {view.name === 'follow' && <FollowView onBack={back} onOpenArticle={(id) => openArticle(id)} />}
             {view.name === 'manage' && <ManageView onBack={back} />}
+            {view.name === 'deadlines' && <DeadlinesView onBack={back} onOpenArticle={(id) => openArticle(id)} />}
           </>
         )}
       </div>
@@ -427,6 +430,31 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_breadPath{flex:1;min-width:0;font-size:11px;color:var(--dsw-alias-label-tertiary,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-cau_dlRow{padding:6px 8px;border-radius:6px}
 .dsh-cau_dlRow:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.04))}
+/* ---- 我的事项大卡 + 全部待办入口 ---- */
+.dsh-cau_mineGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:10px}
+.dsh-cau_mineCard{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid color-mix(in srgb,var(--cau-brand,#008038) 30%,transparent);border-radius:12px;background:color-mix(in srgb,var(--cau-brand,#008038) 6%,transparent);cursor:pointer;transition:border-color .12s ease,background .12s ease}
+.dsh-cau_mineCard:hover{border-color:color-mix(in srgb,var(--cau-brand,#008038) 60%,transparent);background:color-mix(in srgb,var(--cau-brand,#008038) 9%,transparent)}
+.dsh-cau_mineCard.expired{border-color:var(--dsw-alias-border-inverted,rgba(15,17,21,.12));background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.03))}
+.dsh-cau_mineDate{display:flex;align-items:baseline;gap:6px}
+.dsh-cau_mineDay{font-size:30px;font-weight:700;line-height:1;color:var(--cau-brand,#008038)}
+.dsh-cau_mineCard.expired .dsh-cau_mineDay{color:var(--dsw-alias-label-tertiary,#888)}
+.dsh-cau_mineYM{font-size:13px;font-weight:500;color:var(--dsw-alias-label-secondary,#555)}
+.dsh-cau_mineCount{flex:none;margin-left:auto;font-size:11px;font-weight:600;color:var(--cau-brand,#008038)}
+.dsh-cau_mineCard.expired .dsh-cau_mineCount{color:var(--dsw-alias-state-error-primary,#e5484d)}
+.dsh-cau_mineTitle{font-size:13px;line-height:19px;color:var(--dsw-alias-label-primary,#111);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:38px}
+.dsh-cau_mineFoot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dsh-cau_mineCol{flex:1;min-width:0;font-size:11px;color:var(--dsw-alias-label-tertiary,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-cau_mineActs{flex:none;display:flex;gap:4px}
+.dsh-cau_mineEdit{display:flex;gap:6px;align-items:center;margin-top:2px}
+.dsh-cau_deadlineEntry{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1px dashed var(--dsw-alias-border-inverted,rgba(15,17,21,.18));border-radius:8px}
+.dsh-cau_deadlineEntryMain{flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary,#555);cursor:pointer}
+.dsh-cau_deadlineEntryArrow{color:var(--dsw-alias-label-tertiary,#999)}
+/* ---- 待办中心（全部待办视图） ---- */
+.dsh-cau_dlHint{font-size:12px;line-height:17px;color:var(--dsw-alias-label-tertiary,#999);margin:4px 0 8px}
+.dsh-cau_dlChip{height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.14));border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary,#666);font-size:11px;cursor:pointer}
+.dsh-cau_dlChip:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}
+.dsh-cau_dlChip.on{background:color-mix(in srgb,var(--cau-brand,#008038) 12%,transparent);border-color:var(--cau-brand,#008038);color:var(--cau-brand,#008038)}
+.dsh-cau_dlList{display:flex;flex-direction:column;gap:2px}
 .dsh-cau_dlTop{display:flex;align-items:baseline;gap:6px;min-width:0}
 .dsh-cau_dlItem{flex:none;font-size:12px;font-weight:500;color:var(--dsw-alias-label-primary,#111);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
 .dsh-cau_dlDate{flex:none;font-size:11px;font-weight:500;color:var(--dsw-alias-state-warn,#f59e0b)}

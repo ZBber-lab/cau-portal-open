@@ -15,6 +15,9 @@ import {
   setDeadlineOp,
   isFollowed,
   isPruned,
+  isMine,
+  addMine,
+  removeMine,
   enrichArticle,
   loadSettings,
   loadModules,
@@ -48,6 +51,7 @@ export function ArticleView(props: {
   const [aiOut, setAiOut] = useState<any | null>(null)
   const [aiErr, setAiErr] = useState('')
   const [fromCache, setFromCache] = useState(false)
+  const [mined, setMined] = useState(() => isMine(articleId))
 
   const reload = async () => {
     setPhase('loading')
@@ -124,6 +128,22 @@ export function ArticleView(props: {
 
   const hasDeadline = !!(art?.ai?.deadline && art?.ai?.deadline.date)
   const op = deadlineOp || ''
+
+  const toggleMineNow = async () => {
+    if (isMine(articleId)) {
+      removeMine(articleId)
+      setMined(false)
+    } else {
+      await addMine(articleId, {
+        title: art?.title || '',
+        url: art?.url || '',
+        deadline: hasDeadline ? art.ai.deadline.date : undefined,
+        source: art?.source || '',
+        column: columnName || '',
+      })
+      setMined(true)
+    }
+  }
 
   return (
     <div className="dsh-cau_view">
@@ -250,10 +270,10 @@ export function ArticleView(props: {
               <>
                 <button
                   type="button"
-                  className={'dsh-cau_aBtn' + (op === 'pin' ? ' dsh-cau_aBtnOn' : '')}
-                  onClick={() => setDeadlineOpState(setDeadlineOp(articleId, op === 'pin' ? null : 'pin')[articleId] || null)}
+                  className={'dsh-cau_aBtn' + (mined ? ' dsh-cau_aBtnOn' : '')}
+                  onClick={() => void toggleMineNow()}
                 >
-                  留存待办
+                  {mined ? '⭐ 已在我的事项' : '☆ 我的事项'}
                 </button>
                 <button
                   type="button"
