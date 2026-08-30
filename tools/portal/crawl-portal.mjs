@@ -111,9 +111,27 @@ export async function runPortalCrawl({ dataDir = null, days = null, maxPages = n
   const mp = maxPages != null ? Number(maxPages) : 80;
 
   const { items, total } = await fetchAllPim({ pageSize: 100, maxPages: mp, sinceMs, overlapRids: prevRids });
-  if (!items.length) return { ok: true, total, new: 0, error: null, note: '无新增条目（可能全部已在库）' };
 
   const runTs = new Date().toISOString();
+
+  // 无新增：仍执行 article 引用修复（历史 feed 可能缺 article 字段 → enrich/summary 关联不上）
+  if (!items.length) {
+    let changed = false;
+    const fixed = prev.map((p) => {
+      const artFile = `${sha1(p.url)}.json`;
+      const target = existsSync(join(dataRoot, 'articles', artFile)) ? artFile : (p.article ?? null);
+      if ((target || null) !== (p.article || null)) changed = true;
+      return { ...p, article: target };
+    });
+    if (changed) {
+      writeFileSync(feedPath, JSON.stringify({
+        site: 'portal', site_name: '统一门户', column_key: 'notices', column_name: '校内通知',
+        fetched_at: runTs, total_record: total, items: fixed,
+      }, null, 2));
+      return { ok: true, total, new: 0, new_articles: 0, feed_items: fixed.length, repaired_article_refs: true };
+    }
+    return { ok: true, total, new: 0, error: null, note: '无新增条目（可能全部已在库）' };
+  }
 
   // ① 先写文章文件（仅元数据：PIM_CONTENT 一律不落，标题级 AI 由云端 enrich 处理）
   let artNew = 0;
