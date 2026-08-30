@@ -12,6 +12,7 @@
   },
   "files": [
     "lib",
+    "tools/portal",
     "cordis.patch.yml",
     "dsh.plugin.json",
     "README.md"

@@ -342,6 +342,78 @@ export function CauSettings(props: any) {
     }
   }
 
+  // ---------- 子页：统一门户登录（阶段5） ----------
+  const [portalUser, setPortalUser] = useState('')
+  const [portalPwd, setPortalPwd] = useState('')
+  const [portalState, setPortalState] = useState<'idle' | 'loading' | 'ok' | 'fail'>('idle')
+  const [portalMsg, setPortalMsg] = useState('')
+  const fetchPortalStatus = async () => {
+    setPortalState('loading')
+    setPortalMsg('')
+    try {
+      const r = await fetch('/api/cau/portal/status')
+      const j = await r.json()
+      if (!j || j.ok === false) {
+        setPortalState('fail')
+        setPortalMsg(j?.error || '状态接口异常')
+        return
+      }
+      if (j.loggedIn) {
+        setPortalState('ok')
+        setPortalMsg(`已登录 ✓ 账号 ${j.user || '?'}（会话保存于本机，过期可自动重登）`)
+      } else if (j.accountSaved) {
+        setPortalState('idle')
+        setPortalMsg(`密码已保存（账号 ${j.user || '?'}），但登录态已过期——点「一键登录」自动重登`)
+      } else {
+        setPortalState('idle')
+        setPortalMsg('未登录。填入账号密码后点「一键登录」。')
+      }
+    } catch (e: any) {
+      setPortalState('fail')
+      setPortalMsg('服务端不可用：' + String(e?.message || e))
+    }
+  }
+  const doPortalLogin = async () => {
+    if (!portalUser.trim() || !portalPwd) {
+      setPortalState('fail')
+      setPortalMsg('请先填写账号与密码')
+      return
+    }
+    setPortalState('loading')
+    setPortalMsg('')
+    try {
+      const r = await fetch('/api/cau/portal/account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: portalUser.trim(), password: portalPwd }),
+      })
+      const j = await r.json()
+      if (j?.ok) {
+        setPortalState('ok')
+        setPortalPwd('')
+        setPortalMsg(`✅ ${j.message || '登录成功'}（账号 ${j.user || portalUser.trim()}）`)
+      } else {
+        setPortalState('fail')
+        setPortalPwd('')
+        setPortalMsg((j?.message || j?.error || '登录失败') + '（密码未保存？重试或查看服务端日志）')
+      }
+    } catch (e: any) {
+      setPortalState('fail')
+      setPortalMsg('服务端不可用：' + String(e?.message || e))
+    }
+  }
+  const doPortalClear = async () => {
+    setPortalState('loading')
+    try {
+      await fetch('/api/cau/portal/clear', { method: 'POST' })
+      setPortalState('idle')
+      setPortalMsg('已清除本机登录态与保存的密码。')
+    } catch (e: any) {
+      setPortalState('fail')
+      setPortalMsg('清除失败：' + String(e?.message || e))
+    }
+  }
+
   // ---------- 首页卡片 ----------
   const tokBadge = (() => {
     const err = tokens.some((t) => t.enabled && t.expires && daysUntil(t.expires) != null && daysUntil(t.expires)! < 0)
@@ -697,9 +769,26 @@ export function CauSettings(props: any) {
       {page === 'security' && (
         <div className="dsh-cau_setBlocks">
           <div className="dsh-cau_setBlock">
-            <div className="dsh-cau_setTitle">统一门户密码（阶段 5）</div>
-            <div className="dsh-cau_setDesc">实验功能（代登录统一门户），阶段 5 才开放；若开放也仅存本机、不进仓库、不进 AI 对话。</div>
-            <input className="dsh-cau_setInput" type="password" placeholder="暂未开放" disabled />
+            <div className="dsh-cau_setTitle">统一门户登录（校内通知接入）</div>
+            <div className="dsh-cau_setDesc">填入学号/职工号与密码 →「一键登录」→ 在<b>本机</b>自动登录统一门户（one.cau.edu.cn）并保存登录态。密码仅存本机工具目录（gitignore，不进仓库、不进对话/日志）；cookie 过期时自动用保存的密码重登。当前版本仅抓取「校内通知」列表（标题/时间/来源），不抓正文。</div>
+            <label className="dsh-cau_setLabel" htmlFor="cauPortalUser">账号（职工号/学号）</label>
+            <input id="cauPortalUser" className="dsh-cau_setInput" value={portalUser} onChange={(e) => setPortalUser(e.target.value)} placeholder="职工号/学号" autoComplete="off" spellCheck={false} />
+            <label className="dsh-cau_setLabel" htmlFor="cauPortalPwd">密码</label>
+            <input id="cauPortalPwd" className="dsh-cau_setInput" type="password" value={portalPwd} onChange={(e) => setPortalPwd(e.target.value)} placeholder="密码（仅提交本机服务端）" autoComplete="new-password" />
+            <div className="dsh-cau_setRow">
+              <button type="button" className="dsh-cau_setBtn" disabled={portalState === 'loading'} onClick={() => void doPortalLogin()}>
+                {portalState === 'loading' ? '登录中…' : '🔑 一键登录 / 测试'}
+              </button>
+              <button type="button" className="dsh-cau_setBtn danger" onClick={() => void doPortalClear()}>
+                清除密码与登录态
+              </button>
+              <button type="button" className="dsh-cau_setBtn" onClick={() => void fetchPortalStatus()}>
+                查看登录状态
+              </button>
+            </div>
+            {portalState === 'ok' && <span className="dsh-cau_setOk">{portalMsg}</span>}
+            {portalState === 'fail' && <span className="dsh-cau_setErr">{portalMsg}</span>}
+            {portalState === 'idle' && portalMsg && <span className="dsh-cau_setHint">{portalMsg}</span>}
           </div>
           <div className="dsh-cau_setBlock">
             <div className="dsh-cau_setTitle">密钥与重要链接</div>

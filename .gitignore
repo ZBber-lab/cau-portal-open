@@ -17,3 +17,9 @@ push-to-github.bat
 fix-log.txt
 cau-fix-push.bat
 .push-clone/
+
+# 门户会话/密码（本机敏感，绝不进仓）
+tools/portal/session.json
+tools/portal/account.json
+tools/portal/pw.json
+.pw-browsers/
