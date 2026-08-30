@@ -31,7 +31,7 @@ import { getCtx } from './ctx'
 const noop = () => {}
 
 export const SETTINGS_CSS = `
-.dsh-cau_set{display:flex;flex-direction:column;gap:14px;padding:16px 0 24px;max-width:640px}
+.dsh-cau_set{display:flex;flex-direction:column;gap:14px;padding:16px 0 24px;max-width:640px;width:100%;min-width:0;overflow-x:hidden}
 /* ---- 提醒条 ---- */
 .dsh-cau_alert{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-radius:8px;font-size:12px;line-height:17px}
 .dsh-cau_alert.error{border:1px solid var(--dsw-alias-state-error-primary,rgba(229,72,77,.5));background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 10%,transparent);color:var(--dsw-alias-state-error-primary,#e5484d)}
@@ -64,7 +64,10 @@ export const SETTINGS_CSS = `
 .dsh-cau_setTitle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary,#e6e8eb)}
 .dsh-cau_setTitle::before{content:"";flex:none;width:3px;height:12px;border-radius:2px;background:var(--cau-brand,#008038)}
 .dsh-cau_setDesc{font-size:12px;line-height:17px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
-.dsh-cau_setRow{display:flex;align-items:center;gap:10px}
+.dsh-cau_setRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.dsh-cau_mineLabel{display:flex;flex-direction:column;gap:4px;margin:0}
+.dsh-cau_mineLabel span{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
+.dsh-cau_mineLabel .dsh-cau_setSelect{width:100%;flex:none}
 .dsh-cau_setLabel{flex:1;min-width:0;font-size:13px;color:var(--dsw-alias-label-secondary,#9aa4b2)}
 .dsh-cau_setInput{box-sizing:border-box;width:100%;height:32px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary,#e6e8eb);font-size:12px;outline:none}
 .dsh-cau_setInput:focus{border-color:var(--cau-brand,#008038)}
@@ -819,20 +822,22 @@ export function CauSettings(props: any) {
               ))}
             </div>
             <div className="dsh-cau_infoCard">
-              <div className="dsh-cau_setRow">
-                <span className="dsh-cau_setLabel">关键词</span>
+              <label className="dsh-cau_mineLabel">
+                <span>关键词（必填，如 推免 / 选课 / 奖学金）</span>
                 <input className="dsh-cau_setInput" placeholder="如：推免 / 选课 / 奖学金 / 土地学院" value={ruleDraft.keyword} onChange={(e) => setRuleDraft({ ...ruleDraft, keyword: e.target.value })} />
-              </div>
-              <div className="dsh-cau_setRow">
-                <span className="dsh-cau_setLabel">来源含</span>
+              </label>
+              <label className="dsh-cau_mineLabel">
+                <span>来源包含（可空，如 教务处 / 团委 / 土地）</span>
                 <input className="dsh-cau_setInput" placeholder="可空（如 教务处 / 团委 / 土地）" value={ruleDraft.source} onChange={(e) => setRuleDraft({ ...ruleDraft, source: e.target.value })} />
-                <span className="dsh-cau_setLabel" style={{ flex: 'none' }}>重要度</span>
+              </label>
+              <label className="dsh-cau_mineLabel">
+                <span>重要度下限（不限 / 高或中 / 只要高）</span>
                 <select className="dsh-cau_setSelect" value={ruleDraft.minImportance} onChange={(e) => setRuleDraft({ ...ruleDraft, minImportance: e.target.value })}>
-                  <option value="">不限</option>
+                  <option value="">不限重要度</option>
                   <option value="中">高或中</option>
                   <option value="高">只要高</option>
                 </select>
-              </div>
+              </label>
               <div className="dsh-cau_setRow">
                 <button type="button" className="dsh-cau_setBtn" disabled={!ruleDraft.keyword.trim()} onClick={addRule}>
                   添加规则
