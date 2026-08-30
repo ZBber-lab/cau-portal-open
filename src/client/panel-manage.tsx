@@ -5,7 +5,7 @@
  * 本地立即隐藏；可随时退出管理模式。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, readFeed, loadFollow, loadMine, isPruned, queuePruneRequest } from './data'
+import { readCloudJson, readFeed, loadFollow, loadMine, loadDeadlineOps, isPruned, queuePruneRequest } from './data'
 
 const OLD_DAYS = 60
 
@@ -21,6 +21,7 @@ type MgRow = {
   isOld: boolean
   followed: boolean
   mined: boolean
+  archived: boolean
 }
 
 const idKey = (it: any): string =>
@@ -63,7 +64,7 @@ export function ManageView(props: { onBack: () => void }) {
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
   const [rows, setRows] = useState<MgRow[]>([])
   const [sel, setSel] = useState<Set<string>>(new Set())
-  const [filter, setFilter] = useState<'all' | 'old' | 'new'>('all')
+  const [filter, setFilter] = useState<'all' | 'old' | 'new' | 'arch'>('all')
   const [siteFilter, setSiteFilter] = useState('')
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
@@ -81,6 +82,7 @@ export function ManageView(props: { onBack: () => void }) {
     }
     const followSet = new Set(loadFollow().map((f: any) => f.id))
     const mineSet = new Set(Object.keys(loadMine()))
+    const opsMap = loadDeadlineOps()
     const out: MgRow[] = []
     for (const site of idx.sites as any[]) {
       for (const col of site.columns || []) {
@@ -103,6 +105,7 @@ export function ManageView(props: { onBack: () => void }) {
             isOld: t !== null ? t > OLD_DAYS : false,
             followed: followSet.has(id),
             mined: mineSet.has(id),
+            archived: opsMap[id] === 'archive',
           })
         }
       }
@@ -120,6 +123,7 @@ export function ManageView(props: { onBack: () => void }) {
     let list = rows
     if (filter === 'old') list = list.filter((r) => r.isOld)
     if (filter === 'new') list = list.filter((r) => !r.isOld)
+    if (filter === 'arch') list = list.filter((r) => r.archived)
     if (siteFilter) list = list.filter((r) => r.siteKey === siteFilter)
     const q = query.trim().toLowerCase()
     if (q) list = list.filter((r) => (r.title || '').toLowerCase().includes(q) || (r.url || '').toLowerCase().includes(q))
@@ -127,6 +131,7 @@ export function ManageView(props: { onBack: () => void }) {
   }, [rows, filter, siteFilter, query])
 
   const oldCount = useMemo(() => rows.filter((r) => r.isOld).length, [rows])
+  const archCount = useMemo(() => rows.filter((r) => r.archived).length, [rows])
   const sites = useMemo(() => {
     const m = new Map<string, string>()
     for (const r of rows) if (!m.has(r.siteKey)) m.set(r.siteKey, r.siteName)
@@ -136,6 +141,7 @@ export function ManageView(props: { onBack: () => void }) {
   const selOld = useMemo(() => rows.filter((r) => r.isOld && sel.has(r.id)).length, [rows, sel])
   const selFollow = useMemo(() => rows.filter((r) => r.followed && sel.has(r.id)).length, [rows, sel])
   const selMine = useMemo(() => rows.filter((r) => r.mined && sel.has(r.id)).length, [rows, sel])
+  const selArch = useMemo(() => rows.filter((r) => r.archived && sel.has(r.id)).length, [rows, sel])
 
   const toggle = (id: string) => {
     setSel((s) => {
@@ -147,6 +153,7 @@ export function ManageView(props: { onBack: () => void }) {
   }
 
   const selectAllOld = () => setSel(new Set(rows.filter((r) => r.isOld).map((r) => r.id)))
+  const selectAllArch = () => setSel(new Set(rows.filter((r) => r.archived).map((r) => r.id)))
   const clearSel = () => setSel(new Set())
 
   const doDelete = async () => {
@@ -199,9 +206,9 @@ export function ManageView(props: { onBack: () => void }) {
               onChange={(e) => setQuery(e.target.value)}
             />
             <div className="dsh-cau_mgFilters">
-              {(['all', 'old', 'new'] as const).map((k) => (
+              {(['all', 'old', 'new', 'arch'] as const).map((k) => (
                 <button key={k} type="button" className={'dsh-cau_mgChip' + (filter === k ? ' on' : '')} onClick={() => setFilter(k)}>
-                  {k === 'all' ? `全部 ${rows.length}` : k === 'old' ? `旧数据 ${oldCount}` : '近 2 个月'}
+                  {k === 'all' ? `全部 ${rows.length}` : k === 'old' ? `旧数据 ${oldCount}` : k === 'new' ? '近 2 个月' : `已归档 ${archCount}`}
                 </button>
               ))}
               <select className="dsh-cau_mgSel" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} title="按站点筛选">
@@ -217,6 +224,9 @@ export function ManageView(props: { onBack: () => void }) {
               <button type="button" className="dsh-cau_mgBtn" onClick={selectAllOld} title="勾选全部超过 2 个月的数据">
                 选择全部旧数据
               </button>
+              <button type="button" className="dsh-cau_mgBtn" onClick={selectAllArch} disabled={!archCount} title="勾选全部已归档数据">
+                选择全部已归档
+              </button>
               <button type="button" className="dsh-cau_mgBtn" onClick={clearSel} disabled={!sel.size}>
                 清空选择
               </button>
@@ -224,7 +234,7 @@ export function ManageView(props: { onBack: () => void }) {
           </div>
 
           <div className="dsh-cau_mgBar">
-            已选 <b>{sel.size}</b> 条（旧 {selOld} · 我的事项 {selMine} · 关注中 {selFollow}）
+            已选 <b>{sel.size}</b> 条（旧 {selOld} · 我的事项 {selMine} · 关注中 {selFollow}{selArch > 0 ? ` · 已归档 ${selArch}` : ''}）
             <button type="button" className="dsh-cau_mgDel" disabled={!sel.size || busy} onClick={() => setConfirm(true)}>
               删除所选（{sel.size}）
             </button>
@@ -273,6 +283,7 @@ export function ManageView(props: { onBack: () => void }) {
                             {highlight(r.title, query)}
                             {r.mined && <span className="dsh-cau_mgMine" title="我的事项">◎</span>}
                             {r.followed && <span className="dsh-cau_mgStar" title="关注中">★</span>}
+                            {r.archived && <span className="dsh-cau_mgArch" title="已归档（全部待办不再显示，可取消归档）">📥</span>}
                           </span>
                           <span className="dsh-cau_mgRowSub">
                             {r.colName}

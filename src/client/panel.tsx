@@ -434,6 +434,9 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_dlRow.due{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 8%,transparent)}
 .dsh-cau_dlRow.soon .dsh-cau_dlDate{color:var(--dsw-alias-state-warn,#b8860b)}
 .dsh-cau_dlRow.due .dsh-cau_dlDate{color:var(--dsw-alias-state-error-primary,#e5484d)}
+.dsh-cau_dlRow.archived{opacity:.6}
+.dsh-cau_dlArch{flex:none;font-size:10px;padding:1px 7px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.06));color:var(--dsw-alias-label-tertiary,#888)}
+.dsh-cau_mgArch{flex:none;font-size:11px;color:var(--dsw-alias-state-warn,#d99c00)}
 /* ---- 我的事项大卡 + 全部待办入口 ---- */
 .dsh-cau_mineGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:10px}
 .dsh-cau_mineCard{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid color-mix(in srgb,var(--cau-brand,#008038) 30%,transparent);border-radius:12px;background:color-mix(in srgb,var(--cau-brand,#008038) 6%,transparent);cursor:pointer;transition:border-color .12s ease,background .12s ease}

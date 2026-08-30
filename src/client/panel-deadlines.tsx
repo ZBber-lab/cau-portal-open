@@ -4,7 +4,7 @@
  * 顶部时间跨度筛选（剩余天数 7/30/90/全部）；每条可点进文章、可加/移「⭐ 我的事项」。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadMine, addMine, removeMine, isMine, mineDeadlineOf } from './data'
+import { readCloudJson, loadMine, addMine, removeMine, isMine, mineDeadlineOf, loadDeadlineOps, setDeadlineOp } from './data'
 
 function daysLeft(date: string): number {
   return Math.ceil((Date.parse(date) - Date.now()) / 86400e3)
@@ -15,6 +15,7 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
   const [summary, setSummary] = useState<any>(null)
   const [range, setRange] = useState<number | 'all'>(30)
   const [mine, setMine] = useState<Record<string, any>>(() => loadMine())
+  const [ops, setOps] = useState<Record<string, any>>(() => loadDeadlineOps())
   const [busy, setBusy] = useState('')
 
   useEffect(() => {
@@ -79,14 +80,16 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
           {sorted.map(({ d, n }: any) => {
             const id = d.article_id || d.url
             const mined = !!mine[id]
+            const archived = ops[id] === 'archive'
             return (
-              <div className={'dsh-cau_dlRow' + (n <= 1 ? ' due' : n <= 3 ? ' soon' : '')} key={id}>
+              <div className={'dsh-cau_dlRow' + (n <= 1 ? ' due' : n <= 3 ? ' soon' : '') + (archived ? ' archived' : '')} key={id}>
                 <div className="dsh-cau_dlTop">
                   <span className="dsh-cau_dlItem">{d.item || '截止事项'}</span>
                   <span className="dsh-cau_dlDate">
                     {d.date} · {n === 0 ? '今天' : `剩 ${n} 天`}
                   </span>
                   {d.column && <span className="dsh-cau_dlCol">{d.column}</span>}
+                  {archived && <span className="dsh-cau_dlArch" title="已归档（首页待办卡不再显示，可在「归档」找回）">📥 已归档</span>}
                 </div>
                 <div className="dsh-cau_dlTitleWrap">
                   <span className="dsh-cau_dlTitle" title={d.title} onClick={() => onOpenArticle(id)}>
@@ -95,6 +98,18 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
                   <span className="dsh-cau_dlAct">
                     <button type="button" className={'dsh-cau_textBtn' + (mined ? ' dsh-cau_on' : '')} disabled={busy === id} onClick={() => void toggleMine(d)}>
                       {mined ? '⭐ 已在我的事项' : '☆ 我的事项'}
+                    </button>
+                    <button
+                      type="button"
+                      className={'dsh-cau_textBtn' + (archived ? ' dsh-cau_on' : '')}
+                      disabled={busy === id}
+                      onClick={() => {
+                        const next = { ...ops, [id]: archived ? null : 'archive' }
+                        setOps(next)
+                        setDeadlineOp(id, archived ? null : 'archive')
+                      }}
+                    >
+                      {archived ? '↩ 取消归档' : '📥 归档'}
                     </button>
                   </span>
                 </div>

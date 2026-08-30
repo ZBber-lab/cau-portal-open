@@ -727,6 +727,25 @@ export function computeAlerts(): { level: 'error' | 'warn'; text: string }[] {
   if (!mods.ai) out.push({ level: 'warn', text: 'AI 摘要已禁用：文章页不显示摘要与补摘要' })
   if (!mods.context) out.push({ level: 'warn', text: '引用协同已禁用：引用按钮与上下文条已隐藏' })
   if (!mods.deadline) out.push({ level: 'warn', text: '待办与关注已禁用：首页不显示待办卡/关注入口' })
+  // 系统通知：开启但未授权/被拒 → 提醒授权路径（避免"开了不响"的错觉）
+  const s = loadSettings()
+  if (s.notifyOn) {
+    const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+    if (perm === 'default') out.push({ level: 'warn', text: '系统通知已开启但尚未授权：设置 → 面板偏好 → 点「请求通知授权」' })
+    else if (perm === 'denied') out.push({ level: 'warn', text: '系统通知已开启但被浏览器拒绝：请在浏览器站点设置中允许通知' })
+    else if (perm === 'unsupported') out.push({ level: 'warn', text: '系统通知已开启，但当前浏览器不支持通知 API' })
+  }
+  // 过期日登记（settings.keyExpiries 独立键）：不被令牌列表覆盖的键提醒（如 cau-portal-read/bridge）
+  const keyExp = s.keyExpiries || {}
+  const tokenDates = new Set(tokens.map((t) => t.expires).filter(Boolean))
+  for (const [k, exp] of Object.entries(keyExp)) {
+    if (!exp || tokenDates.has(exp)) continue
+    const d = Date.parse(exp)
+    if (!Number.isFinite(d)) continue
+    const left = Math.floor((d - Date.now()) / 86400e3)
+    if (left < 0) out.push({ level: 'error', text: `凭据「${k}」已过期（${exp}），请前往 GitHub 续期` })
+    else if (left <= 30) out.push({ level: 'warn', text: `凭据「${k}」将于 ${left} 天后过期（${exp}）` })
+  }
   return out
 }
 
