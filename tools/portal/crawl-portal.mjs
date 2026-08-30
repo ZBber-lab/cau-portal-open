@@ -113,36 +113,9 @@ export async function runPortalCrawl({ dataDir = null, days = null, maxPages = n
   const { items, total } = await fetchAllPim({ pageSize: 100, maxPages: mp, sinceMs, overlapRids: prevRids });
   if (!items.length) return { ok: true, total, new: 0, error: null, note: '无新增条目（可能全部已在库）' };
 
-  // 合并（按 url；保留历史条目）
-  const byUrl = new Map(prev.map((x) => [x.url, x]));
   const runTs = new Date().toISOString();
-  let newCount = 0;
-  for (const it of items) {
-    const p = byUrl.get(it.url);
-    if (!p) newCount++;
-    byUrl.set(it.url, {
-      url: it.url,
-      title: p?.title ?? it.title,
-      date: p?.date ?? it.date,
-      first_seen: p?.first_seen ?? runTs,
-      source: p?.source ?? it.source,
-      type: p?.type ?? it.type,
-      article: p?.article ?? null,
-    });
-  }
-  const merged = [...byUrl.values()].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  const feed = {
-    site: 'portal',
-    site_name: '统一门户',
-    column_key: 'notices',
-    column_name: '校内通知',
-    fetched_at: runTs,
-    total_record: total,
-    items: merged,
-  };
-  writeFileSync(feedPath, JSON.stringify(feed, null, 2));
 
-  // 文章文件：仅元数据（PIM_CONTENT 一律不落），标题级 AI 由云端 enrich 处理
+  // ① 先写文章文件（仅元数据：PIM_CONTENT 一律不落，标题级 AI 由云端 enrich 处理）
   let artNew = 0;
   const newArticleFiles = [];
   for (const it of items) {
@@ -162,6 +135,36 @@ export async function runPortalCrawl({ dataDir = null, days = null, maxPages = n
     artNew++;
     newArticleFiles.push(`data/articles/${artFile}`);
   }
+
+  // ② 合并（按 url；保留历史条目）；article 字段回填：正文文件存在即指向（供 enrich/summary 关联）
+  const byUrl = new Map(prev.map((x) => [x.url, x]));
+  let newCount = 0;
+  for (const it of items) {
+    const p = byUrl.get(it.url);
+    if (!p) newCount++;
+    const artFile = `${sha1(it.url)}.json`;
+    byUrl.set(it.url, {
+      url: it.url,
+      title: p?.title ?? it.title,
+      date: p?.date ?? it.date,
+      first_seen: p?.first_seen ?? runTs,
+      source: p?.source ?? it.source,
+      type: p?.type ?? it.type,
+      article: existsSync(join(dataRoot, 'articles', artFile)) ? artFile : (p?.article ?? null),
+    });
+  }
+  const merged = [...byUrl.values()].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const feed = {
+    site: 'portal',
+    site_name: '统一门户',
+    column_key: 'notices',
+    column_name: '校内通知',
+    fetched_at: runTs,
+    total_record: total,
+    items: merged,
+  };
+  writeFileSync(feedPath, JSON.stringify(feed, null, 2));
+
   return { ok: true, total, pages_fetched: 0, new: newCount, new_articles: artNew, feed_items: merged.length, new_article_files: newArticleFiles, first: items[0], last: items[items.length - 1] };
 }
 

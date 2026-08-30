@@ -33,11 +33,13 @@ async function main() {
       process.exit(1);
     }
   }
+  // 候选：ai==null 且（有正文 或 门户标题级条目（护栏：正文不入库，仅标题加工））；门户优先
+  const isPortal = (a) => /tp_up/.test(String(a.url || ''));
   const candidates = readdirSync(artsDir)
     .filter((f) => f.endsWith('.json'))
     .map((f) => ({ f, a: JSON.parse(readFileSync(`${artsDir}/${f}`, 'utf8')) }))
-    .filter(({ f, a }) => a.body && (force || a.ai == null) && (!fileArg || f.startsWith(fileArg)))
-    .sort((x, y) => (y.a.time || '').localeCompare(x.a.time || ''))
+    .filter(({ f, a }) => (a.body || isPortal(a)) && (force || a.ai == null) && (!fileArg || f.startsWith(fileArg)))
+    .sort((x, y) => (isPortal(x.a) === isPortal(y.a) ? String(y.a.time || '').localeCompare(String(x.a.time || '')) : isPortal(x.a) ? -1 : 1))
     .slice(0, limit);
   console.log(`[enrich] 候选 ${candidates.length}（backend=${backend} model=${model}${force ? ' force' : ''}）`);
   let done = 0;
