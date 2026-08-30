@@ -19,6 +19,8 @@ import {
   loadReadSet,
   loadFollow,
   loadDeadlineOps,
+  setDeadlineOp,
+  activeTokenValues,
 } from './data'
 import { getOpenRequest, clearOpenRequest, subscribeBus } from './bus'
 
@@ -138,15 +140,19 @@ function measureTopInset(): number {
 // ---- 归档视图（已归档待办）----
 function ArchiveView(props: { onBack: () => void; onOpenArticle: (id: string) => void }) {
   const [rows, setRows] = useState<any[]>([])
-  useEffect(() => {
+  const refresh = () => {
     void (async () => {
-      const token = loadSettings().githubToken
+      const token = activeTokenValues()[0] || loadSettings().githubToken || ''
       if (!token) return
       const b = await loadBundle(token)
       const ops = loadDeadlineOps()
       const list = (b.summary?.deadlines || []).filter((d: any) => ops[d.article_id || d.url] === 'archive')
       setRows(list)
     })()
+  }
+  useEffect(() => {
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return (
     <div className="dsh-cau_view">
@@ -154,17 +160,31 @@ function ArchiveView(props: { onBack: () => void; onOpenArticle: (id: string) =>
         <button type="button" className="dsh-cau_backBtn" onClick={props.onBack}>‹ 返回</button>
         <span className="dsh-cau_breadPath">已归档待办</span>
       </div>
+      <div className="dsh-cau_dlHint">归档的截止事项保留在这里；点「↩ 取消归档」可回到「全部待办」。</div>
       <div className="dsh-cau_card">
         {rows.length === 0 && <div className="dsh-cau_empty">暂无归档待办</div>}
-        {rows.map((d) => (
-          <div className="dsh-cau_dlRow" key={d.article_id || d.url}>
-            <span className="dsh-cau_dlTitleWrap" onClick={() => props.onOpenArticle(d.article_id || d.url)}>
-              <span className="dsh-cau_dlItem">{d.item}</span>
-              <span className="dsh-cau_dlTitle">{d.title}</span>
-            </span>
-            <span className="dsh-cau_dlCol">{d.date}</span>
-          </div>
-        ))}
+        {rows.map((d) => {
+          const id = d.article_id || d.url
+          return (
+            <div className="dsh-cau_dlRow" key={id}>
+              <span className="dsh-cau_dlTitleWrap" onClick={() => props.onOpenArticle(id)}>
+                <span className="dsh-cau_dlItem">{d.item}</span>
+                <span className="dsh-cau_dlTitle">{d.title}</span>
+              </span>
+              <span className="dsh-cau_dlCol">{d.date}</span>
+              <button
+                type="button"
+                className="dsh-cau_textBtn"
+                onClick={() => {
+                  setDeadlineOp(id, null)
+                  refresh()
+                }}
+              >
+                ↩ 取消归档
+              </button>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -560,6 +580,11 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_mgChip:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}
 .dsh-cau_mgChip.on{background:color-mix(in srgb,var(--cau-brand) 12%,transparent);border-color:var(--cau-brand);color:var(--cau-brand)}
 .dsh-cau_mgSel{height:24px;padding:0 6px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.14));border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);font-size:11px}
+.dsh-cau_mgLabel{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
+.dsh-cau_mgDate{height:24px;box-sizing:border-box;padding:0 6px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.14));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#111);font-size:11px}
+.dsh-cau_mgCheck{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.12));border-radius:6px;color:var(--dsw-alias-label-secondary,#666);font-size:11px;cursor:pointer}
+.dsh-cau_mgCheck input{accent-color:var(--cau-brand)}
+.dsh-cau_mgChipBtn{height:24px;padding:0 10px;border:1px dashed var(--dsw-alias-border-inverted,rgba(15,17,21,.2));border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#666);font-size:11px;cursor:pointer}
 .dsh-cau_mgActs{display:flex;gap:6px;flex-wrap:wrap}
 .dsh-cau_mgBtn{height:26px;padding:0 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.16));border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#111);font-size:12px;cursor:pointer}
 .dsh-cau_mgBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}

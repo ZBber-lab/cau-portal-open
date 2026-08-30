@@ -30,10 +30,17 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
 
   const rows = useMemo(() => {
     const all = (summary?.deadlines || []) as any[]
-    const list = all.map((d) => ({ d, n: daysLeft(d.date) }))
+    // 归档 = 从当前待办列表移除（找回/取消归档走首页「归档」入口）
+    const active = all.filter((d) => ops[d.article_id || d.url] !== 'archive')
+    const list = active.map((d) => ({ d, n: daysLeft(d.date) }))
     if (range !== 'all') return list.filter((x) => Number.isFinite(x.n) && x.n >= 0 && x.n <= range)
     return list
-  }, [summary, range])
+  }, [summary, range, ops])
+
+  const archivedCount = useMemo(
+    () => (summary?.deadlines || []).filter((d: any) => ops[d.article_id || d.url] === 'archive').length,
+    [summary, ops],
+  )
 
   const toggleMine = async (d: any) => {
     const id = d.article_id || d.url
@@ -59,7 +66,10 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
         </button>
         <span className="dsh-cau_breadPath">全部待办</span>
       </div>
-      <div className="dsh-cau_dlHint">所有含截止日期的事项（未过期，按截止日升序）。「⭐ 我的事项」可精选到首页大卡面板。</div>
+      <div className="dsh-cau_dlHint">
+        所有含截止日期的事项（未过期，按截止日升序）。「⭐ 我的事项」可精选到首页大卡面板；「📥 归档」后从本列表消失，可在首页「归档」入口找回或取消归档。
+        {archivedCount > 0 && <span className="dsh-cau_dlArch">已归档 {archivedCount} 条</span>}
+      </div>
       <div className="dsh-cau_chips" style={{ marginBottom: 8 }}>
         {([7, 30, 90, 'all'] as const).map((k) => (
           <button key={k} type="button" className={'dsh-cau_dlChip' + (range === k ? ' on' : '')} onClick={() => setRange(k)}>
@@ -82,14 +92,13 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
             const mined = !!mine[id]
             const archived = ops[id] === 'archive'
             return (
-              <div className={'dsh-cau_dlRow' + (n <= 1 ? ' due' : n <= 3 ? ' soon' : '') + (archived ? ' archived' : '')} key={id}>
+              <div className={'dsh-cau_dlRow' + (n <= 1 ? ' due' : n <= 3 ? ' soon' : '')} key={id}>
                 <div className="dsh-cau_dlTop">
                   <span className="dsh-cau_dlItem">{d.item || '截止事项'}</span>
                   <span className="dsh-cau_dlDate">
                     {d.date} · {n === 0 ? '今天' : `剩 ${n} 天`}
                   </span>
                   {d.column && <span className="dsh-cau_dlCol">{d.column}</span>}
-                  {archived && <span className="dsh-cau_dlArch" title="已归档（首页待办卡不再显示，可在「归档」找回）">📥 已归档</span>}
                 </div>
                 <div className="dsh-cau_dlTitleWrap">
                   <span className="dsh-cau_dlTitle" title={d.title} onClick={() => onOpenArticle(id)}>
@@ -101,15 +110,15 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
                     </button>
                     <button
                       type="button"
-                      className={'dsh-cau_textBtn' + (archived ? ' dsh-cau_on' : '')}
+                      className="dsh-cau_textBtn"
                       disabled={busy === id}
                       onClick={() => {
-                        const next = { ...ops, [id]: archived ? null : 'archive' }
+                        const next = { ...ops, [id]: 'archive' }
                         setOps(next)
-                        setDeadlineOp(id, archived ? null : 'archive')
+                        setDeadlineOp(id, 'archive')
                       }}
                     >
-                      {archived ? '↩ 取消归档' : '📥 归档'}
+                      📥 归档
                     </button>
                   </span>
                 </div>

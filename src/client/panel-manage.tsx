@@ -1,13 +1,12 @@
 /**
  * cau-portal 数据管理视图（管理模式）：
- * 浏览全部数据（按站点/栏目分组）、一键「选择全部旧数据」（>2 个月）、手动勾选、
+ * 浏览全部数据（按站点/栏目分组）、按【起止日期自由区间】筛选（起始留空=最早、终止留空=至今）、
+ * 「只看已归档」开关、搜索/站点叠加、「选择全部当前筛选」一键勾选、
  * 删除所选（二次确认；关注中条目附警示）→ 提交云端删除清单（下轮抓取 ≤2h 执行），
  * 本地立即隐藏；可随时退出管理模式。
  */
 import { useEffect, useMemo, useState } from 'react'
 import { readCloudJson, readFeed, loadFollow, loadMine, loadDeadlineOps, isPruned, queuePruneRequest } from './data'
-
-const OLD_DAYS = 60
 
 type MgRow = {
   id: string // 文章 base 或 URL（用于本地过滤/显示）
@@ -18,7 +17,6 @@ type MgRow = {
   siteKey: string
   siteName: string
   colName: string
-  isOld: boolean
   followed: boolean
   mined: boolean
   archived: boolean
@@ -28,10 +26,8 @@ const idKey = (it: any): string =>
   (typeof it.article === 'string' ? it.article.replace(/\.json$/, '') : '') || it.url || ''
 const submitKey = (it: any): string => (typeof it.article === 'string' ? it.article : it.url || '')
 
-function daysAgo(s: string | null | undefined): number | null {
-  const t = Date.parse(String(s ?? ''))
-  if (!Number.isFinite(t)) return null
-  return Math.max(0, Math.floor((Date.now() - t) / 86400000))
+function fmtD(d: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ''
 }
 
 /** 关键词高亮：命中片段包 <mark>；q 空时原样返回 */
@@ -64,7 +60,9 @@ export function ManageView(props: { onBack: () => void }) {
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
   const [rows, setRows] = useState<MgRow[]>([])
   const [sel, setSel] = useState<Set<string>>(new Set())
-  const [filter, setFilter] = useState<'all' | 'old' | 'new' | 'arch'>('all')
+  const [dateFrom, setDateFrom] = useState('') // 空 = 最早
+  const [dateTo, setDateTo] = useState('') // 空 = 至今
+  const [archOnly, setArchOnly] = useState(false)
   const [siteFilter, setSiteFilter] = useState('')
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
@@ -92,7 +90,6 @@ export function ManageView(props: { onBack: () => void }) {
           if (!it?.url) continue
           const id = idKey(it)
           if (isPruned(id)) continue
-          const t = daysAgo(it.date ?? it.first_seen)
           out.push({
             id,
             submit: submitKey(it),
@@ -102,7 +99,6 @@ export function ManageView(props: { onBack: () => void }) {
             siteKey: site.id,
             siteName: f.site_name || site.name || site.id,
             colName: f.column_name || col.name || '',
-            isOld: t !== null ? t > OLD_DAYS : false,
             followed: followSet.has(id),
             mined: mineSet.has(id),
             archived: opsMap[id] === 'archive',
@@ -121,16 +117,21 @@ export function ManageView(props: { onBack: () => void }) {
 
   const shown = useMemo(() => {
     let list = rows
-    if (filter === 'old') list = list.filter((r) => r.isOld)
-    if (filter === 'new') list = list.filter((r) => !r.isOld)
-    if (filter === 'arch') list = list.filter((r) => r.archived)
+    // 日期区间（值均为 YYYY-MM-DD；空=不限）
+    if (dateFrom || dateTo) list = list.filter((r) => {
+      const d = fmtD(String(r.date || ''))
+      if (!d) return false // 无日期条目仅在“不限时间”时出现
+      if (dateFrom && d < dateFrom) return false
+      if (dateTo && d > dateTo) return false
+      return true
+    })
+    if (archOnly) list = list.filter((r) => r.archived)
     if (siteFilter) list = list.filter((r) => r.siteKey === siteFilter)
     const q = query.trim().toLowerCase()
     if (q) list = list.filter((r) => (r.title || '').toLowerCase().includes(q) || (r.url || '').toLowerCase().includes(q))
     return list
-  }, [rows, filter, siteFilter, query])
+  }, [rows, dateFrom, dateTo, archOnly, siteFilter, query])
 
-  const oldCount = useMemo(() => rows.filter((r) => r.isOld).length, [rows])
   const archCount = useMemo(() => rows.filter((r) => r.archived).length, [rows])
   const sites = useMemo(() => {
     const m = new Map<string, string>()
@@ -138,7 +139,6 @@ export function ManageView(props: { onBack: () => void }) {
     return [...m.entries()]
   }, [rows])
 
-  const selOld = useMemo(() => rows.filter((r) => r.isOld && sel.has(r.id)).length, [rows, sel])
   const selFollow = useMemo(() => rows.filter((r) => r.followed && sel.has(r.id)).length, [rows, sel])
   const selMine = useMemo(() => rows.filter((r) => r.mined && sel.has(r.id)).length, [rows, sel])
   const selArch = useMemo(() => rows.filter((r) => r.archived && sel.has(r.id)).length, [rows, sel])
@@ -152,8 +152,7 @@ export function ManageView(props: { onBack: () => void }) {
     })
   }
 
-  const selectAllOld = () => setSel(new Set(rows.filter((r) => r.isOld).map((r) => r.id)))
-  const selectAllArch = () => setSel(new Set(rows.filter((r) => r.archived).map((r) => r.id)))
+  const selectAllShown = () => setSel(new Set(shown.map((r) => r.id)))
   const clearSel = () => setSel(new Set())
 
   const doDelete = async () => {
@@ -167,7 +166,8 @@ export function ManageView(props: { onBack: () => void }) {
       setRows((prev) => prev.filter((r) => !sel.has(r.id)))
       setSel(new Set())
       setConfirm(false)
-      setFilter('all')
+      setDateFrom('')
+      setDateTo('')
       setSiteFilter('')
     } else {
       setError(`提交失败：${res.error || '未知错误'}（可稍后重试）`)
@@ -184,7 +184,7 @@ export function ManageView(props: { onBack: () => void }) {
       </div>
 
       <div className="dsh-cau_mgIntro">
-        选择要删除的数据（旧数据 = 超过 2 个月）。删除不可恢复：本地立即隐藏，云端将于下一轮抓取（≤2 小时）后真正删除；关注中的文章将保留本地缓存可读。
+        按【起始日期 ~ 终止日期】筛选（起始留空=最早，终止留空=至今；无日期条目只在都不限时出现）。删除不可恢复：本地立即隐藏，云端将于下一轮抓取（≤2 小时）后真正删除；关注中的文章将保留本地缓存可读。
       </div>
 
       {phase === 'loading' && (
@@ -206,11 +206,19 @@ export function ManageView(props: { onBack: () => void }) {
               onChange={(e) => setQuery(e.target.value)}
             />
             <div className="dsh-cau_mgFilters">
-              {(['all', 'old', 'new', 'arch'] as const).map((k) => (
-                <button key={k} type="button" className={'dsh-cau_mgChip' + (filter === k ? ' on' : '')} onClick={() => setFilter(k)}>
-                  {k === 'all' ? `全部 ${rows.length}` : k === 'old' ? `旧数据 ${oldCount}` : k === 'new' ? '近 2 个月' : `已归档 ${archCount}`}
+              <span className="dsh-cau_mgLabel">日期</span>
+              <input className="dsh-cau_mgDate" type="date" value={dateFrom} max={dateTo || undefined} title="起始日期（留空=最早）" onChange={(e) => setDateFrom(e.target.value)} />
+              <span className="dsh-cau_mgLabel">~</span>
+              <input className="dsh-cau_mgDate" type="date" value={dateTo} min={dateFrom || undefined} title="终止日期（留空=至今）" onChange={(e) => setDateTo(e.target.value)} />
+              {(dateFrom || dateTo) && (
+                <button type="button" className="dsh-cau_mgChipBtn" onClick={() => { setDateFrom(''); setDateTo('') }}>
+                  重置（全部）
                 </button>
-              ))}
+              )}
+              <label className="dsh-cau_mgCheck" title="只显示已归档的数据">
+                <input type="checkbox" checked={archOnly} onChange={(e) => setArchOnly(e.target.checked)} />
+                只看已归档 {archOnly ? `(${archCount})` : ''}
+              </label>
               <select className="dsh-cau_mgSel" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} title="按站点筛选">
                 <option value="">全部站点</option>
                 {sites.map(([k, n]) => (
@@ -221,11 +229,8 @@ export function ManageView(props: { onBack: () => void }) {
               </select>
             </div>
             <div className="dsh-cau_mgActs">
-              <button type="button" className="dsh-cau_mgBtn" onClick={selectAllOld} title="勾选全部超过 2 个月的数据">
-                选择全部旧数据
-              </button>
-              <button type="button" className="dsh-cau_mgBtn" onClick={selectAllArch} disabled={!archCount} title="勾选全部已归档数据">
-                选择全部已归档
+              <button type="button" className="dsh-cau_mgBtn" onClick={selectAllShown} disabled={!shown.length} title="勾选当前筛选/站点/搜索命中的全部数据">
+                选择全部当前筛选（{shown.length}）
               </button>
               <button type="button" className="dsh-cau_mgBtn" onClick={clearSel} disabled={!sel.size}>
                 清空选择
@@ -234,7 +239,7 @@ export function ManageView(props: { onBack: () => void }) {
           </div>
 
           <div className="dsh-cau_mgBar">
-            已选 <b>{sel.size}</b> 条（旧 {selOld} · 我的事项 {selMine} · 关注中 {selFollow}{selArch > 0 ? ` · 已归档 ${selArch}` : ''}）
+            已选 <b>{sel.size}</b> 条（我的事项 {selMine} · 关注中 {selFollow}{selArch > 0 ? ` · 已归档 ${selArch}` : ''}）
             <button type="button" className="dsh-cau_mgDel" disabled={!sel.size || busy} onClick={() => setConfirm(true)}>
               删除所选（{sel.size}）
             </button>
@@ -287,8 +292,7 @@ export function ManageView(props: { onBack: () => void }) {
                           </span>
                           <span className="dsh-cau_mgRowSub">
                             {r.colName}
-                            {r.date ? ` · ${r.date}` : ''}
-                            {r.isOld && <span className="dsh-cau_mgOld">超过 2 个月</span>}
+                            {r.date ? ` · ${r.date}` : ' · 无日期'}
                             {r.url && <span className="dsh-cau_mgRowUrl">{highlight(r.url, query)}</span>}
                           </span>
                         </span>
