@@ -103,7 +103,9 @@ export function HomeView(props: {
       .map(([id, m]: any) => {
         const d = dlById.get(id)
         const date = mineDeadlineOf(m) || d?.date || null
-        return { id, title: m.title || d?.item || d?.title || '(事项)', date, column: m.column || d?.column || '', artUrl: m.article_url || d?.url || '' }
+        // 事项名语义：m.task=true 用 m.title（用户给定）；旧记录优先 AI 提取的事项名 d.item
+        const title = m.task ? m.title || d?.item : d?.item || m.title || d?.title || '(事项)'
+        return { id, title, date, column: m.column || d?.column || '', artUrl: m.article_url || d?.url || '' }
       })
       .sort((a: any, b: any) => String(b.date || '9999-12-31').localeCompare(String(a.date || '9999-12-31')))
   }, [mine, summary])
@@ -277,6 +279,33 @@ export function HomeView(props: {
                       </div>
                     )
                   })}
+                </div>
+              )}
+              {mineEdit && !mineEdit.id && (
+                <div className="dsh-cau_mineEdit dsh-cau_mineEditNew">
+                  <input className="dsh-cau_setInput" placeholder="事项名（要做什么）" value={mineEdit.name} onChange={(e) => setMineEdit({ ...mineEdit, name: e.target.value })} />
+                  <div className="dsh-cau_mineEditRow">
+                    <input className="dsh-cau_setInput" style={{ maxWidth: 160 }} type="date" value={mineEdit.date} onChange={(e) => setMineEdit({ ...mineEdit, date: e.target.value })} />
+                    <input className="dsh-cau_setInput" placeholder="原文链接（可空）" value={mineEdit.url} onChange={(e) => setMineEdit({ ...mineEdit, url: e.target.value })} />
+                  </div>
+                  <div className="dsh-cau_mineEditRow">
+                    <button
+                      type="button"
+                      className="dsh-cau_textBtn dsh-cau_on"
+                      onClick={() => {
+                        if (mineEdit.name.trim()) {
+                          addCustomMine({ title: mineEdit.name.trim(), deadline: mineEdit.date, url: mineEdit.url })
+                          setMine(loadMine())
+                          setMineEdit(null)
+                        }
+                      }}
+                    >
+                      保存
+                    </button>
+                    <button type="button" className="dsh-cau_textBtn" onClick={() => setMineEdit(null)}>
+                      取消
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="dsh-cau_deadlineEntry">

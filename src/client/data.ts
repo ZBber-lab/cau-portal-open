@@ -452,6 +452,8 @@ export type MineItem = {
   custom_deadline?: string
   /** 纯自定义事项（无关联文章） */
   custom?: boolean
+  /** title 是否为事项名语义（true=用户给定/事项名；false/undefined=旧记录，显示时优先 AI 事项名） */
+  task?: boolean
 }
 
 const MINE_KEY = 'dsh.cau-portal.mine.v1'
@@ -496,7 +498,7 @@ export async function addMine(id: string, item: { title: string; url?: string; d
   migrateMineFromPin()
   const m = loadMine()
   if (!m[id]) {
-    m[id] = { added_at: Date.now(), title: item.title, article_url: item.url || undefined, deadline: item.deadline, source: item.source, column: item.column, custom: item.custom || false }
+    m[id] = { added_at: Date.now(), title: item.title, article_url: item.url || undefined, deadline: item.deadline, source: item.source, column: item.column, custom: item.custom || false, task: true }
     saveMine(m)
   }
   // 同步进关注列表（有关联文章时；无上限；重复自动去重）
@@ -522,7 +524,7 @@ export function addCustomMine(item: { title: string; deadline?: string; url?: st
   migrateMineFromPin()
   const id = `custom-${Date.now().toString(36)}`
   const m = loadMine()
-  m[id] = { added_at: Date.now(), title: item.title || '新事项', article_url: item.url || undefined, custom_deadline: item.deadline || undefined, custom: true }
+  m[id] = { added_at: Date.now(), title: item.title || '新事项', article_url: item.url || undefined, custom_deadline: item.deadline || undefined, custom: true, task: true }
   saveMine(m)
   return id
 }
@@ -531,7 +533,10 @@ export function addCustomMine(item: { title: string; deadline?: string; url?: st
 export function updateMine(id: string, patch: { title?: string; url?: string; deadline?: string }): void {
   const m = loadMine()
   if (!m[id]) return
-  if (patch.title !== undefined) m[id].title = patch.title
+  if (patch.title !== undefined) {
+    m[id].title = patch.title
+    m[id].task = true
+  }
   if (patch.url !== undefined) m[id].article_url = patch.url || undefined
   if (patch.deadline !== undefined) m[id].custom_deadline = patch.deadline || undefined
   saveMine(m)
