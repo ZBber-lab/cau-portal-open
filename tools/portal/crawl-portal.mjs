@@ -144,8 +144,10 @@ export async function runPortalCrawl({ dataDir = null, days = null, maxPages = n
 
   // 文章文件：仅元数据（PIM_CONTENT 一律不落），标题级 AI 由云端 enrich 处理
   let artNew = 0;
+  const newArticleFiles = [];
   for (const it of items) {
-    const artPath = join(dataRoot, 'articles', `${sha1(it.url)}.json`);
+    const artFile = `${sha1(it.url)}.json`;
+    const artPath = join(dataRoot, 'articles', artFile);
     if (existsSync(artPath)) continue;
     writeFileSync(artPath, JSON.stringify({
       title: it.title,
@@ -158,8 +160,9 @@ export async function runPortalCrawl({ dataDir = null, days = null, maxPages = n
       ai: null,
     }, null, 2));
     artNew++;
+    newArticleFiles.push(`data/articles/${artFile}`);
   }
-  return { ok: true, total, pages_fetched: 0, new: newCount, new_articles: artNew, feed_items: merged.length, first: items[0], last: items[items.length - 1] };
+  return { ok: true, total, pages_fetched: 0, new: newCount, new_articles: artNew, feed_items: merged.length, new_article_files: newArticleFiles, first: items[0], last: items[items.length - 1] };
 }
 
 // CLI

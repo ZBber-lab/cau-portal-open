@@ -23,3 +23,4 @@ tools/portal/session.json
 tools/portal/account.json
 tools/portal/pw.json
 .pw-browsers/
+tools/portal/sync-state.json

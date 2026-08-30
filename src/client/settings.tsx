@@ -419,6 +419,24 @@ export function CauSettings(props: any) {
       setPortalMsg('清除失败：' + String(e?.message || e))
     }
   }
+  const doPortalSync = async () => {
+    setPortalState('loading')
+    setPortalMsg('同步中（抓取→推送，约 1-2 分钟）…')
+    try {
+      const r = await fetch('/api/cau/portal/sync', { method: 'POST' })
+      const j = await r.json()
+      if (j?.ok) {
+        setPortalState('ok')
+        setPortalMsg(`✅ 同步完成：新增 ${j.new_items ?? 0} 条通知（${j.new_articles ?? 0} 篇入库）；面板 2 小时内自动显示（云端汇总刷新）`)
+      } else {
+        setPortalState('fail')
+        setPortalMsg('同步失败：' + (j?.error || '未知错误'))
+      }
+    } catch (e: any) {
+      setPortalState('fail')
+      setPortalMsg('同步请求失败：' + String(e?.message || e))
+    }
+  }
 
   // ---------- 首页卡片 ----------
   const tokBadge = (() => {
@@ -784,6 +802,9 @@ export function CauSettings(props: any) {
             <div className="dsh-cau_setRow">
               <button type="button" className="dsh-cau_setBtn" disabled={portalState === 'loading'} onClick={() => void doPortalLogin()}>
                 {portalState === 'loading' ? '登录中…' : '🔑 一键登录 / 测试'}
+              </button>
+              <button type="button" className="dsh-cau_setBtn" disabled={portalState === 'loading'} onClick={() => void doPortalSync()}>
+                ⟳ 立即同步校内通知
               </button>
               <button type="button" className="dsh-cau_setBtn danger" onClick={() => void doPortalClear()}>
                 清除密码与登录态
