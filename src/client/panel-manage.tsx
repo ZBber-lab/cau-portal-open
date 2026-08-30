@@ -5,7 +5,7 @@
  * 本地立即隐藏；可随时退出管理模式。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, readFeed, loadFollow, isPruned, queuePruneRequest } from './data'
+import { readCloudJson, readFeed, loadFollow, loadMine, isPruned, queuePruneRequest } from './data'
 
 const OLD_DAYS = 60
 
@@ -20,6 +20,7 @@ type MgRow = {
   colName: string
   isOld: boolean
   followed: boolean
+  mined: boolean
 }
 
 const idKey = (it: any): string =>
@@ -79,6 +80,7 @@ export function ManageView(props: { onBack: () => void }) {
       return
     }
     const followSet = new Set(loadFollow().map((f: any) => f.id))
+    const mineSet = new Set(Object.keys(loadMine()))
     const out: MgRow[] = []
     for (const site of idx.sites as any[]) {
       for (const col of site.columns || []) {
@@ -100,6 +102,7 @@ export function ManageView(props: { onBack: () => void }) {
             colName: f.column_name || col.name || '',
             isOld: t !== null ? t > OLD_DAYS : false,
             followed: followSet.has(id),
+            mined: mineSet.has(id),
           })
         }
       }
@@ -132,6 +135,7 @@ export function ManageView(props: { onBack: () => void }) {
 
   const selOld = useMemo(() => rows.filter((r) => r.isOld && sel.has(r.id)).length, [rows, sel])
   const selFollow = useMemo(() => rows.filter((r) => r.followed && sel.has(r.id)).length, [rows, sel])
+  const selMine = useMemo(() => rows.filter((r) => r.mined && sel.has(r.id)).length, [rows, sel])
 
   const toggle = (id: string) => {
     setSel((s) => {
@@ -220,7 +224,7 @@ export function ManageView(props: { onBack: () => void }) {
           </div>
 
           <div className="dsh-cau_mgBar">
-            已选 <b>{sel.size}</b> 条（旧 {selOld} · 关注中 {selFollow}）
+            已选 <b>{sel.size}</b> 条（旧 {selOld} · 我的事项 {selMine} · 关注中 {selFollow}）
             <button type="button" className="dsh-cau_mgDel" disabled={!sel.size || busy} onClick={() => setConfirm(true)}>
               删除所选（{sel.size}）
             </button>
@@ -230,11 +234,12 @@ export function ManageView(props: { onBack: () => void }) {
             <div className="dsh-cau_mgConfirm">
               <div className="dsh-cau_mgConfirmText">
                 确定删除所选 <b>{sel.size}</b> 条数据？{' '}
-                {selFollow > 0 && (
-                  <>
-                    <b style={{ color: 'var(--dsw-alias-state-warn,#b8860b)' }}>{selFollow} 条关注中</b>（本地缓存仍可读，但云端将删除）
-                  </>
+                {(selMine > 0 || selFollow > 0) && (
+                  <b style={{ color: 'var(--dsw-alias-state-warn,#b8860b)' }}>
+                    {[selMine > 0 && `${selMine} 条我的事项`, selFollow > 0 && `${selFollow} 条关注中`].filter(Boolean).join('，')}
+                  </b>
                 )}{' '}
+                {(selMine > 0 || selFollow > 0) && <span>（本地缓存仍可读，但云端将删除，我的事项原文链接将失效）</span>}
                 删除不可恢复。
               </div>
               <div className="dsh-cau_mgConfirmActs">
@@ -258,23 +263,27 @@ export function ManageView(props: { onBack: () => void }) {
               .map((g) => (
                 <div key={g.k} className="dsh-cau_mgGroup">
                   <div className="dsh-cau_mgGroupName">{g.n}</div>
-                  {g.items.map((r) => (
-                    <label key={r.id} className="dsh-cau_mgRow">
-                      <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggle(r.id)} />
-                      <span className="dsh-cau_mgRowMain">
-                        <span className="dsh-cau_mgRowTitle">
-                          {highlight(r.title, query)}
-                          {r.followed && <span className="dsh-cau_mgStar" title="关注中">★</span>}
+                  {g.items.map((r) => {
+                    const selMineRow = sel.has(r.id) && (r.mined || r.followed)
+                    return (
+                      <label key={r.id} className={'dsh-cau_mgRow' + (selMineRow ? ' pro' : '')}>
+                        <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggle(r.id)} />
+                        <span className="dsh-cau_mgRowMain">
+                          <span className="dsh-cau_mgRowTitle">
+                            {highlight(r.title, query)}
+                            {r.mined && <span className="dsh-cau_mgMine" title="我的事项">◎</span>}
+                            {r.followed && <span className="dsh-cau_mgStar" title="关注中">★</span>}
+                          </span>
+                          <span className="dsh-cau_mgRowSub">
+                            {r.colName}
+                            {r.date ? ` · ${r.date}` : ''}
+                            {r.isOld && <span className="dsh-cau_mgOld">超过 2 个月</span>}
+                            {r.url && <span className="dsh-cau_mgRowUrl">{highlight(r.url, query)}</span>}
+                          </span>
                         </span>
-                        <span className="dsh-cau_mgRowSub">
-                          {r.colName}
-                          {r.date ? ` · ${r.date}` : ''}
-                          {r.isOld && <span className="dsh-cau_mgOld">超过 2 个月</span>}
-                          {r.url && <span className="dsh-cau_mgRowUrl">{highlight(r.url, query)}</span>}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
+                      </label>
+                    )
+                  })}
                 </div>
               ))}
           </div>

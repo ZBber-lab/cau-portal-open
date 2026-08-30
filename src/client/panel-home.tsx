@@ -17,7 +17,8 @@ import {
   loadModules,
   loadMine,
   removeMine,
-  setMineDeadline,
+  updateMine,
+  addCustomMine,
   mineDeadlineOf,
   migrateMineFromPin,
 } from './data'
@@ -56,8 +57,18 @@ export function HomeView(props: {
   const [follow, setFollow] = useState<any[]>(() => loadFollow())
   const [ops, setOps] = useState<Record<string, any>>(() => loadDeadlineOps())
   const [mine, setMine] = useState<Record<string, any>>(() => loadMine())
-  const [mineEdit, setMineEdit] = useState<string | null>(null)
-  const [mineDraft, setMineDraft] = useState('')
+  const [mineEdit, setMineEdit] = useState<{ id: string | null; name: string; date: string; url: string } | null>(null)
+
+  const startMineEdit = (id?: string) => {
+    setMineEdit(getMineEditDraft(id))
+  }
+  const getMineEditDraft = (id?: string) => {
+    if (id) {
+      const m = loadMine()[id]
+      return { id, name: m?.title || '', date: mineDeadlineOf(m) || '', url: m?.article_url || '' }
+    }
+    return { id: null, name: '', date: '', url: '' }
+  }
   const [needToken, setNeedToken] = useState(false)
   const mods = useMemo(() => loadModules(), [])
 
@@ -92,7 +103,7 @@ export function HomeView(props: {
       .map(([id, m]: any) => {
         const d = dlById.get(id)
         const date = mineDeadlineOf(m) || d?.date || null
-        return { id, title: m.title || d?.title || '(事项)', date, column: m.column || d?.column || '' }
+        return { id, title: m.title || d?.item || d?.title || '(事项)', date, column: m.column || d?.column || '', artUrl: m.article_url || d?.url || '' }
       })
       .sort((a: any, b: any) => String(b.date || '9999-12-31').localeCompare(String(a.date || '9999-12-31')))
   }, [mine, summary])
@@ -161,22 +172,28 @@ export function HomeView(props: {
               <div className="dsh-cau_secHead">
                 <span className="dsh-cau_secMark" />
                 <span className="dsh-cau_secTitle">⭐ 我的事项</span>
-                {allDeadlines > 0 && (
-                  <button type="button" className="dsh-cau_textBtn" onClick={onViewDeadlines}>
-                    全部待办 {allDeadlines} ›
+                <span className="dsh-cau_secActs">
+                  <button type="button" className="dsh-cau_textBtn" onClick={() => startMineEdit()}>
+                    + 自定义事项
                   </button>
-                )}
+                  {allDeadlines > 0 && (
+                    <button type="button" className="dsh-cau_textBtn" onClick={onViewDeadlines}>
+                      全部待办 {allDeadlines} ›
+                    </button>
+                  )}
+                </span>
               </div>
               {mineRows.length === 0 ? (
-                <div className="dsh-cau_empty">在「全部待办」或文章页点「⭐ 我的事项」，精选事项会以大卡突出显示在这里（并自动出现在关注区）。</div>
+                <div className="dsh-cau_empty">点「+ 自定义事项」直接记录要办的事；或在「全部待办」/文章页点「⭐ 我的事项」精选（附原文链接，自动出现在关注区）。</div>
               ) : (
                 <div className="dsh-cau_mineGrid">
-                  {mineRows.map(({ id, title, date, column }: any) => {
+                  {mineRows.map(({ id, title, date, column, artUrl }: any) => {
                     const mm = /^\d{4}-(\d{1,2})-(\d{1,2})/.exec(String(date || ''))
                     const n = date ? daysLeft(String(date)) : Number.NaN
                     const expired = Number.isFinite(n) && n < 0
+                    const canArticle = !String(id).startsWith('custom-')
                     return (
-                      <div key={id} className={'dsh-cau_mineCard' + (expired ? ' expired' : '')} onClick={() => openArt(id, title, [], 0)}>
+                      <div key={id} className={'dsh-cau_mineCard' + (expired ? ' expired' : '')}>
                         <div className="dsh-cau_mineDate">
                           {mm ? (
                             <>
@@ -188,20 +205,35 @@ export function HomeView(props: {
                           )}
                           <span className="dsh-cau_mineCount">{!Number.isFinite(n) ? '—' : expired ? '已过期' : n === 0 ? '今天' : `剩 ${n} 天`}</span>
                         </div>
-                        <div className="dsh-cau_mineTitle">{title}</div>
+                        <div className="dsh-cau_mineTitle" title={title}>
+                          {title}
+                        </div>
                         <div className="dsh-cau_mineFoot">
                           {column && <span className="dsh-cau_mineCol">{column}</span>}
+                          {!column && <span />}
                           <span className="dsh-cau_mineActs">
+                            {artUrl && canArticle && (
+                              <button
+                                type="button"
+                                className="dsh-cau_mineArt"
+                                title="打开对应文章"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (id) openArt(id, title, [], 0)
+                                }}
+                              >
+                                原文 ↗
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="dsh-cau_textBtn"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setMineEdit(id)
-                                setMineDraft(String(date || ''))
+                                startMineEdit(id)
                               }}
                             >
-                              ✎ 日期
+                              ✎ 编辑
                             </button>
                             <button
                               type="button"
@@ -216,23 +248,30 @@ export function HomeView(props: {
                             </button>
                           </span>
                         </div>
-                        {mineEdit === id && (
+                        {mineEdit && (mineEdit.id || '') === id && (
                           <div className="dsh-cau_mineEdit" onClick={(e) => e.stopPropagation()}>
-                            <input className="dsh-cau_setInput" style={{ maxWidth: 160 }} type="date" value={mineDraft} onChange={(e) => setMineDraft(e.target.value)} />
-                            <button
-                              type="button"
-                              className="dsh-cau_textBtn"
-                              onClick={() => {
-                                setMineDeadline(id, mineDraft)
-                                setMine(loadMine())
-                                setMineEdit(null)
-                              }}
-                            >
-                              保存
-                            </button>
-                            <button type="button" className="dsh-cau_textBtn" onClick={() => setMineEdit(null)}>
-                              取消
-                            </button>
+                            <input className="dsh-cau_setInput" placeholder="事项名（要做什么）" value={mineEdit.name} onChange={(e) => setMineEdit({ ...mineEdit, name: e.target.value })} />
+                            <div className="dsh-cau_mineEditRow">
+                              <input className="dsh-cau_setInput" style={{ maxWidth: 160 }} type="date" value={mineEdit.date} onChange={(e) => setMineEdit({ ...mineEdit, date: e.target.value })} />
+                              <input className="dsh-cau_setInput" placeholder="原文链接（可空）" value={mineEdit.url} onChange={(e) => setMineEdit({ ...mineEdit, url: e.target.value })} />
+                            </div>
+                            <div className="dsh-cau_mineEditRow">
+                              <button
+                                type="button"
+                                className="dsh-cau_textBtn dsh-cau_on"
+                                onClick={() => {
+                                  if (mineEdit.id) updateMine(mineEdit.id, { title: mineEdit.name, url: mineEdit.url, deadline: mineEdit.date })
+                                  else if (mineEdit.name.trim()) addCustomMine({ title: mineEdit.name.trim(), deadline: mineEdit.date, url: mineEdit.url })
+                                  setMine(loadMine())
+                                  setMineEdit(null)
+                                }}
+                              >
+                                保存
+                              </button>
+                              <button type="button" className="dsh-cau_textBtn" onClick={() => setMineEdit(null)}>
+                                取消
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>

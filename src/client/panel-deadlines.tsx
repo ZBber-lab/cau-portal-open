@@ -42,7 +42,7 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
       removeMine(id)
       setMine(loadMine())
     } else {
-      await addMine(id, { title: d.title || '', url: d.url || '', deadline: d.date, source: d.source, column: d.column })
+      await addMine(id, { title: d.item || d.title || '(事项)', url: d.url || '', deadline: d.date, source: d.source, column: d.column })
       setMine(loadMine())
     }
     setBusy('')

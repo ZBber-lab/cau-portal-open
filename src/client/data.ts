@@ -440,14 +440,18 @@ export function setDeadlineOp(id: string, op: DeadlineOp): Record<string, Deadli
 
 export type MineItem = {
   added_at: number
+  /** 事项名（"要做什么"），如「推免生报名」；非文章标题 */
   title: string
-  url: string
+  /** 关联原文链接（可为空；自定义事项可后补/无） */
+  article_url?: string
   source?: string
   column?: string
   /** 原（AI 提取）截止日 YYYY-MM-DD */
   deadline?: string
   /** 自定义截止日（覆盖 deadline；仅本机显示层） */
   custom_deadline?: string
+  /** 纯自定义事项（无关联文章） */
+  custom?: boolean
 }
 
 const MINE_KEY = 'dsh.cau-portal.mine.v1'
@@ -487,26 +491,50 @@ export function isMine(id: string): boolean {
   return !!loadMine()[id]
 }
 
-/** 加入我的事项（同步进关注列表 + 异步补本地全文快照） */
-export async function addMine(id: string, item: { title: string; url: string; deadline?: string; source?: string; column?: string }): Promise<void> {
+/** 加入我的事项（title=事项名；同步进关注列表 + 异步补本地全文快照） */
+export async function addMine(id: string, item: { title: string; url?: string; deadline?: string; source?: string; column?: string; custom?: boolean }): Promise<void> {
   migrateMineFromPin()
   const m = loadMine()
   if (!m[id]) {
-    m[id] = { added_at: Date.now(), title: item.title, url: item.url, deadline: item.deadline, source: item.source, column: item.column }
+    m[id] = { added_at: Date.now(), title: item.title, article_url: item.url || undefined, deadline: item.deadline, source: item.source, column: item.column, custom: item.custom || false }
     saveMine(m)
   }
-  // 同步进关注列表（无上限；重复自动去重）
-  const cur = loadFollow()
-  if (!cur.some((x) => x.id === id)) {
-    saveFollow([{ id, title: item.title, url: item.url, time: null, source: item.source, column: item.column, importance: undefined, summary: undefined }, ...cur])
+  // 同步进关注列表（有关联文章时；无上限；重复自动去重）
+  if (item.url) {
+    const cur = loadFollow()
+    if (!cur.some((x) => x.id === id)) {
+      saveFollow([{ id, title: item.title, url: item.url, time: null, source: item.source, column: item.column, importance: undefined, summary: undefined }, ...cur])
+    }
   }
   // 异步补本地全文快照（成功则缓存，失败静默）
-  try {
-    const art = await readArticle(id)
-    if (art) cacheFollowArticle(id, art)
-  } catch {
-    /* 静默 */
+  if (item.url && /^[0-9a-f]{40}$/.test(String(id))) {
+    try {
+      const art = await readArticle(id)
+      if (art) cacheFollowArticle(id, art)
+    } catch {
+      /* 静默 */
+    }
   }
+}
+
+/** 纯自定义事项（无关联文章也可；id 生成 custom-*） */
+export function addCustomMine(item: { title: string; deadline?: string; url?: string }): string {
+  migrateMineFromPin()
+  const id = `custom-${Date.now().toString(36)}`
+  const m = loadMine()
+  m[id] = { added_at: Date.now(), title: item.title || '新事项', article_url: item.url || undefined, custom_deadline: item.deadline || undefined, custom: true }
+  saveMine(m)
+  return id
+}
+
+/** 更新我的事项（事项名/原文链接/自定义截止日） */
+export function updateMine(id: string, patch: { title?: string; url?: string; deadline?: string }): void {
+  const m = loadMine()
+  if (!m[id]) return
+  if (patch.title !== undefined) m[id].title = patch.title
+  if (patch.url !== undefined) m[id].article_url = patch.url || undefined
+  if (patch.deadline !== undefined) m[id].custom_deadline = patch.deadline || undefined
+  saveMine(m)
 }
 
 /** 移出我的事项（不影响关注列表，关注须在关注区另行取消） */

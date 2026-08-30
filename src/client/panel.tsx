@@ -555,6 +555,12 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_mgGroupName{padding:6px 10px;font-size:12px;font-weight:500;color:var(--dsw-alias-label-secondary,#555);background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.03))}
 .dsh-cau_mgRow{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-top:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.05));cursor:pointer}
 .dsh-cau_mgRow input{margin-top:3px}
+.dsh-cau_mgRow.pro{border-left:3px solid var(--dsw-alias-state-warn,#d99c00);background:color-mix(in srgb,var(--dsw-alias-state-warn,#f59e0b) 7%,transparent)}
+.dsh-cau_mgMine{color:var(--dsw-alias-state-warn,#c77d00);border-radius:3px}
+.dsh-cau_mineArt{flex:none;height:24px;padding:0 9px;border:1px solid color-mix(in srgb,var(--cau-brand,#008038) 45%,transparent);border-radius:6px;background:color-mix(in srgb,var(--cau-brand,#008038) 10%,transparent);color:var(--cau-brand,#008038);font-size:11px;cursor:pointer}
+.dsh-cau_mineArt:hover{background:color-mix(in srgb,var(--cau-brand,#008038) 16%,transparent)}
+.dsh-cau_mineEditRow{display:flex;gap:6px;align-items:center;margin-top:4px}
+.dsh-cau_secActs{display:flex;gap:6px;margin-left:auto}
 .dsh-cau_mgRowMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .dsh-cau_mgRowTitle{font-size:13px;line-height:18px;color:var(--dsw-alias-label-primary,#111);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-cau_mgStar{color:var(--dsw-alias-state-warn,#c77d00);margin-left:4px}

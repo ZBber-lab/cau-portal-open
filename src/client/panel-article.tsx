@@ -135,7 +135,7 @@ export function ArticleView(props: {
       setMined(false)
     } else {
       await addMine(articleId, {
-        title: art?.title || '',
+        title: art?.ai?.deadline?.item || art?.title || '事项',
         url: art?.url || '',
         deadline: hasDeadline ? art.ai.deadline.date : undefined,
         source: art?.source || '',
