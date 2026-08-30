@@ -65,7 +65,8 @@ export function HomeView(props: {
   const getMineEditDraft = (id?: string) => {
     if (id) {
       const m = loadMine()[id]
-      return { id, name: m?.title || '', date: mineDeadlineOf(m) || '', url: m?.article_url || '' }
+      const shown = mineRows.find((r: any) => r.id === id)
+      return { id, name: shown?.title || m?.title || '', date: mineDeadlineOf(m) || '', url: m?.article_url || '' }
     }
     return { id: null, name: '', date: '', url: '' }
   }
@@ -105,7 +106,7 @@ export function HomeView(props: {
         const date = mineDeadlineOf(m) || d?.date || null
         // 事项名语义：m.task=true 用 m.title（用户给定）；旧记录优先 AI 提取的事项名 d.item
         const title = m.task ? m.title || d?.item : d?.item || m.title || d?.title || '(事项)'
-        return { id, title, date, column: m.column || d?.column || '', artUrl: m.article_url || d?.url || '' }
+        return { id, title, date, column: m.column || d?.column || '', artUrl: m.article_url || d?.url || '', artTitle: d?.title || '' }
       })
       .sort((a: any, b: any) => String(b.date || '9999-12-31').localeCompare(String(a.date || '9999-12-31')))
   }, [mine, summary])
@@ -189,7 +190,7 @@ export function HomeView(props: {
                 <div className="dsh-cau_empty">点「+ 自定义事项」直接记录要办的事；或在「全部待办」/文章页点「⭐ 我的事项」精选（附原文链接，自动出现在关注区）。</div>
               ) : (
                 <div className="dsh-cau_mineGrid">
-                  {mineRows.map(({ id, title, date, column, artUrl }: any) => {
+                  {mineRows.map(({ id, title, date, column, artUrl, artTitle }: any) => {
                     const mm = /^\d{4}-(\d{1,2})-(\d{1,2})/.exec(String(date || ''))
                     const n = date ? daysLeft(String(date)) : Number.NaN
                     const expired = Number.isFinite(n) && n < 0
@@ -210,6 +211,11 @@ export function HomeView(props: {
                         <div className="dsh-cau_mineTitle" title={title}>
                           {title}
                         </div>
+                        {artTitle && artTitle !== title && (
+                          <div className="dsh-cau_mineSrc" title={artTitle}>
+                            {artTitle}
+                          </div>
+                        )}
                         <div className="dsh-cau_mineFoot">
                           {column && <span className="dsh-cau_mineCol">{column}</span>}
                           {!column && <span />}
@@ -252,10 +258,19 @@ export function HomeView(props: {
                         </div>
                         {mineEdit && (mineEdit.id || '') === id && (
                           <div className="dsh-cau_mineEdit" onClick={(e) => e.stopPropagation()}>
-                            <input className="dsh-cau_setInput" placeholder="事项名（要做什么）" value={mineEdit.name} onChange={(e) => setMineEdit({ ...mineEdit, name: e.target.value })} />
+                            <label className="dsh-cau_mineLabel">
+                              <span>事项名（点此修改，如「土地学院2027推免生报名」）</span>
+                              <input className="dsh-cau_setInput" value={mineEdit.name} onChange={(e) => setMineEdit({ ...mineEdit, name: e.target.value })} />
+                            </label>
                             <div className="dsh-cau_mineEditRow">
-                              <input className="dsh-cau_setInput" style={{ maxWidth: 160 }} type="date" value={mineEdit.date} onChange={(e) => setMineEdit({ ...mineEdit, date: e.target.value })} />
-                              <input className="dsh-cau_setInput" placeholder="原文链接（可空）" value={mineEdit.url} onChange={(e) => setMineEdit({ ...mineEdit, url: e.target.value })} />
+                              <label className="dsh-cau_mineLabel">
+                                <span>截止日期</span>
+                                <input className="dsh-cau_setInput" type="date" value={mineEdit.date} onChange={(e) => setMineEdit({ ...mineEdit, date: e.target.value })} />
+                              </label>
+                              <label className="dsh-cau_mineLabel">
+                                <span>原文链接（可空）</span>
+                                <input className="dsh-cau_setInput" value={mineEdit.url} onChange={(e) => setMineEdit({ ...mineEdit, url: e.target.value })} />
+                              </label>
                             </div>
                             <div className="dsh-cau_mineEditRow">
                               <button
@@ -283,10 +298,19 @@ export function HomeView(props: {
               )}
               {mineEdit && !mineEdit.id && (
                 <div className="dsh-cau_mineEdit dsh-cau_mineEditNew">
-                  <input className="dsh-cau_setInput" placeholder="事项名（要做什么）" value={mineEdit.name} onChange={(e) => setMineEdit({ ...mineEdit, name: e.target.value })} />
+                  <label className="dsh-cau_mineLabel">
+                    <span>事项名（要做什么，如「土地学院2027推免生报名」）</span>
+                    <input className="dsh-cau_setInput" value={mineEdit.name} onChange={(e) => setMineEdit({ ...mineEdit, name: e.target.value })} />
+                  </label>
                   <div className="dsh-cau_mineEditRow">
-                    <input className="dsh-cau_setInput" style={{ maxWidth: 160 }} type="date" value={mineEdit.date} onChange={(e) => setMineEdit({ ...mineEdit, date: e.target.value })} />
-                    <input className="dsh-cau_setInput" placeholder="原文链接（可空）" value={mineEdit.url} onChange={(e) => setMineEdit({ ...mineEdit, url: e.target.value })} />
+                    <label className="dsh-cau_mineLabel">
+                      <span>截止日期（可空）</span>
+                      <input className="dsh-cau_setInput" type="date" value={mineEdit.date} onChange={(e) => setMineEdit({ ...mineEdit, date: e.target.value })} />
+                    </label>
+                    <label className="dsh-cau_mineLabel">
+                      <span>原文链接（可空）</span>
+                      <input className="dsh-cau_setInput" value={mineEdit.url} onChange={(e) => setMineEdit({ ...mineEdit, url: e.target.value })} />
+                    </label>
                   </div>
                   <div className="dsh-cau_mineEditRow">
                     <button

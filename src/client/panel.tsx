@@ -445,7 +445,7 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_mineFoot{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .dsh-cau_mineCol{flex:1;min-width:0;font-size:11px;color:var(--dsw-alias-label-tertiary,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-cau_mineActs{flex:none;display:flex;gap:4px}
-.dsh-cau_mineEdit{display:flex;gap:6px;align-items:center;margin-top:2px}
+.dsh-cau_mineEditRow{display:flex;gap:6px;align-items:flex-end;margin-top:2px}
 .dsh-cau_deadlineEntry{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1px dashed var(--dsw-alias-border-inverted,rgba(15,17,21,.18));border-radius:8px}
 .dsh-cau_deadlineEntryMain{flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary,#555);cursor:pointer}
 .dsh-cau_deadlineEntryArrow{color:var(--dsw-alias-label-tertiary,#999)}
@@ -559,7 +559,11 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_mgMine{color:var(--dsw-alias-state-warn,#c77d00);border-radius:3px}
 .dsh-cau_mineArt{flex:none;height:24px;padding:0 9px;border:1px solid color-mix(in srgb,var(--cau-brand,#008038) 45%,transparent);border-radius:6px;background:color-mix(in srgb,var(--cau-brand,#008038) 10%,transparent);color:var(--cau-brand,#008038);font-size:11px;cursor:pointer}
 .dsh-cau_mineArt:hover{background:color-mix(in srgb,var(--cau-brand,#008038) 16%,transparent)}
-.dsh-cau_mineEditRow{display:flex;gap:6px;align-items:center;margin-top:4px}
+.dsh-cau_mineEdit{display:flex;flex-direction:column;gap:6px;margin-top:2px;padding-top:8px;border-top:1px dashed var(--dsw-alias-border-inverted,rgba(15,17,21,.15))}
+.dsh-cau_mineEditNew{padding:10px 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.15));border-radius:8px}
+.dsh-cau_mineLabel{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
+.dsh-cau_mineLabel span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-cau_mineSrc{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .dsh-cau_secActs{display:flex;gap:6px;margin-left:auto}
 .dsh-cau_mgRowMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .dsh-cau_mgRowTitle{font-size:13px;line-height:18px;color:var(--dsw-alias-label-primary,#111);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
