@@ -26,6 +26,9 @@ import { addAttached, removeAttached, hasAttached } from './bus'
 
 const idOf = (it: { article_id?: string; url?: string }) => it.article_id || it.url || ''
 
+/** 统一门户（tp_up）→ 专属界面（不标注「正文未抓取」） */
+const isPortal = (u?: string) => /tp_up/.test(String(u || ''))
+
 function fmt(iso: string | null | undefined): string {
   if (!iso) return ''
   return String(iso)
@@ -184,6 +187,7 @@ export function ArticleView(props: {
         <>
           <h1 className="dsh-cau_atitle">{art.title || '(无标题)'}</h1>
           <div className="dsh-cau_ameta">
+            {isPortal(art?.url) && <span className="dsh-cau_portalTag">校内平台</span>}
             {art.source && <span>{art.source}</span>}
             {art.time && <span>{fmt(art.time)}</span>}
             {art.is_image_only && <span className="dsh-cau_aimgTag">纯图公告</span>}
@@ -240,7 +244,26 @@ export function ArticleView(props: {
             </div>
           )}
 
-          <div className="dsh-cau_abody">{art.body || <span className="dsh-cau_empty">正文未抓取。请点「查看原文」。</span>}</div>
+          <div className="dsh-cau_abody">
+            {isPortal(art?.url) ? (
+              <div className="dsh-cau_portalCard">
+                <div className="dsh-cau_portalCardTitle">🪪 校内平台通知</div>
+                <div className="dsh-cau_portalCardDesc">
+                  本篇来自<b>统一门户</b>（校内平台），正文在门户内、需登录后查看。为保护个人敏感信息（名单、成绩、学籍等不受控），
+                  插件按隐私原则<b>不收录正文</b>，只保留标题、来源与 AI 摘要。
+                </div>
+                <div className="dsh-cau_aactions">
+                  {art.url && (
+                    <a className="dsh-cau_aBtn dsh-cau_aBtnPrimary" href={art.url} target="_blank" rel="noreferrer">
+                      📖 新标签打开门户原文
+                    </a>
+                  )}
+                </div>
+              </div>
+            ) : (
+              art.body || <span className="dsh-cau_empty">正文未抓取。请点「查看原文」。</span>
+            )}
+          </div>
 
           <div className="dsh-cau_aactions">
             {art.url && (

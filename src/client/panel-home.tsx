@@ -95,9 +95,22 @@ export function HomeView(props: {
   }, [])
 
   const important = useMemo(
-    () => (summary?.important || []).filter((it: any) => !isPruned(it.article_id || it.url)).slice(0, 10),
-    [summary],
+    () =>
+      (summary?.important || []).filter(
+        (it: any) => !isPruned(it.article_id || it.url) && ops[it.article_id || it.url] !== 'archive',
+      ),
+    [summary, ops],
   )
+
+  /** 要闻分块：校内平台（统一门户）/ 其他；各限 8 条，归档一条自动补一条 */
+  const isPortalIt = (it: any) => /tp_up/.test(String(it.url || ''))
+  const portalNews = useMemo(() => important.filter(isPortalIt).slice(0, 8), [important])
+  const otherNews = useMemo(() => important.filter((it: any) => !isPortalIt(it)).slice(0, 8), [important])
+
+  const archiveFromNews = (id: string) => {
+    setDeadlineOp(id, 'archive')
+    setOps((prev: any) => ({ ...(prev || {}), [id]: 'archive' }))
+  }
 
   /** 我的事项：精选大卡（标题/日期快照 + 云端 deadline 富集；含已过期） */
   const mineRows = useMemo(() => {
@@ -160,6 +173,37 @@ export function HomeView(props: {
   }
 
   const allImportantIds = useMemo(() => important.map((it: any) => it.article_id || it.url), [important])
+
+  /** 要闻行（两块共用）：点标题进步详情 / ☆ 关注 / 📥 归档自动补位 */
+  const newsRow = (it: any, i: number, sibs: { id: string; title: string }[]) => {
+    const id = it.article_id || it.url
+    const read = readSet.includes(id)
+    return (
+      <div className="dsh-cau_impRow" key={id}>
+        <span className="dsh-cau_impDot" data-read={read ? '1' : '0'} />
+        <span className="dsh-cau_impMain" onClick={() => openArt(id, it.title, sibs, i)}>
+          <span className="dsh-cau_impTop">
+            <span className="dsh-cau_impTitle">{it.title}</span>
+            <ImpBadge level={it.importance} />
+            {matchRules(watchRules, it).length > 0 && <span className="dsh-cau_impHit" title="命中关注规则">🎯</span>}
+          </span>
+          {it.summary && <span className="dsh-cau_impSummary">{it.summary}</span>}
+          <span className="dsh-cau_impMeta">{[it.column, it.source, fmtCn(it.time)].filter(Boolean).join(' · ')}</span>
+        </span>
+        <button
+          type="button"
+          className={'dsh-cau_followBtn' + (follow.some((x) => x.id === id) ? ' dsh-cau_on' : '')}
+          title={follow.some((x) => x.id === id) ? '取消关注' : '加入关注'}
+          onClick={() => toggleFollow({ id, title: it.title, url: it.url, time: it.time, source: it.source, column: it.column, importance: it.importance, summary: it.summary })}
+        >
+          {follow.some((x) => x.id === id) ? '⭐' : '☆'}
+        </button>
+        <button type="button" className="dsh-cau_impArch" title="归档（从此处移除，可在「归档」视图中找回）" onClick={() => archiveFromNews(id)}>
+          📥
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="dsh-cau_view">
@@ -391,12 +435,27 @@ export function HomeView(props: {
             </div>
           )}
 
-          {/* 要闻 */}
+          {/* 要闻 · 校内平台（统一门户；正文在门户内，详情页为专属界面） */}
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
-              <span className="dsh-cau_secTitle">✦ 要闻</span>
-              {important.length > 0 && (
+              <span className="dsh-cau_secTitle">🏛 校内平台要闻</span>
+              {portalNews.length > 0 && <span className="dsh-cau_secCount">{portalNews.length} 条</span>}
+            </div>
+            <div className="dsh-cau_card">
+              {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
+              {summary && portalNews.length === 0 && <div className="dsh-cau_empty">暂无校内平台重要通知</div>}
+              {portalNews.map((it: any, i: number) => newsRow(it, i, portalNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
+            </div>
+          </div>
+
+          {/* 要闻 · 其他来源（学院/教务处/新闻网，含正文） */}
+          <div className="dsh-cau_sec">
+            <div className="dsh-cau_secHead">
+              <span className="dsh-cau_secMark" />
+              <span className="dsh-cau_secTitle">✦ 其他要闻</span>
+              {otherNews.length > 0 && <span className="dsh-cau_secCount">{otherNews.length} 条</span>}
+              {otherNews.length > 0 && (
                 <button type="button" className="dsh-cau_textBtn" onClick={() => setReadSet(markAllRead(allImportantIds))}>
                   全部已读
                 </button>
@@ -404,34 +463,8 @@ export function HomeView(props: {
             </div>
             <div className="dsh-cau_card">
               {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
-              {summary && important.length === 0 && <div className="dsh-cau_empty">暂无重要通知</div>}
-              {important.map((it: any, i: number) => {
-                const id = it.article_id || it.url
-                const read = readSet.includes(id)
-                const sibs = important.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))
-                return (
-                  <div className="dsh-cau_impRow" key={id}>
-                    <span className="dsh-cau_impDot" data-read={read ? '1' : '0'} />
-                    <span className="dsh-cau_impMain" onClick={() => openArt(id, it.title, sibs, i)}>
-                      <span className="dsh-cau_impTop">
-                        <span className="dsh-cau_impTitle">{it.title}</span>
-                        <ImpBadge level={it.importance} />
-                        {matchRules(watchRules, it).length > 0 && <span className="dsh-cau_impHit" title="命中关注规则">🎯</span>}
-                      </span>
-                      {it.summary && <span className="dsh-cau_impSummary">{it.summary}</span>}
-                      <span className="dsh-cau_impMeta">{[it.column, it.source, fmtCn(it.time)].filter(Boolean).join(' · ')}</span>
-                    </span>
-                    <button
-                      type="button"
-                      className={'dsh-cau_followBtn' + (follow.some((x) => x.id === id) ? ' dsh-cau_on' : '')}
-                      title={follow.some((x) => x.id === id) ? '取消关注' : '加入关注'}
-                      onClick={() => toggleFollow({ id, title: it.title, url: it.url, time: it.time, source: it.source, column: it.column, importance: it.importance, summary: it.summary })}
-                    >
-                      {follow.some((x) => x.id === id) ? '⭐' : '☆'}
-                    </button>
-                  </div>
-                )
-              })}
+              {summary && otherNews.length === 0 && <div className="dsh-cau_empty">暂无其他来源重要通知</div>}
+              {otherNews.map((it: any, i: number) => newsRow(it, i, otherNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
             </div>
           </div>
 

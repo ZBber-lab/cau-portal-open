@@ -520,6 +520,14 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_followBtn{flex:none;align-self:flex-start;height:24px;min-width:24px;margin-right:10px;padding:0 4px;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#999);font-size:15px;line-height:24px;cursor:pointer}
 .dsh-cau_followBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}
 .dsh-cau_followBtn.dsh-cau_on{color:var(--cau-brand)}
+.dsh-cau_impArch{flex:none;align-self:flex-start;height:24px;min-width:24px;margin-left:2px;padding:0 4px;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#999);font-size:13px;line-height:24px;cursor:pointer}
+.dsh-cau_impArch:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}
+.dsh-cau_impArch:disabled{opacity:.35;cursor:default}
+.dsh-cau_secCount{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#999);margin-right:6px}
+.dsh-cau_portalTag{flex:none;font-size:10px;line-height:16px;padding:0 6px;border-radius:4px;font-weight:500;color:var(--cau-brand,#008038);background:color-mix(in srgb,var(--cau-brand,#008038) 14%,transparent)}
+.dsh-cau_portalCard{display:flex;flex-direction:column;gap:9px;padding:12px;border:1px dashed color-mix(in srgb,var(--cau-brand,#008038) 55%,transparent);border-radius:10px;background:color-mix(in srgb,var(--cau-brand,#008038) 6%,transparent)}
+.dsh-cau_portalCardTitle{font-size:13px;font-weight:600;color:var(--cau-brand,#008038)}
+.dsh-cau_portalCardDesc{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary,#555)}
 .dsh-cau_badge{flex:none;font-size:10px;line-height:16px;padding:0 5px;border-radius:4px;font-weight:500}
 .dsh-cau_badgeHigh{color:var(--dsw-alias-state-error-primary,#ec1313);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#ec1313) 12%,transparent)}
 .dsh-cau_badgeMid{color:var(--dsw-alias-state-warn,#c77d00);background:color-mix(in srgb,var(--dsw-alias-state-warn,#f59e0b) 16%,transparent)}
