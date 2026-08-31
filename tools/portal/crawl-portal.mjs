@@ -171,7 +171,15 @@ export async function runPortalCrawl({ dataDir = null, days = null, maxPages = n
       article: existsSync(join(dataRoot, 'articles', artFile)) ? artFile : (p?.article ?? null),
     });
   }
-  const merged = [...byUrl.values()].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  // ③ 全量回填 article 引用：历史条目可能从未被本次抓取窗口覆盖（重叠停抓），
+  //    此处对 merged 全部条目按 sha1(url) 查文章文件，存在的即指向（供 enrich/summary 关联）
+  const merged = [...byUrl.values()]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .map((p) => {
+      const artFile = `${sha1(p.url)}.json`;
+      const ref = existsSync(join(dataRoot, 'articles', artFile)) ? artFile : (p?.article ?? null);
+      return (ref || null) === (p.article || null) ? p : { ...p, article: ref };
+    });
   const feed = {
     site: 'portal',
     site_name: '统一门户',

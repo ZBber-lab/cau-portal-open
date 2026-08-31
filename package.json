@@ -13,6 +13,7 @@
   "files": [
     "lib",
     "tools/portal",
+    "tools/email",
     "cordis.patch.yml",
     "dsh.plugin.json",
     "README.md"

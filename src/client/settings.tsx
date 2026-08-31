@@ -195,7 +195,7 @@ export function CauSettings(props: any) {
   const sessions = props.sessions ?? _ctx.sessions
   const modelDirectories = props.modelDirectories ?? _ctx.modelDirectories
 
-  const [page, setPage] = useState<'home' | 'ai' | 'tokens' | 'prefs' | 'cloud' | 'security'>('home')
+  const [page, setPage] = useState<'home' | 'ai' | 'tokens' | 'prefs' | 'cloud' | 'security' | 'mail'>('home')
   const [settings, setSettings] = useState(() => loadSettings())
   const [mods, setMods] = useState(() => loadModules())
   const [tokens, setTokens] = useState<TokenRecord[]>(() => loadTokens())
@@ -449,6 +449,113 @@ export function CauSettings(props: any) {
     }
   }
 
+  // ---------- 每日邮件报告（阶段6） ----------
+  const fetchEmailStatus = async () => {
+    try {
+      const r = await fetch('/api/cau/email/status')
+      const j = await r.json()
+      if (j && j.ok !== false) {
+        setMailCfg((c) => ({
+          ...c,
+          enabled: !!j.enabled,
+          sender: j.sender || c.sender,
+          recipient: j.recipient || c.recipient || j.sender || c.sender,
+          sendTime: j.sendTime || c.sendTime,
+          hasCode: !!j.hasCode,
+          provider: j.provider ? String(j.provider) : '',
+        }))
+      }
+    } catch (e: any) {
+      /* 服务端不可用时保持现状 */
+    }
+  }
+  const [mailCfg, setMailCfg] = useState({ enabled: false, sender: '', authCode: '', recipient: '', sendTime: '08:00', hasCode: false, provider: '', rulesCount: 0 })
+  const [mailState, setMailState] = useState<'idle' | 'loading' | 'ok' | 'fail'>('idle')
+  const [mailMsg, setMailMsg] = useState('')
+  const [mailLast, setMailLast] = useState<string>('')
+  const refreshMailInfo = async () => {
+    await fetchEmailStatus()
+    try {
+      const r = await fetch('/api/cau/email/status')
+      const j = await r.json()
+      if (j && j.ok !== false) {
+        setMailLast(
+          j.last_sent
+            ? `上次发送：${new Date(j.last_sent).toLocaleString('zh-CN', { hour12: false })}（${j.last_mode === 'test' ? '测试' : '日报'}）${j.last_ok === false ? ' · ❌ ' + (j.last_error || '失败') : ' · ✅ 成功'}`
+            : '尚未发送过（启用后每天 ' + (j.sendTime || '08:00') + ' 自动发送；测试按钮可先试发）',
+        )
+        setMailCfg((c) => ({ ...c, rulesCount: j.rulesCount || 0, provider: j.provider || c.provider }))
+      }
+    } catch (e: any) {
+      /* 忽略 */
+    }
+  }
+  const doMailSave = async (enabledOverride?: boolean) => {
+    const enabled = enabledOverride ?? mailCfg.enabled
+    setMailState('loading')
+    setMailMsg('')
+    try {
+      const r = await fetch('/api/cau/email/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled,
+          sender: mailCfg.sender,
+          authCode: mailCfg.authCode,
+          recipient: mailCfg.recipient,
+          sendTime: mailCfg.sendTime,
+        }),
+      })
+      const j = await r.json()
+      if (j?.ok) {
+        setMailState('ok')
+        setMailMsg(enabled ? '✅ 已保存并启用：每天 ' + (j.sendTime || mailCfg.sendTime) + ' 自动发送（错过时间开机自动补发）；建议点「测试发送」确认' : '已保存（未启用）')
+        setMailCfg((c) => ({ ...c, authCode: '' }))
+        void refreshMailInfo()
+      } else {
+        setMailState('fail')
+        setMailMsg(j?.error || '保存失败')
+      }
+    } catch (e: any) {
+      setMailState('fail')
+      setMailMsg('服务端不可用：' + String(e?.message || e))
+    }
+  }
+  const doMailTest = async () => {
+    setMailState('loading')
+    setMailMsg('发送中（30 秒内）…')
+    try {
+      const r = await fetch('/api/cau/email/test', { method: 'POST' })
+      const j = await r.json()
+      if (j?.ok) {
+        setMailState('ok')
+        setMailMsg(`✅ 测试邮件已发出：「${j.subject || '农大门户日报'}」→ 请查看收件箱（含垃圾箱）`)
+      } else {
+        setMailState('fail')
+        setMailMsg('发送失败：' + (j?.error || '未知错误') + '（常见：授权码错误 / 服务商被封 / 收件地址不对）')
+      }
+      void refreshMailInfo()
+    } catch (e: any) {
+      setMailState('fail')
+      setMailMsg('请求失败：' + String(e?.message || e))
+    }
+  }
+  // 关注规则变化 → 同步快照给服务端（邮件的 🎯 段用）；静默失败
+  const syncRulesToEmail = (next: WatchRule[]) => {
+    try {
+      void fetch('/api/cau/email/rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rules: next.filter((r) => r.enabled !== false && r.keyword) }),
+      })
+    } catch (e: any) {
+      /* 忽略 */
+    }
+  }
+  useEffect(() => {
+    void fetchEmailStatus()
+  }, [])
+
   // ---------- 关注规则 + 系统通知 ----------
   const [rules, setRules] = useState<WatchRule[]>(() => loadRules())
   const [ruleDraft, setRuleDraft] = useState<{ keyword: string; source: string; minImportance: string }>({ keyword: '', source: '', minImportance: '' })
@@ -456,6 +563,7 @@ export function CauSettings(props: any) {
   const persistRules = (next: WatchRule[]) => {
     setRules(next)
     saveRules(next)
+    syncRulesToEmail(next)
   }
   const addRule = () => {
     const k = ruleDraft.keyword.trim()
@@ -481,7 +589,7 @@ export function CauSettings(props: any) {
     return err ? { cls: 'err', text: `${active} 枚在用 · ⚠ 已过期` } : warn ? { cls: 'warn', text: `${active} 枚在用 · ⚠ 临期` } : { cls: 'ok', text: `${active} 枚在用` }
   })()
 
-  const cards: { key: ModuleKey | null; icon: string; name: string; desc: string; badge: { cls: string; text: string }; need: boolean; page: 'ai' | 'tokens' | 'prefs' | 'cloud' | 'security' }[] = [
+  const cards: { key: ModuleKey | null; icon: string; name: string; desc: string; badge: { cls: string; text: string }; need: boolean; page: 'ai' | 'tokens' | 'prefs' | 'cloud' | 'security' | 'mail' }[] = [
     {
       key: 'ai',
       icon: '🤖',
@@ -526,6 +634,15 @@ export function CauSettings(props: any) {
       badge: mods.cloud ? { cls: 'ok', text: '已连接云端' } : { cls: 'err', text: '已禁用! 插件无数据' },
       need: mods.cloud,
       page: 'cloud',
+    },
+    {
+      key: null,
+      icon: '📧',
+      name: '每日邮件报告',
+      desc: '每天 8:00 自动推送今日摘要到邮箱（错过自动补发）；授权码仅存本机',
+      badge: mailCfg.enabled ? { cls: 'ok', text: '已启用' } : mailCfg.sender ? { cls: 'warn', text: '未启用' } : { cls: 'off', text: '未配置' },
+      need: true,
+      page: 'mail',
     },
     {
       key: 'portal',
@@ -577,7 +694,7 @@ export function CauSettings(props: any) {
           ‹ 返回
         </button>
         <div className="dsh-cau_setTitle" style={{ margin: 0 }}>
-          {page === 'ai' ? 'AI 加工 · 模型配置' : page === 'tokens' ? '令牌管理' : page === 'prefs' ? '面板偏好 · 引用协同' : page === 'cloud' ? '数据源' : '安全 · 门户'}
+          {page === 'ai' ? 'AI 加工 · 模型配置' : page === 'tokens' ? '令牌管理' : page === 'prefs' ? '面板偏好 · 引用协同' : page === 'cloud' ? '数据源' : page === 'mail' ? '每日邮件报告' : '安全 · 门户'}
         </div>
         {errCount > 0 && <span className="dsh-cau_setWarn">⚠ 有 {errCount} 项配置问题</span>}
       </div>
@@ -900,6 +1017,77 @@ export function CauSettings(props: any) {
                   {l.label} ↗
                 </a>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {page === 'mail' && (
+        <div className="dsh-cau_setBlocks">
+          <div className="dsh-cau_setBlock">
+            <div className="dsh-cau_setTitle">📧 每日报告邮件</div>
+            <div className="dsh-cau_setDesc">
+              每天 <b>{mailCfg.sendTime}</b> 自动把「今日高重要通知 + 3 天内截止 + 命中关注规则 + 昨日回顾」推送到你的邮箱；若发送时间已过才开机，会自动<b>补发</b>。发件与收件可填同一个邮箱（自己发给自己）。授权码只存本机（仓库外），不会上传或显示在日志里。
+            </div>
+            <label className="dsh-cau_setLabel" htmlFor="cauMailSender">发件邮箱（如 QQ 号@qq.com）</label>
+            <input
+              id="cauMailSender"
+              className="dsh-cau_setInput"
+              value={mailCfg.sender}
+              onChange={(e) => setMailCfg({ ...mailCfg, sender: e.target.value })}
+              placeholder="如 [REDACTED-EMAIL]（QQ/163/Outlook/农大邮箱均可）"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {mailCfg.provider && <div className="dsh-cau_setHint">已识别服务商：{mailCfg.provider}（SMTP 自动配置，无需手填）</div>}
+            <label className="dsh-cau_setLabel" htmlFor="cauMailCode">邮箱授权码 {mailCfg.hasCode ? '（已保存；留空则不修改）' : ''}</label>
+            <input
+              id="cauMailCode"
+              className="dsh-cau_setInput"
+              type="password"
+              value={mailCfg.authCode}
+              onChange={(e) => setMailCfg({ ...mailCfg, authCode: e.target.value })}
+              placeholder={mailCfg.hasCode ? '已保存授权码，留空保持不变' : 'QQ 邮箱：设置→账户→开启 SMTP→生成授权码'}
+              autoComplete="new-password"
+            />
+            <label className="dsh-cau_setLabel" htmlFor="cauMailTo">收件邮箱（留空 = 发件邮箱）</label>
+            <input
+              id="cauMailTo"
+              className="dsh-cau_setInput"
+              value={mailCfg.recipient}
+              onChange={(e) => setMailCfg({ ...mailCfg, recipient: e.target.value })}
+              placeholder="留空则发给自己（与发件邮箱相同）"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <label className="dsh-cau_setLabel" htmlFor="cauMailTime">发送时间（本机时间，默认 08:00）</label>
+            <input id="cauMailTime" className="dsh-cau_setInput" type="time" value={mailCfg.sendTime} onChange={(e) => setMailCfg({ ...mailCfg, sendTime: e.target.value || '08:00' })} />
+            <label className="dsh-cau_setCheck">
+              <input type="checkbox" checked={mailCfg.enabled} onChange={(e) => setMailCfg({ ...mailCfg, enabled: e.target.checked })} />
+              启用每日邮件报告（保存后立即生效：次日 {mailCfg.sendTime || '08:00'} 起自动发送）
+            </label>
+            <div className="dsh-cau_setRow">
+              <button type="button" className="dsh-cau_setBtn" disabled={mailState === 'loading'} onClick={() => void doMailSave()}>
+                {mailState === 'loading' ? '保存中…' : '💾 保存配置'}
+              </button>
+              <button type="button" className="dsh-cau_setBtn" disabled={mailState === 'loading'} onClick={() => void doMailTest()}>
+                ✉️ 测试发送
+              </button>
+              <button type="button" className="dsh-cau_setBtn" onClick={() => void refreshMailInfo()}>
+                刷新状态
+              </button>
+            </div>
+            {mailState === 'loading' && mailMsg && <span className="dsh-cau_setWarn">{mailMsg}</span>}
+            {mailState === 'ok' && <span className="dsh-cau_setOk">{mailMsg}</span>}
+            {mailState === 'fail' && <span className="dsh-cau_setErr">{mailMsg}</span>}
+            {mailState === 'idle' && mailMsg && <span className="dsh-cau_setHint">{mailMsg}</span>}
+            {mailLast && <div className="dsh-cau_setHint">{mailLast}</div>}
+            <div className="dsh-cau_infoCard">
+              <span className="dsh-cau_setDesc">
+                关注规则（🎯）已同步 {mailCfg.rulesCount} 条给报告；改规则后自动更新。找不到邮箱授权码？最常用路径——
+                <b>QQ 邮箱</b>：网页版 → 设置 → 账户 → 开启「SMTP 服务」→ 按提示发短信后生成 16 位授权码（不是 QQ 密码）。
+                <b>163</b>：设置 → POP3/SMTP/IMAP → 开启 SMTP → 客户端授权密码。
+              </span>
             </div>
           </div>
         </div>
