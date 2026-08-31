@@ -22,10 +22,7 @@ import {
   readCloudJson,
 } from './data'
 
-// 校徽 SVG（currentColor 版）、校名题字 SVG（官方绿版）与题字 currentColor 版由 build.mjs 以文本内联（占位符替换）
-const emblemSvg = '__CAU_EMBLEM_SVG__'
-const nameSvg = '__CAU_NAME_SVG__'
-const nameSvgCurrent = '__CAU_NAME_CURRENT_SVG__'
+// 开源版中性化：不再内联学校校徽/校名题字 SVG（build.mjs 不再注入），改用中性「CAU」徽标 + 宋体题字，配色由 currentColor 跟随所在容器。
 
 const CSS = `
 /* ---- UI 批②：设计 token 层（挂 body：DSH 的 --dsw-* token 定义在 body/[data-ds-dark-theme] 上，
@@ -61,6 +58,10 @@ body[data-ds-dark-theme]{--cau-brand:#00b856}
 .dsh-cau_pillName{flex:1;min-width:0;display:flex;align-items:center;overflow:hidden;color:var(--dsw-alias-label-primary,#e6e8eb)}
 .dsh-cau_pillName svg{display:block;width:auto;height:16px}
 .dsh-cau_pillCount{flex:none;padding:0 7px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));font-size:11px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
+.dsh-cau_cauLogo{flex:none;display:flex;align-items:center;font-family:Arial,Helvetica,sans-serif;font-weight:800;letter-spacing:.02em;color:currentColor}
+.dsh-cau_songtiName{flex:1;min-width:0;display:flex;align-items:center;overflow:hidden;font-family:SimSun,'Songti SC','STSong',serif;font-weight:600;letter-spacing:.02em;color:inherit}
+.dsh-cau_pill .dsh-cau_cauLogo{font-size:15px}
+.dsh-cau_pill .dsh-cau_songtiName{font-size:13px;white-space:nowrap}
 .dsh-cau_tags{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:8px}
 .dsh-cau_chips{display:flex;flex-wrap:wrap;gap:6px}
 /* 键盘焦点环 + 交互过渡（对所有 dsh-cau_* 元素生效；输入框已有 focus 边框不再加轮廓） */
@@ -119,16 +120,14 @@ function CauButton(props: any) {
           onClick={() => setOpen((o) => !o)}
           title={wide ? undefined : count > 0 ? `农大门户 · ${count} 条未读` : '农大门户'}
         >
-          <span dangerouslySetInnerHTML={{ __html: emblemSvg }} />
-          {wide && <span className="dsh-cau_pillName" dangerouslySetInnerHTML={{ __html: nameSvgCurrent }} />}
+          <span className="dsh-cau_cauLogo">CAU</span>
+          {wide && <span className="dsh-cau_pillName dsh-cau_songtiName">中国农业大学</span>}
           {wide && count > 0 && <span className="dsh-cau_pillCount">{count}</span>}
         </button>
       </div>
       {open && (
         <CauPanel
           outsideIgnore={rowRef.current}
-          emblem={emblemSvg}
-          nameSvg={nameSvgCurrent}
           onClose={() => setOpen(false)}
           onUnreadChange={setCount}
         />
@@ -140,9 +139,6 @@ function CauButton(props: any) {
 export const inject = ['slots', 'sessions', 'modelDirectories']
 
 export function apply(ctx: any) {
-  // 共享校徽（供上下文条/引用 chip 复用；build 的 emblem token 只在此文件替换）
-  ;(window as any).__CAU_EMBLEM__ = emblemSvg
-
   // 全局错误浮层：插件/面板出错时在屏幕左下角显示红字（原生 DOM，React 崩了也留着）
   ctx.effect(() => {
     const onErr = (e: any) => {

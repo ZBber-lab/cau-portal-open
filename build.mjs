@@ -16,13 +16,6 @@ import ts from 'typescript'
 const here = dirname(fileURLToPath(import.meta.url))
 mkdirSync(join(here, 'lib'), { recursive: true })
 
-const EMBLEM_TOKEN = "'__CAU_EMBLEM_SVG__'"
-const emblem = readFileSync(join(here, 'assets/brand-svg/cau-emblem.svg'), 'utf8')
-const NAME_TOKEN = "'__CAU_NAME_SVG__'"
-const nameSvg = readFileSync(join(here, 'assets/brand-svg/cau-name-green.svg'), 'utf8')
-const NAME_CURRENT_TOKEN = "'__CAU_NAME_CURRENT_SVG__'"
-const nameSvgCurrent = readFileSync(join(here, 'assets/brand-svg/cau-name.svg'), 'utf8')
-
 function transpileTs(srcText) {
   return ts.transpileModule(srcText, {
     compilerOptions: {
@@ -57,19 +50,8 @@ function inlineLocalRequires(code, dir) {
 }
 
 // ---- 客户端：TSX → CJS，内联本地模块，外加 __ModuleLoader__ 握手 banner/footer ----
+// 开源版中性化：不再内联学校校徽/校名题字 SVG（组件已改为中性「CAU」+ 宋体文字，配色由 currentColor 跟随容器）
 let clientSrc = readFileSync(join(here, 'src/client/index.tsx'), 'utf8')
-if (!clientSrc.includes(EMBLEM_TOKEN)) {
-  throw new Error('client source is missing the emblem placeholder token')
-}
-clientSrc = clientSrc.replace(EMBLEM_TOKEN, JSON.stringify(emblem))
-if (!clientSrc.includes(NAME_TOKEN)) {
-  throw new Error('client source is missing the name placeholder token')
-}
-clientSrc = clientSrc.replace(NAME_TOKEN, JSON.stringify(nameSvg))
-if (!clientSrc.includes(NAME_CURRENT_TOKEN)) {
-  throw new Error('client source is missing the name-current placeholder token')
-}
-clientSrc = clientSrc.replace(NAME_CURRENT_TOKEN, JSON.stringify(nameSvgCurrent))
 const clientOut = inlineLocalRequires(transpileTs(clientSrc), join(here, 'src/client'))
 const clientBanner =
   "window.__ModuleLoader__.load({ id: 'cau-portal', factory: (require) => { var module = { exports: {} }; var exports = module.exports;"

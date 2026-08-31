@@ -230,12 +230,10 @@ function FollowView(props: { onBack: () => void; onOpenArticle: (id: string) => 
 
 export function CauPanel(props: {
   outsideIgnore?: HTMLElement | null
-  emblem: string
-  nameSvg: string
   onClose: () => void
   onUnreadChange?: (n: number) => void
 }) {
-  const { outsideIgnore, emblem, nameSvg, onClose, onUnreadChange } = props
+  const { outsideIgnore, onClose, onUnreadChange } = props
   const rootRef = useRef<HTMLDivElement>(null)
   const [stack, setStack] = useState<View[]>([{ name: 'home' }])
   const [metaTime, setMetaTime] = useState('')
@@ -372,9 +370,9 @@ export function CauPanel(props: {
   return (
     <div ref={rootRef} className="dsh-cau_panel" role="dialog" aria-label="农大门户" style={{ ['--cau-panel-top' as any]: `${topInset}px` }}>
       <div className="dsh-cau_panelHead">
-        <span className="dsh-cau_panelEmblem" dangerouslySetInnerHTML={{ __html: emblem }} />
+        <span className="dsh-cau_panelEmblem dsh-cau_cauLogo">CAU</span>
         <span className="dsh-cau_panelName">
-          <span className="dsh-cau_panelNameImg" dangerouslySetInnerHTML={{ __html: nameSvg }} />
+          <span className="dsh-cau_panelNameImg dsh-cau_songtiName">中国农业大学</span>
           {showSettings && <span className="dsh-cau_panelTitle">设置</span>}
         </span>
         <IconBtn n="pinFill" label={pinned ? '取消固定面板' : '固定面板'} title={pinned ? '取消固定（点击外部/Esc 会关闭）' : '固定面板（点击外部/Esc 不关闭）'} on={pinned} onClick={togglePinned} />
@@ -447,6 +445,8 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_panelName{flex:1;min-width:0;display:flex;align-items:center;gap:8px;overflow:hidden}
 .dsh-cau_panelNameImg{flex:none;display:flex;align-items:center;color:var(--cau-brand)}
 .dsh-cau_panelNameImg svg{display:block;width:auto;height:20px}
+.dsh-cau_panelHead .dsh-cau_cauLogo{font-size:18px}
+.dsh-cau_panelHead .dsh-cau_songtiName{font-size:19px;color:var(--cau-brand);white-space:nowrap}
 .dsh-cau_panelTitle{flex:none;font-size:12px;font-weight:600;letter-spacing:.05em;color:var(--cau-ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-cau_iconBtn{flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:var(--cau-r-s);background:transparent;color:var(--cau-ink3);cursor:pointer}
 .dsh-cau_iconBtn:hover{background:var(--cau-hover);color:var(--cau-ink)}

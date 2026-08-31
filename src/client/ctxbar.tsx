@@ -35,6 +35,7 @@ export const CTXBAR_CSS = `
 .dsh-cau_ctxbar{display:flex;align-items:center;gap:6px;box-sizing:border-box;flex:0 1 auto;min-width:0;max-width:300px;padding:5px 8px 5px 7px;border:1px solid var(--cau-line);border-radius:999px;background:var(--dsw-specific-tip,rgba(255,255,255,.05));color:var(--cau-ink2)}
 .dsh-cau_ctxbarEmblem{flex:none;display:flex;align-items:center;color:var(--cau-brand)}
 .dsh-cau_ctxbarEmblem svg{display:block;height:16px;width:auto}
+.dsh-cau_ctxbar .dsh-cau_cauLogo{font-size:12px}
 .dsh-cau_ctxbarTitle{flex:0 1 auto;min-width:0;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--cau-ink)}
 .dsh-cau_ctxbarX{flex:none;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--cau-ink3);cursor:pointer;font-size:12px;line-height:1}
 .dsh-cau_ctxbarX:hover{background:var(--cau-hover);color:var(--cau-ink)}
@@ -45,7 +46,6 @@ export function CtxBar(props: any) {
   const attached = useSyncExternalStore(subscribeAttached, getAttached) as any[]
   const [injected, setInjected] = useState(false)
   const [tip, setTip] = useState('')
-  const emblem = (window as any).__CAU_EMBLEM__ || ''
   const draftRef = useRef<string>((props?.input?.draft as string) || '')
   useEffect(() => {
     draftRef.current = (props?.input?.draft as string) || ''
@@ -121,7 +121,7 @@ export function CtxBar(props: any) {
         <span className="dsh-cau_ctxbarStatus">{(attached || []).length} 篇引用 · 发送时附带</span>
         {(attached || []).map((it: any) => (
           <div className="dsh-cau_ctxbar" key={it.id}>
-            <span className="dsh-cau_ctxbarEmblem" dangerouslySetInnerHTML={{ __html: emblem }} />
+            <span className="dsh-cau_ctxbarEmblem dsh-cau_cauLogo">CAU</span>
             <span className="dsh-cau_ctxbarTitle" title={it.title}>
               {it.title}
             </span>
