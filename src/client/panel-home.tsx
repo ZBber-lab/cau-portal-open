@@ -50,8 +50,9 @@ export function HomeView(props: {
   onViewArchive: () => void
   onViewFollow: () => void
   onViewDeadlines: () => void
+  onReadChange?: () => void
 }) {
-  const { onOpenColumn, onOpenArticle, onViewArchive, onViewFollow, onViewDeadlines } = props
+  const { onOpenColumn, onOpenArticle, onViewArchive, onViewFollow, onViewDeadlines, onReadChange } = props
   const [phase, setPhase] = useState<'loading' | 'maybe-token' | 'error' | 'ready'>('loading')
   const [indexJson, setIndexJson] = useState<any>(null)
   const [summary, setSummary] = useState<any>(null)
@@ -104,7 +105,7 @@ export function HomeView(props: {
 
   /** 要闻分块：校内平台（统一门户）/ 其他；各限 8 条，归档一条自动补一条 */
   const isPortalIt = (it: any) => /tp_up/.test(String(it.url || ''))
-  const portalNews = useMemo(() => important.filter(isPortalIt).slice(0, 8), [important])
+  const portalNews = useMemo(() => (mods.portal ? important.filter(isPortalIt).slice(0, 8) : []), [important, mods.portal])
   const otherNews = useMemo(() => important.filter((it: any) => !isPortalIt(it)).slice(0, 8), [important])
 
   const archiveFromNews = (id: string) => {
@@ -135,7 +136,7 @@ export function HomeView(props: {
   // ---------- 今日要览（主动察觉层：高重要新进 · 3天内截止 · 关注规则命中） ----------
   const watchRules = useMemo(() => loadRules().filter((r) => r.enabled), [])
   const overview = useMemo(() => {
-    const imp = (summary?.important || []).filter((it: any) => !isPruned(it.article_id || it.url))
+    const imp = (summary?.important || []).filter((it: any) => !isPruned(it.article_id || it.url) && (mods.portal || !isPortalIt(it)))
     const cut = Date.now() - 3 * 86400000
     const recentOk = (t: any) => {
       const x = Date.parse(String(t || ''))
@@ -151,7 +152,7 @@ export function HomeView(props: {
       .filter((v: any, i: number, arr: any[]) => arr.findIndex((x) => (x.article_id || x.url) === (v.article_id || v.url)) === i)
       .slice(0, 3)
     return { high: high.length, due: dueSoon.length, hits: hits.length, top }
-  }, [summary, watchRules, ops])
+  }, [summary, watchRules, ops, mods.portal])
 
   const archiveCount = useMemo(
     () => (summary?.deadlines || []).filter((d: DeadlineItem) => ops[d.article_id || d.url] === 'archive').length,
@@ -443,19 +444,28 @@ export function HomeView(props: {
               <span className="dsh-cau_secMark" />
               <span className="dsh-cau_secTitle">📌 要闻</span>
               {important.length > 0 && (
-                <button type="button" className="dsh-cau_textBtn" onClick={() => setReadSet(markAllRead(allImportantIds))}>
+                <button
+                  type="button"
+                  className="dsh-cau_textBtn"
+                  onClick={() => {
+                    setReadSet(markAllRead(allImportantIds))
+                    onReadChange?.()
+                  }}
+                >
                   全部已读
                 </button>
               )}
             </div>
             <div className="dsh-cau_card">
               {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
-              <div className="dsh-cau_newsSubHead">
-                <span>🏛 校内平台</span>
-                <em>{portalNews.length} 条</em>
-              </div>
-              {summary && portalNews.length === 0 && <div className="dsh-cau_empty">暂无校内平台重要通知</div>}
-              {portalNews.map((it: any, i: number) => newsRow(it, i, portalNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
+              {mods.portal && (
+                <div className="dsh-cau_newsSubHead">
+                  <span>🏛 校内平台</span>
+                  <em>{portalNews.length} 条</em>
+                </div>
+              )}
+              {mods.portal && summary && portalNews.length === 0 && <div className="dsh-cau_empty">暂无校内平台重要通知</div>}
+              {mods.portal && portalNews.map((it: any, i: number) => newsRow(it, i, portalNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
               <div className="dsh-cau_newsSubHead">
                 <span>✦ 其他来源</span>
                 <em>{otherNews.length} 条</em>
@@ -501,7 +511,7 @@ export function HomeView(props: {
               <span className="dsh-cau_secMark" />
               <span className="dsh-cau_secTitle">📚 栏目频道</span>
             </div>
-            {(indexJson?.sites || []).map((site: any) => (
+            {(indexJson?.sites || []).filter((site: any) => mods.portal || site.id !== 'portal').map((site: any) => (
               <div className="dsh-cau_colGroup" key={site.id}>
                 <button type="button" className="dsh-cau_colSiteBtn" onClick={() => onOpenColumn(site.id, null)}>
                   {site.name} ›

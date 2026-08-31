@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "entry": {
     "name": "cau-portal",
-    "inject": []
+    "inject": ["webServer", "llm"]
   },
   "client": {
     "platform": "web"

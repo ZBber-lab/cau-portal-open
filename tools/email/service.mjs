@@ -18,7 +18,9 @@ const DEFAULT = {
   recipient: '',
   sendTime: '08:00', // 本机时间 HH:MM
   rules: [], // 关注规则快照（客户端同步，用于 🎯 段）
-  last_sent: '', // ISO
+  last_sent: '', // ISO（仅「成功发送的正式日报」才写）
+  last_test: '', // ISO（最近一次测试发送成功时间）
+  last_attempt: '', // ISO（最近一次发送尝试失败时间，用于重试退避）
   last_ok: null, // true/false/null
   last_error: '',
   last_mode: '', // daily | test
@@ -53,6 +55,7 @@ export function statusInfo() {
     host: pt ? pt.host : null,
     rulesCount: Array.isArray(c.rules) ? c.rules.length : 0,
     last_sent: c.last_sent,
+    last_attempt: c.last_attempt,
     last_ok: c.last_ok,
     last_error: c.last_error,
     last_mode: c.last_mode,
@@ -113,16 +116,22 @@ export async function sendReport({ mode = 'daily' } = {}) {
       subject,
       text,
     });
-    const st = { ...c, last_sent: new Date().toISOString(), last_ok: out.ok, last_mode: mode, last_error: out.error || '' };
+    const nowIso = new Date().toISOString();
     if (out.ok) {
+      // 成功：测试只记 last_test；正式日报才记 last_sent（当日判重只看它）
+      const st =
+        mode === 'test'
+          ? { ...c, last_test: nowIso, last_ok: true, last_mode: mode, last_error: '' }
+          : { ...c, last_sent: nowIso, last_ok: true, last_mode: mode, last_error: '' };
       saveConfig(st);
       return { ok: true, subject };
     }
-    saveConfig(st);
+    // 失败：只记尝试时间与错误，绝不写 last_sent → 当天仍可重试、正式日报不被吞
+    saveConfig({ ...c, last_attempt: nowIso, last_ok: false, last_mode: mode, last_error: out.error || '' });
     return { ok: false, error: out.error };
   } catch (e) {
-    const st = { ...loadConfig(), last_sent: new Date().toISOString(), last_ok: false, last_mode: mode, last_error: String(e?.message || e).slice(0, 200) };
-    saveConfig(st);
+    const c2 = loadConfig();
+    saveConfig({ ...c2, last_attempt: new Date().toISOString(), last_ok: false, last_mode: mode, last_error: String(e?.message || e).slice(0, 200) });
     return { ok: false, error: String(e?.message || e) };
   } finally {
     sending = false;
@@ -141,8 +150,14 @@ function needDailyNow() {
   const hm = now.getHours() * 60 + now.getMinutes();
   const target = hh * 60 + (mm || 0);
   if (hm < target) return false;
-  const lastDay = c.last_sent ? todayStrFromIso(c.last_sent) : '';
-  return lastDay !== todayStr();
+  // 今天已成功发送正式日报 → 不重发（测试发送不再占位：只有 daily 成功才写 last_sent）
+  if (c.last_mode === 'daily' && c.last_ok === true && c.last_sent && todayStrFromIso(c.last_sent) === todayStr()) return false;
+  // 正式日报失败后的重试退避：10 分钟内不重复尝试
+  if (c.last_mode === 'daily' && c.last_ok === false && c.last_attempt) {
+    const at = Date.parse(c.last_attempt);
+    if (Number.isFinite(at) && Date.now() - at < 10 * 60e3) return false;
+  }
+  return true;
 }
 
 function todayStrFromIso(iso) {

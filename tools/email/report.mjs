@@ -59,14 +59,14 @@ const addDays = (s, n) => {
 
 const IMP_RANK = { 高: 3, 中: 2, 低: 1, undefined: 0 };
 
-/** 规则命中：与客户端 matchRules 同语义（标题/来源/栏目含关键词；来源含限制；重要度下限） */
+/** 规则命中：与客户端 matchRules 同口径（标题/来源/站点名/栏目名/栏目key 任一含关键词，忽略大小写；来源限制=来源/站点名；重要度下限） */
 function matchRule(item, rule) {
-  const kw = String(rule?.keyword || '').trim();
+  const kw = String(rule?.keyword || '').trim().toLowerCase();
   if (!kw) return false;
-  const hay = `${item.title || ''} ${item.source || ''} ${item.site_name || item.site || ''} ${item.column_name || item.column || ''}`;
+  const hay = `${item.title || ''} ${item.source || ''} ${item.site_name || item.site || ''} ${item.column_name || ''} ${item.column || ''}`.toLowerCase();
   if (!hay.includes(kw)) return false;
-  const src = String(rule?.source || '').trim();
-  if (src && !`${item.source || ''} ${item.site_name || item.site || ''} ${item.column_name || item.column || ''}`.includes(src)) return false;
+  const src = String(rule?.source || '').trim().toLowerCase();
+  if (src && !`${item.source || ''} ${item.site_name || item.site || ''}`.toLowerCase().includes(src)) return false;
   const min = rule?.minImportance;
   if (min && (IMP_RANK[item._importance] || 0) < IMP_RANK[min]) return false;
   return true;

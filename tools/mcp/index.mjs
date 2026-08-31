@@ -115,10 +115,6 @@ async function loadFeeds() {
   return feeds
 }
 
-async function listArticleFiles() {
-  return listDir('articles')
-}
-
 /** 相对路径 → 绝对 URL */
 function absUrl(site, url) {
   const u = String(url ?? '')
@@ -253,7 +249,7 @@ server.registerTool('list_latest', {
 server.registerTool('search_news', {
   title: '关键词检索农大新闻/通知',
   description:
-    '在农大门户数据中按关键词检索新闻/通知。匹配范围：标题、AI 摘要，以及已抓取入库的正文（未抓正文的条目仅匹配标题）。' +
+    '在农大门户数据中按关键词检索新闻/通知。匹配范围：标题、AI 摘要（秒回）；命中不足时按需读取候选正文（最多 40 篇，限并发）。' +
     'query 支持空格分隔的多关键词（须全部命中）。可选 days 限定最近 N 天、source 限定站点。返回按日期倒序的前 30 条（含标题/日期/来源/链接/AI 摘要）。',
   inputSchema: {
     query: z.string().min(1),
@@ -277,32 +273,52 @@ server.registerTool('search_news', {
     }
     items.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
 
+    // 一次读取 summary 的 ai_map（含全部已加工条目的摘要），避免逐篇请求
+    const summary = (await readJson('summary.json')) || {}
+    const aiMap = summary.ai_map || {}
+    const articleKey = (it) => (it.article ? String(it.article).replace(/\.json$/, '') : null)
+    const mkHit = (it, ai) => ({
+      title: it.title,
+      date: it.date,
+      source: it.site_name,
+      column: it.column_name,
+      url: it.url,
+      article_id: articleKey(it),
+      ai_summary: ai?.summary ?? null,
+      importance: ai?.importance ?? null,
+    })
+
     const hits = []
+    const candidates = []
+    // 阶段1：标题 + AI 摘要粗筛（零额外请求，保证秒回）
     for (const it of items) {
-      const title = String(it.title ?? '').toLowerCase()
-      let hay = title
-      let ai = null
-      if (it.article) {
-        const art = await readJson('articles/' + it.article)
-        if (art) {
-          ai = art.ai ?? null
-          hay += ' ' + String(art.body ?? '').slice(0, 2000).toLowerCase()
-          hay += ' ' + String(art.ai?.summary ?? '').toLowerCase()
+      const ai = articleKey(it) ? (aiMap[articleKey(it)] || null) : null
+      const hay = String(it.title ?? '').toLowerCase() + ' ' + String(ai?.summary ?? '').toLowerCase()
+      const partial = tokens.some((t) => hay.includes(t))
+      if (tokens.every((t) => hay.includes(t))) {
+        hits.push(mkHit(it, ai))
+        if (hits.length >= 30) break
+      } else if (partial && it.article) {
+        candidates.push(it) // 标题/摘要命中部分关键词 → 正文回退候选
+      }
+    }
+    // 阶段2：正文回退（最多 40 篇、并发 6，防超时）
+    if (hits.length < 30 && candidates.length > 0) {
+      const pool = candidates.slice(0, 40)
+      const CONC = 6
+      for (let i = 0; i < pool.length && hits.length < 30; i += CONC) {
+        const arts = await Promise.all(
+          pool.slice(i, i + CONC).map(async (it) => {
+            const art = await readJson('articles/' + it.article)
+            return { it, body: art?.body ? String(art.body).slice(0, 4000).toLowerCase() : '', ai: art?.ai ?? null }
+          }),
+        )
+        for (const { it, body, ai } of arts) {
+          if (hits.length >= 30) break
+          const hay = String(it.title ?? '').toLowerCase() + ' ' + body + ' ' + String(ai?.summary ?? '').toLowerCase()
+          if (tokens.every((t) => hay.includes(t))) hits.push(mkHit(it, ai))
         }
       }
-      if (tokens.every((t) => hay.includes(t))) {
-        hits.push({
-          title: it.title,
-          date: it.date,
-          source: it.site_name,
-          column: it.column_name,
-          url: it.url,
-          article_id: it.article ? String(it.article).replace(/\.json$/, '') : null,
-          ai_summary: ai?.summary ?? null,
-          importance: ai?.importance ?? null,
-        })
-      }
-      if (hits.length >= 30) break
     }
     return okJson({ query, count: hits.length, items: hits })
   } catch (e) { return failJson(e) }
@@ -361,27 +377,27 @@ server.registerTool('list_deadlines', {
 }, async (args) => {
   try {
     const days = Math.min(90, Math.max(1, Number(args?.days) || 7))
-    const files = await listArticleFiles()
+    // 直接读 summary.json 的 deadlines（爬虫已算好并校验），避免逐篇扫描上千个文章文件
+    const summary = (await readJson('summary.json')) || {}
+    const dl = Array.isArray(summary.deadlines) ? summary.deadlines : []
+    const aiMap = summary.ai_map || {}
     const now = Date.now()
     const floor = new Date(); floor.setHours(0, 0, 0, 0)
     const ceil = floor.getTime() + days * 86400000
     const out = []
-    for (const f of files) {
-      const art = await readJson('articles/' + f)
-      const dl = art?.ai?.deadline
-      if (!dl || typeof dl.date !== 'string') continue
-      const t = parseDay(dl.date)
+    for (const d of dl) {
+      const t = parseDay(d.date)
       if (!Number.isFinite(t) || t < floor.getTime() || t >= ceil) continue
       out.push({
-        title: art.title,
-        source: art.source,
-        url: art.url,
-        publish_time: art.time,
-        summary: art.ai?.summary ?? null,
-        deadline: dl,
+        title: d.title,
+        source: d.source,
+        url: d.url,
+        publish_time: d.time ?? null,
+        summary: (aiMap[d.article_id] && aiMap[d.article_id].summary) || null,
+        deadline: { item: d.item ?? '', date: d.date, evidence: d.evidence ?? '' },
       })
     }
-    out.sort((a, b) => a.deadline.date.localeCompare(b.deadline.date))
+    out.sort((a, b) => String(a.deadline.date).localeCompare(String(b.deadline.date)))
     return okJson({ days, count: out.length, generated_at: new Date(now).toISOString(), items: out })
   } catch (e) { return failJson(e) }
 })

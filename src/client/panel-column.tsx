@@ -5,7 +5,7 @@
  * 数据：index.json（站点/栏目目录）+ summary.json（ai_map 徽章与筛选）+ feed/<site>__<col>.json。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadReadSet, readFeed, isPruned } from './data'
+import { readCloudJson, loadReadSet, readFeed, isPruned, loadModules } from './data'
 
 type Row = {
   id: string
@@ -43,8 +43,15 @@ export function ColumnView(props: {
   const [readSet, setReadSet] = useState<string[]>(() => loadReadSet())
   const [siteLabel, setSiteLabel] = useState(siteName || site)
   const [colLabel, setColLabel] = useState(columnName || '')
+  const [errMsg, setErrMsg] = useState('')
 
   const load = async () => {
+    if (site === 'portal' && !loadModules().portal) {
+      setErrMsg('统一门户模块已在设置中关闭；可到 设置 → 数据源 → 统一门户 重新启用。')
+      setPhase('error')
+      return
+    }
+    setErrMsg('')
     setPhase('loading')
     const [idx, sum] = await Promise.all([readCloudJson('data/index.json'), readCloudJson('data/summary.json')])
     setIndexJson(idx)
@@ -137,7 +144,7 @@ export function ColumnView(props: {
       )}
       {phase === 'error' && (
         <div className="dsh-cau_msg">
-          <div className="dsh-cau_msgText">栏目加载失败。</div>
+          <div className="dsh-cau_msgText">{errMsg || '栏目加载失败。'}</div>
           <button type="button" className="dsh-cau_msgBtn" onClick={() => void load()}>
             重试
           </button>

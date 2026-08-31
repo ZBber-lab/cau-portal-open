@@ -814,14 +814,19 @@ export function saveRules(list: WatchRule[]) {
 }
 export function newRuleId() { return 'r-' + Math.random().toString(36).slice(2, 9) }
 
-/** 规则命中：keyword（标题/来源/栏目含）+ source 含 + 重要度下限 */
-export function matchRules(rules: WatchRule[], item: { title?: string; source?: string; column?: string; importance?: string }): WatchRule[] {
+/** 规则命中：keyword（标题/来源/站点名/栏目名/栏目key 任一含，忽略大小写）+ source 含（来源/站点名）+ 重要度下限。
+ *  字段口径与 tools/email/report.mjs 的 matchRule 对齐：面板🎯 与邮件日报🎯 命中一致。 */
+export function matchRules(
+  rules: WatchRule[],
+  item: { title?: string; source?: string; site_name?: string; column?: string; column_name?: string; importance?: string },
+): WatchRule[] {
   if (!rules || !rules.length) return []
-  const text = `${item.title || ''} ${item.source || ''} ${item.column || ''}`.toLowerCase()
+  const hay = `${item.title || ''} ${item.source || ''} ${item.site_name || ''} ${item.column_name || ''} ${item.column || ''}`.toLowerCase()
+  const srcHay = `${item.source || ''} ${item.site_name || ''}`.toLowerCase()
   return rules.filter((r) => {
     if (!r.enabled || !r.keyword) return false
-    if (!text.includes(r.keyword.toLowerCase())) return false
-    if (r.source && !String(item.source || '').toLowerCase().includes(r.source.toLowerCase())) return false
+    if (!hay.includes(r.keyword.toLowerCase())) return false
+    if (r.source && !srcHay.includes(r.source.toLowerCase())) return false
     if (r.minImportance === '高' && item.importance !== '高') return false
     if (r.minImportance === '中' && item.importance !== '高' && item.importance !== '中') return false
     return true

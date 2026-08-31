@@ -18,7 +18,7 @@
 │   ├── scraper/          # Node 爬虫 + AI 加工管道（零重型依赖，fetch 手写解析）
 │   └── mcp/              # Node MCP 服务器（@modelcontextprotocol/sdk，6 个查询工具）
 ├── assets/               # 品牌资产（校徽/题字 SVG、预览页）
-├── explore/              # 调研与参考（FEASIBILITY.md、参考实现存档）
+├── docs/                 # 调研文档（FEASIBILITY.md 等）
 └── .github/workflows/    # Actions 定时抓取
 ```
 
@@ -40,6 +40,6 @@
 
 ## 接入 DSH
 
-- MCP：在 DSH web profile 的 `cordis.patch.yml` 注册 `@deepseek-ai/dsh-mcp-client`（serverName `cau`，stdio 指向 `tools/mcp/index.mjs`），聊天区即获得 `mcp__cau__*` 工具。
+- MCP：在 DSH web profile 的 `cordis.patch.yml` 注册 `@deepseek-ai/dsh-mcp-client`（serverName `cau`，stdio 指向 `tools/mcp/index.mjs`），聊天区即获得 `mcp__cau__*` 工具。MCP 服务器依赖需在安装包内单独装一次：`cd tools/mcp && pnpm install`（依赖 `@modelcontextprotocol/sdk`、`zod`，不含在插件主包依赖中）。
 - Skill：`~/.dsh/skills/cau-portal.md`（本仓库同款指引见 [SPEC.md §6](SPEC.md)）。
 - 侧边栏插件：阶段 4（见 SPEC 路线图）。

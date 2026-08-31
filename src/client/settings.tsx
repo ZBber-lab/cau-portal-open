@@ -41,6 +41,8 @@ export const SETTINGS_CSS = `
 .dsh-cau_cards{display:flex;flex-direction:column;gap:10px}
 .dsh-cau_setCard{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.03));cursor:pointer;transition:border-color .12s ease}
 .dsh-cau_setCard:hover{border-color:color-mix(in srgb,var(--cau-brand,#008038) 55%,transparent)}
+.dsh-cau_setCardAlt{border-style:dashed;border-color:color-mix(in srgb,var(--cau-brand,#008038) 55%,transparent);background:color-mix(in srgb,var(--cau-brand,#008038) 7%,transparent)}
+.dsh-cau_setCardAlt:hover{border-style:solid;border-color:color-mix(in srgb,var(--cau-brand,#008038) 80%,transparent)}
 .dsh-cau_cardMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .dsh-cau_cardName{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary,#e6e8eb)}
 .dsh-cau_cardIcon{flex:none;font-size:15px;line-height:1}
@@ -618,7 +620,7 @@ export function CauSettings(props: any) {
     return err ? { cls: 'err', text: `${active} 枚在用 · ⚠ 已过期` } : warn ? { cls: 'warn', text: `${active} 枚在用 · ⚠ 临期` } : { cls: 'ok', text: `${active} 枚在用` }
   })()
 
-  const cards: { key: ModuleKey | null; icon: string; name: string; desc: string; badge: { cls: string; text: string }; need: boolean; page: 'ai' | 'tokens' | 'prefs' | 'cloud' | 'security' | 'mail' }[] = [
+  const cards: { key: ModuleKey | null; icon: string; name: string; desc: string; badge: { cls: string; text: string }; need: boolean; page: 'ai' | 'tokens' | 'prefs' | 'cloud' | 'security' | 'mail'; alt?: boolean }[] = [
     {
       key: 'ai',
       icon: '🤖',
@@ -656,10 +658,10 @@ export function CauSettings(props: any) {
       page: 'prefs',
     },
     {
-      key: 'cloud',
+      key: null,
       icon: '☁️',
       name: '数据源',
-      desc: 'GitHub 云端数据（每 2 小时自动更新）+ 连通性检查',
+      desc: 'GitHub 云端数据（每 2 小时自动更新）+ 统一门户 · 校内通知 —— 开关在页面内',
       badge: mods.cloud ? { cls: 'ok', text: '已连接云端' } : { cls: 'err', text: '已禁用! 插件无数据' },
       need: mods.cloud,
       page: 'cloud',
@@ -674,13 +676,14 @@ export function CauSettings(props: any) {
       page: 'mail',
     },
     {
-      key: 'portal',
+      key: null,
       icon: '🔐',
-      name: '安全 · 门户',
-      desc: '统一门户密码（阶段 5）、密钥与重要链接',
-      badge: { cls: 'ok', text: '阶段5 预留' },
+      name: '统一门户 · 账号',
+      desc: 'one.cau.edu.cn 校内通知 —— 一键登录 / 查看状态 / 清除（独立入口）',
+      badge: { cls: 'ok', text: '账号入口' },
       need: true,
       page: 'security',
+      alt: true,
     },
   ]
 
@@ -699,7 +702,7 @@ export function CauSettings(props: any) {
         <div className="dsh-cau_setDesc">分项管理各功能与凭据；每项可独立启用/禁用，关键项缺失会在此提醒。</div>
         <div className="dsh-cau_cards">
           {cards.map((c) => (
-            <div key={c.name} className="dsh-cau_setCard" role="button" tabIndex={0} onClick={() => setPage(c.page)} onKeyDown={(e) => e.key === 'Enter' && setPage(c.page)}>
+            <div key={c.name} className={'dsh-cau_setCard' + (c.alt ? ' dsh-cau_setCardAlt' : '')} role="button" tabIndex={0} onClick={() => setPage(c.page)} onKeyDown={(e) => e.key === 'Enter' && setPage(c.page)}>
               <div className="dsh-cau_cardMain">
                 <span className="dsh-cau_cardName">
                   <span className="dsh-cau_cardIcon">{c.icon}</span>
@@ -1029,9 +1032,12 @@ export function CauSettings(props: any) {
       {page === 'cloud' && (
         <div className="dsh-cau_setBlocks">
           <div className="dsh-cau_setBlock">
-            <div className="dsh-cau_setTitle">数据源</div>
+            <div className="dsh-cau_setRow" style={{ gap: 8 }}>
+              <div className="dsh-cau_setTitle" style={{ margin: 0 }}>☁️ 数据源 · GitHub 云端</div>
+              <Toggle on={mods.cloud} onToggle={() => toggleMod('cloud')} label="切换 数据源" />
+            </div>
             <div className="dsh-cau_setDesc">
-              数据存于 GitHub 私有仓库（`zhouxuanting52-lab/cau-portal` 的 data/），由 Actions 每 2 小时抓取+AI 加工并提交；面板与 MCP 直接读云端。关闭本模块将完全停止数据读取（顶部红条提醒）。
+              数据存于 GitHub 私有仓库（`zhouxuanting52-lab/cau-portal` 的 data/），由 Actions 每 2 小时抓取+AI 加工并提交；面板与 MCP 直接读云端。关闭本开关将完全停止数据读取（顶部红条提醒）。
             </div>
             <div className="dsh-cau_setRow">
               <button type="button" className="dsh-cau_setBtn" disabled={cloudState === 'loading'} onClick={() => void checkCloud()}>
@@ -1046,6 +1052,15 @@ export function CauSettings(props: any) {
                   {l.label} ↗
                 </a>
               ))}
+            </div>
+          </div>
+          <div className="dsh-cau_setBlock">
+            <div className="dsh-cau_setRow" style={{ gap: 8 }}>
+              <div className="dsh-cau_setTitle" style={{ margin: 0 }}>🏛 统一门户 · 校内通知</div>
+              <Toggle on={mods.portal} onToggle={() => toggleMod('portal')} label="切换 统一门户" />
+            </div>
+            <div className="dsh-cau_setDesc">
+              门户数据来自统一门户（one.cau.edu.cn），需登录校园网/SSO 看原文（账号入口见首页「统一门户 · 账号」）。关闭此开关后，面板隐藏门户通知（要闻 / 栏目 / 待办 / 未读计数）；对话查询不受影响。默认开启。
             </div>
           </div>
         </div>

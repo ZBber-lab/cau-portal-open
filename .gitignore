@@ -24,3 +24,12 @@ tools/portal/account.json
 tools/portal/pw.json
 .pw-browsers/
 tools/portal/sync-state.json
+
+# tmp probes (robocopy /XF guards pushes; git add -A fallback)
+tools/tmp-*.mjs
+
+explore/
+lishu_*.csv
+lishu_*.png
+plot_spring_tmax.py
+test.py

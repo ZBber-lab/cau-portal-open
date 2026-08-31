@@ -17,10 +17,14 @@ import {
   saveSettings,
   readCloudText,
   loadReadSet,
+  markRead,
   loadFollow,
   loadDeadlineOps,
   setDeadlineOp,
   activeTokenValues,
+  loadTokens,
+  saveTokens,
+  loadModules,
 } from './data'
 import { getOpenRequest, clearOpenRequest, subscribeBus } from './bus'
 
@@ -71,19 +75,26 @@ async function loadBundle(token: string): Promise<Loaded> {
   return bundle
 }
 
+/** 未读候选：summary.important 中（门户模块开关关闭时排除门户条目） */
+function unreadCandidates(summary: any): any[] {
+  const list = (summary?.important || []) as any[]
+  if (loadModules().portal) return list
+  return list.filter((it: any) => !/tp_up/.test(String(it.url || '')))
+}
+
 /** 页面加载时初始化按钮未读计数（不弹窗；无令牌/无 summary 时返回 0） */
 export async function fetchUnreadCount(): Promise<number> {
-  const token = loadSettings().githubToken
+  const token = activeTokenValues()[0]
   if (!token) return 0
   const b = await loadBundle(token)
   if (!b.summary) return 0
   const readSet = loadReadSet()
-  return (b.summary.important ?? []).filter((it: any) => !readSet.includes(it.article_id || it.url)).length
+  return unreadCandidates(b.summary).filter((it: any) => !readSet.includes(it.article_id || it.url)).length
 }
 
 function ensureToken(): string | null {
-  const s = loadSettings()
-  if (s.githubToken) return s.githubToken
+  const existing = activeTokenValues()[0]
+  if (existing) return existing
   const input = window.prompt(
     '农大门户需要 GitHub 只读令牌才能读取云端数据。\n请粘贴 cau-portal-read 令牌（github_pat_ 开头）：',
   )
@@ -93,7 +104,23 @@ function ensureToken(): string | null {
     window.alert('令牌格式不对（应以 github_pat_ 开头），未保存。')
     return null
   }
-  saveSettings({ ...s, githubToken: t })
+  // 写入令牌登记（设置页「令牌管理」可见可管），与数据读取同一口径，不再只写旧 githubToken 键
+  const list = loadTokens()
+  const rec = list.find((x) => x.id === 'github-read' && x.value)
+  if (rec) {
+    rec.value = t
+  } else {
+    list.unshift({
+      id: 'github-read',
+      name: 'GitHub 数据令牌',
+      usage: '读取云端数据（面板/MCP）',
+      value: t,
+      expires: '',
+      adminUrl: 'https://github.com/settings/personal-access-tokens',
+      enabled: true,
+    })
+  }
+  saveTokens(list)
   return t
 }
 
@@ -241,12 +268,12 @@ export function CauPanel(props: {
   // 头部更新时间 + 初始未读
   useEffect(() => {
     void (async () => {
-      const token = loadSettings().githubToken
+      const token = activeTokenValues()[0]
       if (!token) return
       const b = await loadBundle(token)
       if (b.summary?.last_updated || b.index?.last_updated) setMetaTime(shortTime(b.summary?.last_updated || b.index?.last_updated))
       const readSet = loadReadSet()
-      const n = (b.summary?.important || []).filter((it: any) => !readSet.includes(it.article_id || it.url)).length
+      const n = unreadCandidates(b.summary).filter((it: any) => !readSet.includes(it.article_id || it.url)).length
       setUnread(n)
     })()
   }, [])
@@ -308,14 +335,28 @@ export function CauPanel(props: {
   }, [outsideIgnore, onClose, pinned])
 
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s))
-  const openArticle = (id: string, siteName?: string, columnName?: string, siblings?: { id: string; title: string }[], index?: number) =>
+  /** 打开即已读：按已加载的 summary 重算未读数（SPEC 口径：打开即读、计数即时减一） */
+  const recountUnread = () => {
+    const b = bundleCache
+    if (!b?.summary) return
+    const readSet = loadReadSet()
+    const n = unreadCandidates(b.summary).filter((it: any) => !readSet.includes(it.article_id || it.url)).length
+    setUnread(n)
+  }
+  const openArticle = (id: string, siteName?: string, columnName?: string, siblings?: { id: string; title: string }[], index?: number) => {
+    markRead(id)
+    recountUnread()
     setStack((s) => [...s, { name: 'article', id, back: s[s.length - 1], siteName, columnName, siblings, index }])
-  const replaceArticle = (id: string, siblings?: { id: string; title: string }[], index?: number) =>
+  }
+  const replaceArticle = (id: string, siblings?: { id: string; title: string }[], index?: number) => {
+    markRead(id)
+    recountUnread()
     setStack((s) => {
       const top = s[s.length - 1]
       if (top.name === 'article') return [...s.slice(0, -1), { ...top, id, siblings, index }]
       return [...s, { name: 'article', id, back: top, siblings, index }]
     })
+  }
 
   const openColumn = (site: string, column: string | null) =>
     setStack((s) => [...s, column ? { name: 'column', site, column } : { name: 'site', site }])
@@ -372,6 +413,7 @@ export function CauPanel(props: {
                 onViewArchive={() => setStack((s) => [...s, { name: 'archive' }])}
                 onViewFollow={() => setStack((s) => [...s, { name: 'follow' }])}
                 onViewDeadlines={() => setStack((s) => [...s, { name: 'deadlines' }])}
+                onReadChange={recountUnread}
               />
             )}
             {view.name === 'site' && (
@@ -390,7 +432,7 @@ export function CauPanel(props: {
           </>
         )}
       </div>
-      <div className="dsh-cau_panelFoot">数据来自 GitHub 云端 · 每 2 小时自动更新 · 关注无上限 · 待办可留存/归档</div>
+      <div className="dsh-cau_panelFoot">数据由云端每 2 小时更新 · 打开时拉取 · 关注无上限 · 待办可留存/归档</div>
     </div>
   )
 }
