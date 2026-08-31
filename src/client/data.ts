@@ -668,6 +668,11 @@ export type UsageRow = {
   inputTokens?: number
   outputTokens?: number
   cacheReadTokens?: number
+  /** 云端 usage.jsonl 原始字段（下划线命名） */
+  prompt_tokens?: number
+  completion_tokens?: number
+  cached_tokens?: number
+  cost_yuan?: number
 }
 
 /** 合并云端 usage.jsonl（角色 enrich）与本机按需日志（on-demand） */
@@ -705,8 +710,8 @@ export function buildDailyUsage(rows: UsageRow[], days: number, metric: 'calls' 
     const slot = map[k]
     if (!slot) continue
     slot.calls += 1
-    slot.prompt += r.prompt ?? r.inputTokens ?? 0
-    slot.completion += r.completion ?? r.outputTokens ?? 0
+    slot.prompt += r.prompt ?? r.prompt_tokens ?? r.inputTokens ?? 0
+    slot.completion += r.completion ?? r.completion_tokens ?? r.outputTokens ?? 0
     slot.cost += Number(r.cost ?? r.cost_yuan ?? 0)
   }
   return Object.values(map).map((v) => ({ label: v.label, value: v[metric] }))
