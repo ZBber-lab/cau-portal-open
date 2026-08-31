@@ -521,6 +521,35 @@ export function CauSettings(props: any) {
       setMailMsg('服务端不可用：' + String(e?.message || e))
     }
   }
+  const doMailToggle = async () => {
+    const next = !mailCfg.enabled
+    // 未配置就启用 → 直接引导去配置
+    if (next && !mailCfg.sender) {
+      setPage('mail')
+      setMailState('fail')
+      setMailMsg('启用前请先填写发件邮箱与授权码')
+      return
+    }
+    try {
+      const r = await fetch('/api/cau/email/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      })
+      const j = await r.json()
+      if (j?.ok) {
+        setMailCfg((c) => ({ ...c, enabled: !!j.enabled }))
+        setMailState(next ? 'ok' : 'idle')
+        setMailMsg(next ? '已启用：每天 ' + (j.sendTime || mailCfg.sendTime) + ' 自动发送（错过时间开机补发）' : '已禁用：日报暂停（配置保留）')
+      } else {
+        setMailState('fail')
+        setMailMsg((j?.error || '切换失败') + '（可进页面查看/修复）')
+      }
+    } catch (e: any) {
+      setMailState('fail')
+      setMailMsg('服务端不可用：' + String(e?.message || e))
+    }
+  }
   const doMailTest = async () => {
     setMailState('loading')
     setMailMsg('发送中（30 秒内）…')
@@ -679,7 +708,7 @@ export function CauSettings(props: any) {
                 </span>
                 <span className="dsh-cau_cardDesc">{c.desc}</span>
               </div>
-              {c.key && <Toggle on={mods[c.key]} onToggle={() => toggleMod(c.key)} label={`切换 ${c.name}`} />}
+              {c.key ? <Toggle on={mods[c.key]} onToggle={() => toggleMod(c.key)} label={`切换 ${c.name}`} /> : c.icon === '📧' ? <Toggle on={mailCfg.enabled} onToggle={() => void doMailToggle()} label="切换 每日邮件报告" /> : null}
             </div>
           ))}
         </div>
