@@ -218,114 +218,6 @@ export function apply(ctx: any) {
     },
   })
 
-  // ---------- 阶段5：统一门户（登录/会话；密码仅存本机 tools/portal/account.json，不落日志） ----------
-  // 引擎 lazy import：服务端代码与 tools/portal/* 一同发布（package.json files 含 tools/portal）
-  const portalEngine = () => import(new URL('../tools/portal/engine.mjs', import.meta.url).href as string)
-
-  webServer.register({
-    kind: 'exact',
-    path: '/api/cau/portal/status',
-    handler: async (_req: any, res: any) => {
-      try {
-        const eng: any = await portalEngine()
-        json(res, 200, { ok: true, ...(await eng.statusInfo()) })
-      } catch (error: any) {
-        json(res, 200, { ok: false, error: `门户引擎不可用: ${String(error?.message ?? error)}` })
-      }
-    },
-  })
-
-  webServer.register({
-    kind: 'exact',
-    path: '/api/cau/portal/account',
-    handler: async (req: any, res: any) => {
-      if (req.method !== 'POST') {
-        json(res, 405, { ok: false, error: 'POST only' })
-        return
-      }
-      let input: any = null
-      try {
-        const raw = await readBody(req)
-        input = raw ? JSON.parse(raw) : {}
-      } catch {
-        json(res, 400, { ok: false, error: 'invalid JSON body' })
-        return
-      }
-      const username = String(input?.username ?? '').trim()
-      const password = String(input?.password ?? '')
-      if (!username || !password || username.length > 64 || password.length > 128) {
-        json(res, 400, { ok: false, error: '账号/密码缺失或过长' })
-        return
-      }
-      try {
-        const eng: any = await portalEngine()
-        eng.saveAccount(username, password) // 先存（自动重登用），登录成功后 session.json 由 login 写入
-        eng.clearSession()
-        const out = await eng.login(username, password)
-        if (out.ok) json(res, 200, { ok: true, message: '登录成功', user: username })
-        else json(res, 200, { ok: false, message: out.message })
-      } catch (error: any) {
-        json(res, 500, { ok: false, error: String(error?.message ?? error) })
-      }
-    },
-  })
-
-  webServer.register({
-    kind: 'exact',
-    path: '/api/cau/portal/clear',
-    handler: async (req: any, res: any) => {
-      if (req.method !== 'POST') {
-        json(res, 405, { ok: false, error: 'POST only' })
-        return
-      }
-      try {
-        const eng: any = await portalEngine()
-        eng.clearAccount()
-        eng.clearSession()
-        json(res, 200, { ok: true, message: '已清除登录态与密码' })
-      } catch (error: any) {
-        json(res, 500, { ok: false, error: String(error?.message ?? error) })
-      }
-    },
-  })
-
-  // ---------- 阶段5：门户同步（抓取→推送 portal 数据；本机定时 6h + 启动补抓） ----------
-  const portalSync = () => import(new URL('../tools/portal/sync.mjs', import.meta.url).href as string)
-
-  webServer.register({
-    kind: 'exact',
-    path: '/api/cau/portal/sync',
-    handler: async (req: any, res: any) => {
-      if (req.method !== 'POST') {
-        json(res, 405, { ok: false, error: 'POST only' })
-        return
-      }
-      try {
-        const m: any = await portalSync()
-        if (m.isSyncing()) {
-          json(res, 200, { ok: false, error: '同步正在进行中，请稍候' })
-          return
-        }
-        const out = await m.syncPortal()
-        json(res, 200, out)
-      } catch (error: any) {
-        json(res, 500, { ok: false, error: String(error?.message ?? error) })
-      }
-    },
-  })
-
-  // 定时器：启动一次（幂等）；结果只记计数/错误，绝不落密码/令牌
-  portalSync()
-    .then((m: any) =>
-      m.startPortalScheduler({
-        onResult: (r: any) => {
-          const note = r.ok ? `portal 同步完成（新 ${r.new_items ?? 0} 条）` : `portal 同步失败：${r.error ?? ''}`
-          ctx?.logger?.info(`[cau-portal] ${note}`)
-        },
-      }),
-    )
-    .catch((e: any) => ctx?.logger?.warn(`[cau-portal] portal 调度启动失败：${String(e?.message ?? e)}`))
-
   // ---------- 阶段6：每日邮件报告（本机 SMTP 发送；授权码仅存本机 cau-email/config.json） ----------
   const emailSvc = () => import(new URL('../tools/email/service.mjs', import.meta.url).href as string)
 
@@ -430,5 +322,5 @@ export function apply(ctx: any) {
     )
     .catch((e: any) => ctx?.logger?.warn(`[cau-portal] 邮件调度启动失败：${String(e?.message ?? e)}`))
 
-  ctx?.logger?.info('[cau-portal] server routes registered: /api/cau/health, /api/cau/enrich, /api/cau/data, /api/cau/portal/{status,account,clear,sync}, /api/cau/email/{status,config,rules,test}')
+  ctx?.logger?.info('[cau-portal] server routes registered: /api/cau/health, /api/cau/enrich, /api/cau/data, /api/cau/email/{status,config,rules,test}')
 }
