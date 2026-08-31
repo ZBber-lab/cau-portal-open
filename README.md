@@ -44,6 +44,18 @@
 - 一个 GitHub 账号与一个**私有仓库**（存放你的数据；见下）
 - DeepSeek API Key（管道 AI 加工用；`deepseek-v4-flash` 等）
 
+## 凭据与服务来源一览
+
+| 需要什么 | 从哪获取 | 用途 |
+|---|---|---|
+| **DeepSeek API Key** | [platform.deepseek.com](https://platform.deepseek.com) → 注册/登录 → **API Keys** → 创建（账户需有余额） | 管道 AI 加工、面板按需摘要 |
+| **GitHub 数据仓** | [github.com/new](https://github.com/new) → 新建 **私有** 仓 | 存放你的 `data/` |
+| **GitHub 细粒度令牌** | [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens) → **Fine-grained tokens** → 选你的数据仓 → **Contents: Read**(+/Write) | 面板/MCP 读你的数据 |
+| **cron-job.org（调度桥）** | [console.cron-job.org](https://console.cron-job.org) → 免费注册 → 新建 job | 定时触发抓取（免费私有仓的 `schedule` 被禁用，需外部触发） |
+| **SMTP 邮箱授权码** | QQ：[设置→账户→SMTP](https://mail.qq.com)生成授权码；163：[设置→POP3/SMTP/IMAP](https://mail.163.com)授权密码；Outlook：[账户→安全→应用密码](https://account.microsoft.com) | 每日邮件报告（可选） |
+
+> 安全：这些 key/令牌只服务于你自己的数据与调度；除调度桥的令牌需填入 cron-job.org（第三方）外，其余凭据只存本机。
+
 ### 第 1 步：安装插件
 
 ```bash

@@ -33,7 +33,7 @@ dsh plugin --profile web add "github:zhouxuanting52-lab/cau-portal-open"
 ### 步骤 B：准备数据仓库
 
 1. GitHub 新建私有仓库（如 `username/cau-data`）；
-2. 生成细粒度令牌：Settings → Developer settings → Personal access tokens → Fine-grained tokens：
+2. 生成细粒度令牌（入口 [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens) → **Fine-grained tokens**）：
    - Repository access：仅该数据仓；
    - Permissions → Contents：Read（如需面板「删除」功能则 Read and write）；
    - 其他权限不勾选；
@@ -60,7 +60,7 @@ dsh plugin --profile web add "github:zhouxuanting52-lab/cau-portal-open"
 # 1) 抓取（可选限制页数/条数，先小批量试跑）
 node tools/scraper/crawl.mjs --pages 2 --articles 8
 
-# 2) AI 加工（需要 DeepSeek API Key）。macOS/Linux：`DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8`
+# 2) AI 加工（需要 DeepSeek API Key，从 platform.deepseek.com 的 API Keys 处获取）。macOS/Linux：`DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8`
 #    Windows PowerShell：`$env:DEEPSEEK_API_KEY='sk-...'; node tools/scraper/enrich.mjs --limit 8`
 DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8
 ```
@@ -82,7 +82,7 @@ git add data && git commit -m "data: first crawl" && git push
 免费私有仓的 `schedule` 触发器不生效，需外部触发（常用 cron-job.org）：
 
 1. 用户在数据仓建一个最小权限细粒度令牌：仅该仓库 → Actions: Read & write；
-2. 到 cron-job.org 新建 cron job：
+2. 到 cron-job.org（[console.cron-job.org](https://console.cron-job.org) 免费注册）新建 cron job：
    - Method `POST`，URL `https://api.github.com/repos/<用户>/<数据仓>/actions/workflows/crawl.yml/dispatches`
    - Headers `Authorization: Bearer <令牌>`、`Accept: application/vnd.github+json`
    - Body `{"ref":"main"}`
