@@ -5,6 +5,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { readCloudJson, loadMine, addMine, removeMine, isMine, mineDeadlineOf, loadDeadlineOps, setDeadlineOp, daysLeft } from './data'
+import { Empty } from './empty'
 
 export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: string) => void }) {
   const { onBack, onOpenArticle } = props
@@ -80,7 +81,7 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
           <span>加载中…</span>
         </div>
       ) : sorted.length === 0 ? (
-        <div className="dsh-cau_empty">当前筛选下暂无截止事项（全部未过期截止共 {(summary?.deadlines || []).length} 条）</div>
+        <Empty icon="📋" main="当前筛选下暂无截止事项" sub={`全部未过期截止共 ${(summary?.deadlines || []).length} 条`} />
       ) : (
         <div className="dsh-cau_dlList">
           {sorted.map(({ d, n }: any) => {

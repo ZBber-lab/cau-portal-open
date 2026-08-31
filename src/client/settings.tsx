@@ -95,15 +95,15 @@ export const SETTINGS_CSS = `
 .dsh-cau_usageTable th{color:var(--dsw-alias-label-tertiary,#8b95a5);font-weight:500}
 /* ---- 令牌 ---- */
 .dsh-cau_tokList{display:flex;flex-direction:column;gap:8px}
-.dsh-cau_tok{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:10px}
+.dsh-cau_tok{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px}
 .dsh-cau_tokMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .dsh-cau_tokName{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary,#e6e8eb)}
 .dsh-cau_tokMeta{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
 .dsh-cau_tokActs{display:flex;gap:6px;flex:none}
-.dsh-cau_tokBtn{flex:none;height:26px;padding:0 9px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#9aa4b2);font-size:11px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
+.dsh-cau_tokBtn{flex:none;height:26px;padding:0 9px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary,#9aa4b2);font-size:11px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
 .dsh-cau_tokBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,#e6e8eb)}
 .dsh-cau_links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
-.dsh-cau_link{display:inline-flex;align-items:center;padding:5px 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.16));border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary,#e6e8eb);font-size:11px;text-decoration:none;cursor:pointer}
+.dsh-cau_link{display:inline-flex;align-items:center;padding:5px 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.16));border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary,#e6e8eb);font-size:11px;text-decoration:none;cursor:pointer}
 .dsh-cau_link:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
 `
 

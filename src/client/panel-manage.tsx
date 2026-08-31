@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { readCloudJson, readFeed, loadFollow, loadMine, loadDeadlineOps, isPruned, queuePruneRequest } from './data'
+import { Empty } from './empty'
 
 type MgRow = {
   id: string // 文章 base 或 URL（用于本地过滤/显示）
@@ -276,7 +277,7 @@ export function ManageView(props: { onBack: () => void }) {
           {error && <div className="dsh-cau_mgMsg error">{error}</div>}
 
           <div className="dsh-cau_mgList">
-            {shown.length === 0 && <div className="dsh-cau_empty">没有符合条件的数据</div>}
+            {shown.length === 0 && <Empty icon="🔍" main="没有符合条件的数据" sub="放宽日期/站点筛选或清空搜索词再试" />}
             {sites
               .map(([k, n]) => ({ k, n, items: shown.filter((r) => r.siteKey === k) }))
               .filter((g) => g.items.length)

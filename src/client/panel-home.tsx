@@ -25,6 +25,7 @@ import {
   matchRules,
   daysLeft,
 } from './data'
+import { Empty } from './empty'
 
 type DeadlineItem = { item: string; date: string; title: string; article_id?: string; url?: string; column?: string; source?: string; time?: string | null }
 
@@ -281,7 +282,7 @@ export function HomeView(props: {
                 </span>
               </div>
               {mineRows.length === 0 ? (
-                <div className="dsh-cau_empty">点「+ 自定义事项」直接记录要办的事；或在「全部待办」/文章页点「⭐ 我的事项」精选（附原文链接，自动出现在关注区）。</div>
+                <Empty icon="🗒️" main="还没有我的事项" sub="点「+ 自定义事项」直接记录要办的事；或在「全部待办」/文章页点「⭐ 我的事项」精选（附原文链接）" />
               ) : (
                 <div className="dsh-cau_mineGrid">
                   {mineRows.map(({ id, title, date, column, artUrl, artTitle }: any) => {
@@ -491,7 +492,7 @@ export function HomeView(props: {
               )}
             </div>
             <div className="dsh-cau_card">
-              {follow.length === 0 && <div className="dsh-cau_empty">在文章里点「加入关注」，重要内容集中在这，不设上限</div>}
+              {follow.length === 0 && <Empty icon="⭐" main="还没有关注内容" sub="在文章里点「加入关注」，重要内容集中在这，不设上限" />}
               {follow.slice(0, 5).map((it) => (
                 <div className="dsh-cau_row" key={it.id}>
                   <span className="dsh-cau_rowMain" onClick={() => onOpenArticle(it.id, follow.map((x) => ({ id: x.id, title: x.title })), 0)}>

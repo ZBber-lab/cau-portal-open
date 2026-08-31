@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { readCloudJson, loadReadSet, readFeed, isPruned, loadModules } from './data'
+import { Empty } from './empty'
 
 type Row = {
   id: string
@@ -166,7 +167,7 @@ export function ColumnView(props: {
           )}
 
           <div className="dsh-cau_list">
-            {visible.length === 0 && <div className="dsh-cau_empty">暂无内容</div>}
+            {visible.length === 0 && <Empty icon="📄" main="暂无内容" sub="换个栏目或筛选条件试试" />}
             {visible.map((r, i) => {
               const read = r.id && readSet.includes(r.id)
               return (

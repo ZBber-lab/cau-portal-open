@@ -38,6 +38,11 @@ body[data-ds-dark-theme] .dsh-cau_pill{--cau-brand:#00b856}
 .dsh-cau_pillName{flex:1;min-width:0;display:flex;align-items:center;overflow:hidden;color:var(--dsw-alias-label-primary,#e6e8eb)}
 .dsh-cau_pillName svg{display:block;width:auto;height:16px}
 .dsh-cau_pillCount{flex:none;padding:0 7px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));font-size:11px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
+.dsh-cau_tags{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:8px}
+.dsh-cau_chips{display:flex;flex-wrap:wrap;gap:6px}
+/* UI 批①：键盘焦点框 + 交互过渡（对所有 dsh-cau_* 元素生效；输入框已有 focus 边框不再加轮廓） */
+[class*='dsh-cau_']:not(input):not(select):not(textarea):focus-visible{outline:2px solid color-mix(in srgb,var(--cau-brand,#008038) 60%,transparent);outline-offset:1px}
+[class*='dsh-cau_']{transition:background-color .12s ease,border-color .12s ease,color .12s ease,opacity .12s ease}
 ${PANEL_CSS}
 ${SETTINGS_CSS}
 ${CTXBAR_CSS}
