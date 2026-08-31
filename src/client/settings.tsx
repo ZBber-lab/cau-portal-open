@@ -1,9 +1,12 @@
 /**
- * cau-portal 设置页（2026-08-29 重构：分组卡片「一筐一筐」管理）：
- * 首页 = 分组卡片墙（每卡右上角启用/禁用开关 + 状态徽章）＋ 顶部提醒条（红=基本需求不满足 / 黄=注意）。
- * 子页：① AI 加工·模型配置（模型选择 + 用量柱状图 7/30/90 天 + 指标切换 + 分账表）
- *      ② 令牌管理（多令牌登记：值/过期日/剩余天数/快捷跳转 GitHub 管理页/逐枚开关）
- *      ③ 面板偏好（自动附加 + 引用协同开关） ④ 待办提醒与关注 ⑤ 数据源（连通检查） ⑥ 安全·门户与链接。
+ * cau-portal 设置页（2026-09-01 结构重设计：方案C 分组卡片墙 + 语义统一）：
+ * 首页 = 3 组分组卡片（智能与数据 / 通知与关注 / 面板行为）＋ 顶部提醒条（红=基本需求不满足 / 黄=注意）。
+ *   开关语义统一：功能卡（AI/数据源/待办/引用协同/邮件）首页即有总开关；凭据卡（令牌/门户账号，淡底）无开关只显状态。
+ * 子页（卡片↔子页严格 1:1；页头下内联本模块相关提醒，另有其他模块问题时显示可点击计数 chip 回首页）：
+ *   ① AI 加工·模型配置（模型选择 + 用量柱状图 7/30/90 天 + 指标切换 + 分账表 + 按需补摘要说明）
+ *   ② 令牌管理（多令牌登记：值/过期日/剩余天数/快捷跳转 GitHub 管理页/逐枚开关）
+ *   ③ 面板偏好·引用协同（自动附加 + 引用协同开关 + 面板固定）  ④ 待办提醒·关注（模块开关 + 关注规则 + 系统通知）
+ *   ⑤ 数据源（GitHub 云端 + 统一门户开关 + 连通检查）  ⑥ 每日邮件报告  ⑦ 统一门户·账号（一键登录/同步/清除 + 重要链接）
  * 全部纯客户端（localStorage），浏览器刷新生效。
  */
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
@@ -38,12 +41,15 @@ export const SETTINGS_CSS = `
 .dsh-cau_alert.error{border:1px solid color-mix(in srgb,var(--cau-err) 45%,transparent);background:color-mix(in srgb,var(--cau-err) 10%,transparent);color:var(--cau-err)}
 .dsh-cau_alert.warn{border:1px solid color-mix(in srgb,var(--cau-warn) 45%,transparent);background:color-mix(in srgb,var(--cau-warn) 10%,transparent);color:var(--cau-warn)}
 .dsh-cau_alertDot{flex:none;width:8px;height:8px;margin-top:4px;border-radius:50%;background:currentColor}
+/* ---- 分组 ---- */
+.dsh-cau_setGroup{display:flex;flex-direction:column;gap:10px}
+.dsh-cau_setGroupTitle{display:flex;align-items:center;gap:8px;padding:2px 2px 0;font-size:11px;font-weight:600;letter-spacing:.07em;color:var(--cau-ink3)}
+.dsh-cau_setGroupTitle::after{content:"";flex:1;height:1px;background:var(--cau-line-soft)}
 /* ---- 分组卡片 ---- */
 .dsh-cau_cards{display:flex;flex-direction:column;gap:10px}
 .dsh-cau_setCard{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--cau-line-soft);border-radius:var(--cau-r-m);background:color-mix(in srgb,var(--dsw-specific-menu,#fff) 26%,transparent);box-shadow:0 1px 2px rgba(10,15,22,.03);cursor:pointer;transition:border-color .12s ease}
 .dsh-cau_setCard:hover{border-color:var(--cau-brand-a55)}
-.dsh-cau_setCardAlt{border-style:dashed;border-color:var(--cau-brand-a55);background:var(--cau-brand-a6)}
-.dsh-cau_setCardAlt:hover{border-style:solid;border-color:var(--cau-brand)}
+.dsh-cau_setCardAlt{background:var(--cau-fill)}
 .dsh-cau_cardMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .dsh-cau_cardName{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--cau-ink)}
 .dsh-cau_cardIcon{flex:none;display:flex;color:var(--cau-brand)}
@@ -88,6 +94,8 @@ export const SETTINGS_CSS = `
 .dsh-cau_setOk{font-size:12px;color:var(--cau-ok)}
 .dsh-cau_setErr{font-size:12px;color:var(--cau-err)}
 .dsh-cau_setWarn{font-size:12px;line-height:17px;color:var(--cau-warn)}
+.dsh-cau_setOther{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 10px;border:1px solid color-mix(in srgb,var(--cau-warn) 40%,transparent);border-radius:999px;background:color-mix(in srgb,var(--cau-warn) 8%,transparent);color:var(--cau-warn);font-size:11px;cursor:pointer}
+.dsh-cau_setOther:hover{background:color-mix(in srgb,var(--cau-warn) 14%,transparent)}
 .dsh-cau_setCheck{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--cau-ink2);cursor:pointer}
 .dsh-cau_setCheck input{accent-color:var(--cau-brand)}
 .dsh-cau_infoCard{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--cau-line-soft);border-radius:10px;background:var(--cau-fill)}
@@ -206,7 +214,7 @@ export function CauSettings(props: any) {
   const sessions = props.sessions ?? _ctx.sessions
   const modelDirectories = props.modelDirectories ?? _ctx.modelDirectories
 
-  const [page, setPage] = useState<'home' | 'ai' | 'tokens' | 'prefs' | 'cloud' | 'security' | 'mail'>('home')
+  const [page, setPage] = useState<'home' | 'ai' | 'tokens' | 'prefs' | 'follow' | 'cloud' | 'security' | 'mail'>('home')
   const [settings, setSettings] = useState(() => loadSettings())
   const [mods, setMods] = useState(() => loadModules())
   const [tokens, setTokens] = useState<TokenRecord[]>(() => loadTokens())
@@ -629,76 +637,92 @@ export function CauSettings(props: any) {
     return err ? { cls: 'err', text: `${active} 枚在用 · ⚠ 已过期` } : warn ? { cls: 'warn', text: `${active} 枚在用 · ⚠ 临期` } : { cls: 'ok', text: `${active} 枚在用` }
   })()
 
-  const cards: { key: ModuleKey | null; icon: string; name: string; desc: string; badge: { cls: string; text: string }; need: boolean; page: 'ai' | 'tokens' | 'prefs' | 'cloud' | 'security' | 'mail'; alt?: boolean }[] = [
+  // ---------- 首页分组卡片（功能卡有开关；凭据卡无开关、淡底区分）----------
+  type CardDef = { key: ModuleKey | null; icon: string; name: string; desc: string; badge: { cls: string; text: string }; need: boolean; page: 'ai' | 'tokens' | 'prefs' | 'follow' | 'cloud' | 'security' | 'mail'; alt?: boolean }
+  const cardGroups: { title: string; cards: CardDef[] }[] = [
     {
-      key: 'ai',
-      icon: 'robot',
-      name: 'AI 加工 · 模型配置',
-      desc: '模型选择 + 用量柱状图（7/30/90 天，次数/token/费用切换）',
-      badge: monitor ? { cls: 'ok', text: monitor.model } : { cls: 'warn', text: '未指定模型' },
-      need: mods.ai,
-      page: 'ai',
+      title: '智能与数据',
+      cards: [
+        {
+          key: 'ai',
+          icon: 'robot',
+          name: 'AI 加工 · 模型配置',
+          desc: '模型选择 + 用量柱状图（7/30/90 天，次数/token/费用切换）',
+          badge: monitor ? { cls: 'ok', text: monitor.model } : { cls: 'warn', text: '未指定模型' },
+          need: mods.ai,
+          page: 'ai',
+        },
+        {
+          key: 'cloud',
+          icon: 'database',
+          name: '数据源',
+          desc: 'GitHub 云端数据（每 2 小时自动更新）；统一门户 · 校内通知开关在页面内',
+          badge: mods.cloud ? { cls: 'ok', text: '已连接云端' } : { cls: 'err', text: '已禁用! 插件无数据' },
+          need: mods.cloud,
+          page: 'cloud',
+        },
+        {
+          key: null,
+          icon: 'key',
+          name: '令牌管理',
+          desc: 'GitHub / 调度桥等令牌：过期日期、剩余天数、一键跳转 GitHub 管理页',
+          badge: tokBadge,
+          need: true,
+          page: 'tokens',
+          alt: true,
+        },
+        {
+          key: null,
+          icon: 'lock',
+          name: '统一门户 · 账号',
+          desc: 'one.cau.edu.cn 校内通知 —— 一键登录 / 查看状态 / 清除（独立入口）',
+          badge: { cls: 'ok', text: '账号入口' },
+          need: true,
+          page: 'security',
+          alt: true,
+        },
+      ],
     },
     {
-      key: null,
-      icon: 'key',
-      name: '令牌管理',
-      desc: 'GitHub / 调度桥等令牌：过期日期、剩余天数、一键跳转 GitHub 管理页',
-      badge: tokBadge,
-      need: true,
-      page: 'tokens',
+      title: '通知与关注',
+      cards: [
+        {
+          key: 'deadline',
+          icon: 'clock',
+          name: '待办提醒 · 关注',
+          desc: '首页待办卡（截止提醒）、关注规则（关键词订阅）与系统通知',
+          badge: mods.deadline ? { cls: 'ok', text: '已启用' } : { cls: 'off', text: '已禁用' },
+          need: mods.deadline,
+          page: 'follow',
+        },
+        {
+          key: null,
+          icon: 'mail',
+          name: '每日邮件报告',
+          desc: '每天 8:00 自动推送今日摘要到邮箱（错过自动补发）；授权码仅存本机',
+          badge: mailCfg.enabled ? { cls: 'ok', text: '已启用' } : mailCfg.sender ? { cls: 'warn', text: '未启用' } : { cls: 'off', text: '未配置' },
+          need: true,
+          page: 'mail',
+        },
+      ],
     },
     {
-      key: 'context',
-      icon: 'chat',
-      name: '面板偏好 · 引用协同',
-      desc: '自动附加阅读上下文、引用到对话（上下文条/工具卡片）',
-      badge: mods.context ? { cls: 'ok', text: '引用协同开' } : { cls: 'off', text: '已禁用' },
-      need: mods.context,
-      page: 'prefs',
-    },
-    {
-      key: 'deadline',
-      icon: 'clock',
-      name: '待办提醒 · 关注',
-      desc: '首页待办卡（截止提醒）与关注功能',
-      badge: mods.deadline ? { cls: 'ok', text: '已启用' } : { cls: 'off', text: '已禁用' },
-      need: mods.deadline,
-      page: 'prefs',
-    },
-    {
-      key: null,
-      icon: 'database',
-      name: '数据源',
-      desc: 'GitHub 云端数据（每 2 小时自动更新）+ 统一门户 · 校内通知 —— 开关在页面内',
-      badge: mods.cloud ? { cls: 'ok', text: '已连接云端' } : { cls: 'err', text: '已禁用! 插件无数据' },
-      need: mods.cloud,
-      page: 'cloud',
-    },
-    {
-      key: null,
-      icon: 'mail',
-      name: '每日邮件报告',
-      desc: '每天 8:00 自动推送今日摘要到邮箱（错过自动补发）；授权码仅存本机',
-      badge: mailCfg.enabled ? { cls: 'ok', text: '已启用' } : mailCfg.sender ? { cls: 'warn', text: '未启用' } : { cls: 'off', text: '未配置' },
-      need: true,
-      page: 'mail',
-    },
-    {
-      key: null,
-      icon: 'lock',
-      name: '统一门户 · 账号',
-      desc: 'one.cau.edu.cn 校内通知 —— 一键登录 / 查看状态 / 清除（独立入口）',
-      badge: { cls: 'ok', text: '账号入口' },
-      need: true,
-      page: 'security',
-      alt: true,
+      title: '面板行为',
+      cards: [
+        {
+          key: 'context',
+          icon: 'chat',
+          name: '面板偏好 · 引用协同',
+          desc: '自动附加阅读上下文、引用到对话（上下文条/工具卡片）；面板固定',
+          badge: mods.context ? { cls: 'ok', text: '引用协同开' } : { cls: 'off', text: '已禁用' },
+          need: mods.context,
+          page: 'prefs',
+        },
+      ],
     },
   ]
 
   // ---------- 渲染 ----------
-  const errCount = useMemo(() => alerts.filter((a) => a.level === 'error').length, [alerts])
-
   if (page === 'home') {
     return (
       <div className="dsh-cau_set">
@@ -708,27 +732,35 @@ export function CauSettings(props: any) {
             <span>{a.text}</span>
           </div>
         ))}
-        <div className="dsh-cau_setDesc">分项管理各功能与凭据；每项可独立启用/禁用，关键项缺失会在此提醒。</div>
-        <div className="dsh-cau_cards">
-          {cards.map((c) => (
-            <div key={c.name} className={'dsh-cau_setCard' + (c.alt ? ' dsh-cau_setCardAlt' : '')} role="button" tabIndex={0} onClick={() => setPage(c.page)} onKeyDown={(e) => e.key === 'Enter' && setPage(c.page)}>
-              <div className="dsh-cau_cardMain">
-                <span className="dsh-cau_cardName">
-                  <span className="dsh-cau_cardIcon">
-                    <Ic n={c.icon} />
-                  </span>
-                  {c.name}
-                  <span className={`dsh-cau_cardBadge ${c.badge.cls}`}>{c.badge.text}</span>
-                </span>
-                <span className="dsh-cau_cardDesc">{c.desc}</span>
-              </div>
-              {c.key ? <Toggle on={mods[c.key]} onToggle={() => toggleMod(c.key)} label={`切换 ${c.name}`} /> : c.page === 'mail' ? <Toggle on={mailCfg.enabled} onToggle={() => void doMailToggle()} label="切换 每日邮件报告" /> : null}
+        <div className="dsh-cau_setDesc">按组管理功能与凭据：功能卡可直接开关，凭据卡（淡底）进入维护；关键项缺失会在此提醒。</div>
+        {cardGroups.map((g) => (
+          <div key={g.title} className="dsh-cau_setGroup">
+            <div className="dsh-cau_setGroupTitle">{g.title}</div>
+            <div className="dsh-cau_cards">
+              {g.cards.map((c) => (
+                <div key={c.name} className={'dsh-cau_setCard' + (c.alt ? ' dsh-cau_setCardAlt' : '')} role="button" tabIndex={0} onClick={() => setPage(c.page)} onKeyDown={(e) => e.key === 'Enter' && setPage(c.page)}>
+                  <div className="dsh-cau_cardMain">
+                    <span className="dsh-cau_cardName">
+                      <span className="dsh-cau_cardIcon">
+                        <Ic n={c.icon} />
+                      </span>
+                      {c.name}
+                      <span className={`dsh-cau_cardBadge ${c.badge.cls}`}>{c.badge.text}</span>
+                    </span>
+                    <span className="dsh-cau_cardDesc">{c.desc}</span>
+                  </div>
+                  {c.key ? <Toggle on={mods[c.key]} onToggle={() => toggleMod(c.key)} label={`切换 ${c.name}`} /> : c.page === 'mail' ? <Toggle on={mailCfg.enabled} onToggle={() => void doMailToggle()} label="切换 每日邮件报告" /> : null}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     )
   }
+
+  const pageAlerts = alerts.filter((a) => a.page === page)
+  const otherCount = alerts.length - pageAlerts.length
 
   return (
     <div className="dsh-cau_set">
@@ -738,10 +770,20 @@ export function CauSettings(props: any) {
           返回
         </button>
         <div className="dsh-cau_setTitle" style={{ margin: 0 }}>
-          {page === 'ai' ? 'AI 加工 · 模型配置' : page === 'tokens' ? '令牌管理' : page === 'prefs' ? '面板偏好 · 引用协同' : page === 'cloud' ? '数据源' : page === 'mail' ? '每日邮件报告' : '安全 · 门户'}
+          {page === 'ai' ? 'AI 加工 · 模型配置' : page === 'tokens' ? '令牌管理' : page === 'prefs' ? '面板偏好 · 引用协同' : page === 'follow' ? '待办提醒 · 关注' : page === 'cloud' ? '数据源' : page === 'mail' ? '每日邮件报告' : '统一门户 · 账号'}
         </div>
-        {errCount > 0 && <span className="dsh-cau_setWarn">⚠ 有 {errCount} 项配置问题</span>}
+        {otherCount > 0 && (
+          <button type="button" className="dsh-cau_setOther" title="返回设置首页查看全部提醒" onClick={() => setPage('home')}>
+            ⚠ 另有 {otherCount} 项问题
+          </button>
+        )}
       </div>
+      {pageAlerts.map((a, i) => (
+        <div key={i} className={`dsh-cau_alert ${a.level}`}>
+          <span className="dsh-cau_alertDot" />
+          <span>{a.text}</span>
+        </div>
+      ))}
 
       {page === 'ai' && (
         <div className="dsh-cau_setBlocks">
@@ -953,7 +995,26 @@ export function CauSettings(props: any) {
             </div>
           </div>
           <div className="dsh-cau_setBlock">
-            <div className="dsh-cau_setTitle">待办提醒 · 关注</div>
+            <div className="dsh-cau_setTitle">面板固定</div>
+            <label className="dsh-cau_setCheck">
+              <input type="checkbox" checked={!!settings.panelPinned} onChange={(e) => upd({ ...settings, panelPinned: e.target.checked })} />
+              固定面板（点击外部/Esc 不关闭，仅 ✕ 关闭）
+            </label>
+            <div className="dsh-cau_setHint">与面板头部图钉是同一状态；已打开的面板在下次打开时生效。</div>
+          </div>
+        </div>
+      )}
+
+      {page === 'follow' && (
+        <div className="dsh-cau_setBlocks">
+          <div className="dsh-cau_setBlock">
+            <div className="dsh-cau_setRow" style={{ gap: 8 }}>
+              <div className="dsh-cau_setTitle" style={{ margin: 0 }}>
+                <Ic n="clock" />
+                待办提醒 · 关注
+              </div>
+              <Toggle on={mods.deadline} onToggle={() => toggleMod('deadline')} label="切换 待办提醒 · 关注" />
+            </div>
             <div className="dsh-cau_setDesc">首页「待办卡」展示未过期截止事项（≤7 天），支持留存/归档；关注无上限，文章页点星标加入。关闭本模块后待办卡与关注入口隐藏。</div>
           </div>
           <div className="dsh-cau_setBlock">
@@ -1041,10 +1102,6 @@ export function CauSettings(props: any) {
                 {notifyStatus === 'granted' ? '已授权 ✓' : notifyStatus === 'denied' ? '已被拒绝（需在浏览器站点设置中允许通知）' : notifyStatus === 'unsupported' ? '当前环境不支持通知' : '未授权'}
               </span>
             </div>
-          </div>
-          <div className="dsh-cau_setBlock">
-            <div className="dsh-cau_setTitle">面板固定</div>
-            <div className="dsh-cau_setDesc">面板头部图钉固定后，点击外部/Esc 不关闭，仅 ✕ 关闭（状态持久化）。</div>
           </div>
         </div>
       )}

@@ -713,13 +713,13 @@ export function buildDailyUsage(rows: UsageRow[], days: number, metric: 'calls' 
 }
 
 /** 全局配置提醒：error=基本需求不满足（红条）；warn=注意项（黄条） */
-export function computeAlerts(): { level: 'error' | 'warn'; text: string }[] {
-  const out: { level: 'error' | 'warn'; text: string }[] = []
+export function computeAlerts(): { level: 'error' | 'warn'; text: string; page?: string }[] {
+  const out: { level: 'error' | 'warn'; text: string; page?: string }[] = []
   const mods = loadModules()
   const tokens = loadTokens()
   const hasActiveValue = tokens.some((t) => t.enabled && t.value)
-  if (!hasActiveValue) out.push({ level: 'error', text: '未配置有效令牌：面板无法读取云端数据（设置 → 令牌管理）' })
-  if (!mods.cloud) out.push({ level: 'error', text: '数据源已禁用：插件将无法读取云端数据' })
+  if (!hasActiveValue) out.push({ level: 'error', text: '未配置有效令牌：面板无法读取云端数据（设置 → 令牌管理）', page: 'tokens' })
+  if (!mods.cloud) out.push({ level: 'error', text: '数据源已禁用：插件将无法读取云端数据', page: 'cloud' })
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   for (const t of tokens) {
@@ -728,19 +728,19 @@ export function computeAlerts(): { level: 'error' | 'warn'; text: string }[] {
     const d = Date.parse(t.expires)
     if (!Number.isFinite(d)) continue
     const left = Math.floor((d - Date.now()) / 86400e3)
-    if (left < 0) out.push({ level: 'error', text: `令牌「${t.name}」已过期（${t.expires}），请前往续期` })
-    else if (left <= 30) out.push({ level: 'warn', text: `令牌「${t.name}」将于 ${left} 天后过期（${t.expires}）` })
+    if (left < 0) out.push({ level: 'error', text: `令牌「${t.name}」已过期（${t.expires}），请前往续期`, page: 'tokens' })
+    else if (left <= 30) out.push({ level: 'warn', text: `令牌「${t.name}」将于 ${left} 天后过期（${t.expires}）`, page: 'tokens' })
   }
-  if (!mods.ai) out.push({ level: 'warn', text: 'AI 摘要已禁用：文章页不显示摘要与补摘要' })
-  if (!mods.context) out.push({ level: 'warn', text: '引用协同已禁用：引用按钮与上下文条已隐藏' })
-  if (!mods.deadline) out.push({ level: 'warn', text: '待办与关注已禁用：首页不显示待办卡/关注入口' })
+  if (!mods.ai) out.push({ level: 'warn', text: 'AI 摘要已禁用：文章页不显示摘要与补摘要', page: 'ai' })
+  if (!mods.context) out.push({ level: 'warn', text: '引用协同已禁用：引用按钮与上下文条已隐藏', page: 'prefs' })
+  if (!mods.deadline) out.push({ level: 'warn', text: '待办与关注已禁用：首页不显示待办卡/关注入口', page: 'follow' })
   // 系统通知：开启但未授权/被拒 → 提醒授权路径（避免"开了不响"的错觉）
   const s = loadSettings()
   if (s.notifyOn) {
     const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
-    if (perm === 'default') out.push({ level: 'warn', text: '系统通知已开启但尚未授权：设置 → 面板偏好 → 点「请求通知授权」' })
-    else if (perm === 'denied') out.push({ level: 'warn', text: '系统通知已开启但被浏览器拒绝：请在浏览器站点设置中允许通知' })
-    else if (perm === 'unsupported') out.push({ level: 'warn', text: '系统通知已开启，但当前浏览器不支持通知 API' })
+    if (perm === 'default') out.push({ level: 'warn', text: '系统通知已开启但尚未授权：设置 → 待办提醒 · 关注 → 点「请求通知授权」', page: 'follow' })
+    else if (perm === 'denied') out.push({ level: 'warn', text: '系统通知已开启但被浏览器拒绝：请在浏览器站点设置中允许通知', page: 'follow' })
+    else if (perm === 'unsupported') out.push({ level: 'warn', text: '系统通知已开启，但当前浏览器不支持通知 API', page: 'follow' })
   }
   // 过期日登记（settings.keyExpiries 独立键）：不被令牌列表覆盖的键提醒（如 cau-portal-read/bridge）
   const keyExp = s.keyExpiries || {}
@@ -750,8 +750,8 @@ export function computeAlerts(): { level: 'error' | 'warn'; text: string }[] {
     const d = Date.parse(exp)
     if (!Number.isFinite(d)) continue
     const left = Math.floor((d - Date.now()) / 86400e3)
-    if (left < 0) out.push({ level: 'error', text: `凭据「${k}」已过期（${exp}），请前往 GitHub 续期` })
-    else if (left <= 30) out.push({ level: 'warn', text: `凭据「${k}」将于 ${left} 天后过期（${exp}）` })
+    if (left < 0) out.push({ level: 'error', text: `凭据「${k}」已过期（${exp}），请前往 GitHub 续期`, page: 'tokens' })
+    else if (left <= 30) out.push({ level: 'warn', text: `凭据「${k}」将于 ${left} 天后过期（${exp}）`, page: 'tokens' })
   }
   return out
 }
