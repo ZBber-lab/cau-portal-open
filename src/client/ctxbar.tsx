@@ -31,13 +31,13 @@ class CtxBarBoundary extends Component<any, { err: any }> {
 
 export const CTXBAR_CSS = `
 .dsh-cau_ctxbarList{box-sizing:border-box;width:calc(100% - var(--dsh-composer-side-clearance,16px) - var(--dsh-composer-side-clearance,16px));max-width:calc(var(--dsh-composer-card-max-width,780px) - var(--dsh-composer-dock-inset,8px) - var(--dsh-composer-dock-inset,8px));padding:0 var(--dsh-composer-dock-inset,8px);margin:0 auto 4px;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
-.dsh-cau_ctxbarStatus{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#8b95a5);opacity:.85;margin-right:2px}
-.dsh-cau_ctxbar{display:flex;align-items:center;gap:6px;box-sizing:border-box;flex:0 1 auto;min-width:0;max-width:300px;padding:5px 8px 5px 7px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.16));border-radius:999px;background:var(--dsw-specific-tip,rgba(255,255,255,.05));color:var(--dsw-alias-label-secondary,#9aa4b2)}
-.dsh-cau_ctxbarEmblem{flex:none;display:flex;align-items:center;color:var(--cau-brand,#008038)}
+.dsh-cau_ctxbarStatus{flex:none;font-size:10px;color:var(--cau-ink3);opacity:.85;margin-right:2px}
+.dsh-cau_ctxbar{display:flex;align-items:center;gap:6px;box-sizing:border-box;flex:0 1 auto;min-width:0;max-width:300px;padding:5px 8px 5px 7px;border:1px solid var(--cau-line);border-radius:999px;background:var(--dsw-specific-tip,rgba(255,255,255,.05));color:var(--cau-ink2)}
+.dsh-cau_ctxbarEmblem{flex:none;display:flex;align-items:center;color:var(--cau-brand)}
 .dsh-cau_ctxbarEmblem svg{display:block;height:16px;width:auto}
-.dsh-cau_ctxbarTitle{flex:0 1 auto;min-width:0;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-primary,#e6e8eb)}
-.dsh-cau_ctxbarX{flex:none;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary,#8b95a5);cursor:pointer;font-size:12px;line-height:1}
-.dsh-cau_ctxbarX:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,#e6e8eb)}
+.dsh-cau_ctxbarTitle{flex:0 1 auto;min-width:0;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--cau-ink)}
+.dsh-cau_ctxbarX{flex:none;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--cau-ink3);cursor:pointer;font-size:12px;line-height:1}
+.dsh-cau_ctxbarX:hover{background:var(--cau-hover);color:var(--cau-ink)}
 `
 
 export function CtxBar(props: any) {

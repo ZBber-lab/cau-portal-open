@@ -28,11 +28,33 @@ const nameSvg = '__CAU_NAME_SVG__'
 const nameSvgCurrent = '__CAU_NAME_CURRENT_SVG__'
 
 const CSS = `
+/* ---- UI 批②：设计 token 层（:root 级，面板/设置/工具卡片/上下文条/侧栏按钮共享） ---- */
+:root{
+  --cau-brand:#008038;
+  --cau-brand-a6:color-mix(in srgb,var(--cau-brand) 6%,transparent);
+  --cau-brand-a9:color-mix(in srgb,var(--cau-brand) 9%,transparent);
+  --cau-brand-a12:color-mix(in srgb,var(--cau-brand) 12%,transparent);
+  --cau-brand-a16:color-mix(in srgb,var(--cau-brand) 16%,transparent);
+  --cau-brand-a22:color-mix(in srgb,var(--cau-brand) 22%,transparent);
+  --cau-brand-a35:color-mix(in srgb,var(--cau-brand) 35%,transparent);
+  --cau-brand-a55:color-mix(in srgb,var(--cau-brand) 55%,transparent);
+  --cau-ink:var(--dsw-alias-label-primary,#16181d);
+  --cau-ink2:var(--dsw-alias-label-secondary,#5a6372);
+  --cau-ink3:var(--dsw-alias-label-tertiary,#8b95a5);
+  --cau-line:var(--dsw-alias-border-inverted,rgba(15,17,21,.1));
+  --cau-line-soft:color-mix(in srgb,var(--dsw-alias-border-inverted,rgba(15,17,21,.1)) 55%,transparent);
+  --cau-hover:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.045));
+  --cau-fill:color-mix(in srgb,var(--dsw-alias-label-primary,#16181d) 4%,transparent);
+  --cau-warn:var(--dsw-alias-state-warn,#c77d00);
+  --cau-err:var(--dsw-alias-state-error-primary,#e5484d);
+  --cau-ok:var(--dsw-alias-state-success,#2f9e44);
+  --cau-r-s:8px;--cau-r-m:12px;--cau-r-l:16px;
+}
+body[data-ds-dark-theme]{--cau-brand:#00b856}
 .dsh-cau_pillRow{display:flex;align-items:center;box-sizing:border-box;height:42px;padding:0 6px;min-width:0}
-.dsh-cau_pill{--cau-brand:#008038;flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:7px;height:34px;padding:0 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.09));border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.045));color:var(--dsw-alias-label-primary,#e6e8eb);cursor:pointer;transition:background .15s ease,border-color .15s ease;text-align:left}
-body[data-ds-dark-theme] .dsh-cau_pill{--cau-brand:#00b856}
+.dsh-cau_pill{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:7px;height:34px;padding:0 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.09));border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.045));color:var(--dsw-alias-label-primary,#e6e8eb);cursor:pointer;transition:background .15s ease,border-color .15s ease;text-align:left}
 .dsh-cau_pill:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.09));border-color:var(--dsw-alias-border-l3,rgba(255,255,255,.18));color:var(--dsw-alias-label-primary,#e6e8eb)}
-.dsh-cau_pill[aria-expanded='true']{color:var(--cau-brand);border-color:color-mix(in srgb,var(--cau-brand) 55%,transparent);background:color-mix(in srgb,var(--cau-brand) 12%,transparent)}
+.dsh-cau_pill[aria-expanded='true']{color:var(--cau-brand);border-color:var(--cau-brand-a55);background:var(--cau-brand-a12)}
 .dsh-cau_pill[aria-expanded='true']:hover{color:var(--cau-brand);border-color:color-mix(in srgb,var(--cau-brand) 75%,transparent)}
 .dsh-cau_pill svg{display:block;width:auto;height:18px;flex:none}
 .dsh-cau_pillName{flex:1;min-width:0;display:flex;align-items:center;overflow:hidden;color:var(--dsw-alias-label-primary,#e6e8eb)}
@@ -40,9 +62,9 @@ body[data-ds-dark-theme] .dsh-cau_pill{--cau-brand:#00b856}
 .dsh-cau_pillCount{flex:none;padding:0 7px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));font-size:11px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
 .dsh-cau_tags{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:8px}
 .dsh-cau_chips{display:flex;flex-wrap:wrap;gap:6px}
-/* UI 批①：键盘焦点框 + 交互过渡（对所有 dsh-cau_* 元素生效；输入框已有 focus 边框不再加轮廓） */
-[class*='dsh-cau_']:not(input):not(select):not(textarea):focus-visible{outline:2px solid color-mix(in srgb,var(--cau-brand,#008038) 60%,transparent);outline-offset:1px}
-[class*='dsh-cau_']{transition:background-color .12s ease,border-color .12s ease,color .12s ease,opacity .12s ease}
+/* 键盘焦点环 + 交互过渡（对所有 dsh-cau_* 元素生效；输入框已有 focus 边框不再加轮廓） */
+[class*='dsh-cau_']:not(input):not(select):not(textarea):focus-visible{outline:2px solid var(--cau-brand-a55);outline-offset:1px}
+[class*='dsh-cau_']{transition:background-color .12s ease,border-color .12s ease,color .12s ease,opacity .12s ease,box-shadow .12s ease}
 ${PANEL_CSS}
 ${SETTINGS_CSS}
 ${CTXBAR_CSS}

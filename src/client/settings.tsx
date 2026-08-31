@@ -27,84 +27,94 @@ import {
   type ModuleKey,
 } from './data'
 import { getCtx } from './ctx'
+import { Ic } from './icons'
 
 const noop = () => {}
 
 export const SETTINGS_CSS = `
 .dsh-cau_set{display:flex;flex-direction:column;gap:14px;padding:16px 0 24px;max-width:640px;width:100%;min-width:0;overflow-x:hidden}
 /* ---- 提醒条 ---- */
-.dsh-cau_alert{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-radius:8px;font-size:12px;line-height:17px}
-.dsh-cau_alert.error{border:1px solid var(--dsw-alias-state-error-primary,rgba(229,72,77,.5));background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 10%,transparent);color:var(--dsw-alias-state-error-primary,#e5484d)}
-.dsh-cau_alert.warn{border:1px solid var(--dsw-alias-state-warn,rgba(255,180,0,.5));background:color-mix(in srgb,var(--dsw-alias-state-warn,#ffb400) 10%,transparent);color:var(--dsw-alias-state-warn,#d99c00)}
+.dsh-cau_alert{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-radius:10px;font-size:12px;line-height:17px}
+.dsh-cau_alert.error{border:1px solid color-mix(in srgb,var(--cau-err) 45%,transparent);background:color-mix(in srgb,var(--cau-err) 10%,transparent);color:var(--cau-err)}
+.dsh-cau_alert.warn{border:1px solid color-mix(in srgb,var(--cau-warn) 45%,transparent);background:color-mix(in srgb,var(--cau-warn) 10%,transparent);color:var(--cau-warn)}
 .dsh-cau_alertDot{flex:none;width:8px;height:8px;margin-top:4px;border-radius:50%;background:currentColor}
 /* ---- 分组卡片 ---- */
 .dsh-cau_cards{display:flex;flex-direction:column;gap:10px}
-.dsh-cau_setCard{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.03));cursor:pointer;transition:border-color .12s ease}
-.dsh-cau_setCard:hover{border-color:color-mix(in srgb,var(--cau-brand,#008038) 55%,transparent)}
-.dsh-cau_setCardAlt{border-style:dashed;border-color:color-mix(in srgb,var(--cau-brand,#008038) 55%,transparent);background:color-mix(in srgb,var(--cau-brand,#008038) 7%,transparent)}
-.dsh-cau_setCardAlt:hover{border-style:solid;border-color:color-mix(in srgb,var(--cau-brand,#008038) 80%,transparent)}
+.dsh-cau_setCard{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--cau-line-soft);border-radius:var(--cau-r-m);background:color-mix(in srgb,var(--dsw-specific-menu,#fff) 26%,transparent);box-shadow:0 1px 2px rgba(10,15,22,.03);cursor:pointer;transition:border-color .12s ease}
+.dsh-cau_setCard:hover{border-color:var(--cau-brand-a55)}
+.dsh-cau_setCardAlt{border-style:dashed;border-color:var(--cau-brand-a55);background:var(--cau-brand-a6)}
+.dsh-cau_setCardAlt:hover{border-style:solid;border-color:var(--cau-brand)}
 .dsh-cau_cardMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
-.dsh-cau_cardName{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary,#e6e8eb)}
-.dsh-cau_cardIcon{flex:none;font-size:15px;line-height:1}
-.dsh-cau_cardDesc{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
+.dsh-cau_cardName{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--cau-ink)}
+.dsh-cau_cardIcon{flex:none;display:flex;color:var(--cau-brand)}
+.dsh-cau_cardIcon svg{width:15px;height:15px}
+.dsh-cau_cardDesc{font-size:11px;line-height:16px;color:var(--cau-ink3)}
 .dsh-cau_cardBadge{flex:none;font-size:11px;padding:2px 7px;border-radius:999px;white-space:nowrap}
-.dsh-cau_cardBadge.ok{background:color-mix(in srgb,var(--dsw-alias-state-success,#2f9e44) 14%,transparent);color:var(--dsw-alias-state-success,#2f9e44)}
-.dsh-cau_cardBadge.warn{background:color-mix(in srgb,var(--dsw-alias-state-warn,#ffb400) 14%,transparent);color:var(--dsw-alias-state-warn,#d99c00)}
-.dsh-cau_cardBadge.off{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.07));color:var(--dsw-alias-label-tertiary,#8b95a5)}
-.dsh-cau_cardBadge.err{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 14%,transparent);color:var(--dsw-alias-state-error-primary,#e5484d)}
+.dsh-cau_cardBadge.ok{background:color-mix(in srgb,var(--cau-ok) 14%,transparent);color:var(--cau-ok)}
+.dsh-cau_cardBadge.warn{background:color-mix(in srgb,var(--cau-warn) 14%,transparent);color:var(--cau-warn)}
+.dsh-cau_cardBadge.off{background:var(--cau-fill);color:var(--cau-ink3)}
+.dsh-cau_cardBadge.err{background:color-mix(in srgb,var(--cau-err) 14%,transparent);color:var(--cau-err)}
 /* ---- 开关 ---- */
-.dsh-cau_switch{flex:none;position:relative;width:34px;height:20px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.2));border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));cursor:pointer;transition:background .15s ease,border-color .15s ease}
-.dsh-cau_switch span{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--dsw-alias-label-tertiary,#8b95a5);transition:transform .15s ease,background .15s ease}
-.dsh-cau_switch.on{border-color:color-mix(in srgb,var(--cau-brand,#008038) 60%,transparent);background:color-mix(in srgb,var(--cau-brand,#008038) 22%,transparent)}
-.dsh-cau_switch.on span{transform:translateX(14px);background:var(--cau-brand,#008038)}
+.dsh-cau_switch{flex:none;position:relative;width:34px;height:20px;border:1px solid var(--cau-line);border-radius:999px;background:var(--cau-fill);cursor:pointer;transition:background .15s ease,border-color .15s ease}
+.dsh-cau_switch span{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--cau-ink3);transition:transform .15s ease,background .15s ease}
+.dsh-cau_switch.on{border-color:var(--cau-brand-a55);background:var(--cau-brand-a22)}
+.dsh-cau_switch.on span{transform:translateX(14px);background:var(--cau-brand)}
 /* ---- 子页 ---- */
 .dsh-cau_setPageHead{display:flex;align-items:center;gap:8px;margin-bottom:2px}
-.dsh-cau_setSubBack{flex:none;height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary,#e6e8eb);font-size:12px;cursor:pointer}
-.dsh-cau_setSubBack:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
+.dsh-cau_setSubBack{flex:none;display:inline-flex;align-items:center;gap:3px;height:28px;padding:0 11px;border:1px solid var(--cau-line);border-radius:999px;background:transparent;color:var(--cau-brand);font-size:12px;cursor:pointer}
+.dsh-cau_setSubBack:hover{background:var(--cau-brand-a9)}
+.dsh-cau_setSubBack svg{width:12px;height:12px}
 .dsh-cau_setBlocks{display:flex;flex-direction:column;gap:14px}
 .dsh-cau_setBlock{display:flex;flex-direction:column;gap:8px}
-.dsh-cau_setTitle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary,#e6e8eb)}
-.dsh-cau_setTitle::before{content:"";flex:none;width:3px;height:12px;border-radius:2px;background:var(--cau-brand,#008038)}
-.dsh-cau_setDesc{font-size:12px;line-height:17px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
+.dsh-cau_setTitle{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--cau-ink)}
+.dsh-cau_setTitle::before{content:"";flex:none;width:2px;height:12px;border-radius:2px;background:var(--cau-brand)}
+.dsh-cau_setTitle svg{width:13px;height:13px;color:var(--cau-brand)}
+.dsh-cau_setDesc{font-size:12px;line-height:17px;color:var(--cau-ink3)}
 .dsh-cau_setRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
 .dsh-cau_mineLabel{display:flex;flex-direction:column;gap:4px;margin:0}
-.dsh-cau_mineLabel span{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
+.dsh-cau_mineLabel span{font-size:11px;line-height:16px;color:var(--cau-ink3)}
 .dsh-cau_mineLabel .dsh-cau_setSelect{width:100%;flex:none}
-.dsh-cau_setLabel{flex:1;min-width:0;font-size:13px;color:var(--dsw-alias-label-secondary,#9aa4b2)}
-.dsh-cau_setInput{box-sizing:border-box;width:100%;height:32px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary,#e6e8eb);font-size:12px;outline:none}
-.dsh-cau_setInput:focus{border-color:var(--cau-brand,#008038)}
-.dsh-cau_setSelect{box-sizing:border-box;min-width:0;flex:1;height:32px;padding:0 8px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:8px;background:var(--dsw-specific-menu,#1b1e24);color:var(--dsw-alias-label-primary,#e6e8eb);font-size:12px;outline:none;cursor:pointer}
-.dsh-cau_setBtn{flex:none;height:32px;padding:0 14px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary,#e6e8eb);font-size:12px;cursor:pointer}
-.dsh-cau_setBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
+.dsh-cau_setLabel{flex:1;min-width:0;font-size:13px;color:var(--cau-ink2)}
+.dsh-cau_setInput{box-sizing:border-box;width:100%;height:32px;padding:0 10px;border:1px solid var(--cau-line);border-radius:var(--cau-r-s);background:transparent;color:var(--cau-ink);font-size:12px;outline:none}
+.dsh-cau_setInput:focus{border-color:var(--cau-brand)}
+.dsh-cau_setSelect{box-sizing:border-box;min-width:0;flex:1;height:32px;padding:0 8px;border:1px solid var(--cau-line);border-radius:var(--cau-r-s);background:var(--dsw-specific-menu,#1b1e24);color:var(--cau-ink);font-size:12px;outline:none;cursor:pointer}
+.dsh-cau_setBtn{flex:none;display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 14px;border:1px solid var(--cau-line);border-radius:10px;background:transparent;color:var(--cau-ink);font-size:12px;cursor:pointer}
+.dsh-cau_setBtn:hover{border-color:var(--cau-brand-a35);color:var(--cau-brand);background:var(--cau-brand-a6)}
+.dsh-cau_setBtn svg{width:12px;height:12px}
 .dsh-cau_setBtn:disabled{opacity:.45;cursor:default}
-.dsh-cau_setBtn.danger{border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 45%,transparent);color:var(--dsw-alias-state-error-primary,#e5484d)}
-.dsh-cau_setHint{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
-.dsh-cau_setOk{font-size:12px;color:var(--dsw-alias-state-success,#34c77b)}
-.dsh-cau_setErr{font-size:12px;color:var(--dsw-alias-state-error-primary,#e5484d)}
-.dsh-cau_setWarn{font-size:12px;line-height:17px;color:var(--dsw-alias-state-warn,#ffb400)}
-.dsh-cau_setCheck{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dsw-alias-label-secondary,#9aa4b2);cursor:pointer}
-.dsh-cau_setCheck input{accent-color:var(--cau-brand,#008038)}
-.dsh-cau_infoCard{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:8px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.03))}
+.dsh-cau_setBtn.danger{border-color:color-mix(in srgb,var(--cau-err) 45%,transparent);color:var(--cau-err)}
+.dsh-cau_setBtn.danger:hover{background:color-mix(in srgb,var(--cau-err) 8%,transparent)}
+.dsh-cau_setHint{font-size:11px;line-height:16px;color:var(--cau-ink3)}
+.dsh-cau_setOk{font-size:12px;color:var(--cau-ok)}
+.dsh-cau_setErr{font-size:12px;color:var(--cau-err)}
+.dsh-cau_setWarn{font-size:12px;line-height:17px;color:var(--cau-warn)}
+.dsh-cau_setCheck{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--cau-ink2);cursor:pointer}
+.dsh-cau_setCheck input{accent-color:var(--cau-brand)}
+.dsh-cau_infoCard{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--cau-line-soft);border-radius:10px;background:var(--cau-fill)}
 /* ---- 用量图 ---- */
-.dsh-cau_chart{display:block;width:100%;height:150px;color:var(--dsw-alias-label-secondary,#9aa4b2)}
-.dsh-cau_setChip{height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary,#9aa4b2);font-size:11px;cursor:pointer}
-.dsh-cau_setChip.on{background:color-mix(in srgb,var(--cau-brand,#008038) 14%,transparent);border-color:var(--cau-brand,#008038);color:var(--cau-brand,#00b856)}
-.dsh-cau_usageTable{width:100%;border-collapse:collapse;font-size:12px;color:var(--dsw-alias-label-secondary,#9aa4b2)}
-.dsh-cau_usageTable th,.dsh-cau_usageTable td{padding:6px 8px;border-bottom:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.08));text-align:right;white-space:nowrap}
+.dsh-cau_chart{display:block;width:100%;height:150px;color:var(--cau-ink2)}
+.dsh-cau_setChip{height:24px;padding:0 11px;border:1px solid var(--cau-line);border-radius:999px;background:transparent;color:var(--cau-ink2);font-size:11px;cursor:pointer}
+.dsh-cau_setChip.on{background:var(--cau-brand-a12);border-color:var(--cau-brand);color:var(--cau-brand)}
+.dsh-cau_usageTable{width:100%;border-collapse:collapse;font-size:12px;color:var(--cau-ink2)}
+.dsh-cau_usageTable th,.dsh-cau_usageTable td{padding:6px 8px;border-bottom:1px solid var(--cau-line-soft);text-align:right;white-space:nowrap}
 .dsh-cau_usageTable th:first-child,.dsh-cau_usageTable td:first-child{text-align:left}
-.dsh-cau_usageTable th{color:var(--dsw-alias-label-tertiary,#8b95a5);font-weight:500}
+.dsh-cau_usageTable th{color:var(--cau-ink3);font-weight:500}
 /* ---- 令牌 ---- */
 .dsh-cau_tokList{display:flex;flex-direction:column;gap:8px}
-.dsh-cau_tok{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px}
+.dsh-cau_tok{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--cau-line-soft);border-radius:var(--cau-r-m)}
 .dsh-cau_tokMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.dsh-cau_tokName{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary,#e6e8eb)}
-.dsh-cau_tokMeta{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
+.dsh-cau_tokName{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--cau-ink)}
+.dsh-cau_tokMeta{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--cau-ink3)}
 .dsh-cau_tokActs{display:flex;gap:6px;flex:none}
-.dsh-cau_tokBtn{flex:none;height:26px;padding:0 9px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary,#9aa4b2);font-size:11px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
-.dsh-cau_tokBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,#e6e8eb)}
+.dsh-cau_tokBtn{flex:none;display:inline-flex;align-items:center;gap:3px;height:26px;padding:0 9px;border:1px solid var(--cau-line);border-radius:var(--cau-r-s);background:transparent;color:var(--cau-ink2);font-size:11px;cursor:pointer;text-decoration:none}
+.dsh-cau_tokBtn:hover{border-color:var(--cau-brand-a35);color:var(--cau-brand);background:var(--cau-brand-a6)}
+.dsh-cau_tokBtn svg{width:11px;height:11px}
+.dsh-cau_tokBtn.danger{color:var(--cau-err);border-color:color-mix(in srgb,var(--cau-err) 40%,transparent)}
+.dsh-cau_tokBtn.danger:hover{background:color-mix(in srgb,var(--cau-err) 8%,transparent)}
 .dsh-cau_links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
-.dsh-cau_link{display:inline-flex;align-items:center;padding:5px 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.16));border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary,#e6e8eb);font-size:11px;text-decoration:none;cursor:pointer}
-.dsh-cau_link:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
+.dsh-cau_link{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--cau-line);border-radius:var(--cau-r-s);background:transparent;color:var(--cau-ink2);font-size:11px;text-decoration:none;cursor:pointer}
+.dsh-cau_link:hover{border-color:var(--cau-brand-a35);color:var(--cau-brand);background:var(--cau-brand-a6)}
+.dsh-cau_link svg{width:11px;height:11px}
 `
 
 const ROLE_LABEL: Record<string, string> = {
@@ -622,7 +632,7 @@ export function CauSettings(props: any) {
   const cards: { key: ModuleKey | null; icon: string; name: string; desc: string; badge: { cls: string; text: string }; need: boolean; page: 'ai' | 'tokens' | 'prefs' | 'cloud' | 'security' | 'mail'; alt?: boolean }[] = [
     {
       key: 'ai',
-      icon: '🤖',
+      icon: 'robot',
       name: 'AI 加工 · 模型配置',
       desc: '模型选择 + 用量柱状图（7/30/90 天，次数/token/费用切换）',
       badge: monitor ? { cls: 'ok', text: monitor.model } : { cls: 'warn', text: '未指定模型' },
@@ -631,7 +641,7 @@ export function CauSettings(props: any) {
     },
     {
       key: null,
-      icon: '🔑',
+      icon: 'key',
       name: '令牌管理',
       desc: 'GitHub / 调度桥等令牌：过期日期、剩余天数、一键跳转 GitHub 管理页',
       badge: tokBadge,
@@ -640,7 +650,7 @@ export function CauSettings(props: any) {
     },
     {
       key: 'context',
-      icon: '💬',
+      icon: 'chat',
       name: '面板偏好 · 引用协同',
       desc: '自动附加阅读上下文、引用到对话（上下文条/工具卡片）',
       badge: mods.context ? { cls: 'ok', text: '引用协同开' } : { cls: 'off', text: '已禁用' },
@@ -649,7 +659,7 @@ export function CauSettings(props: any) {
     },
     {
       key: 'deadline',
-      icon: '⏰',
+      icon: 'clock',
       name: '待办提醒 · 关注',
       desc: '首页待办卡（截止提醒）与关注功能',
       badge: mods.deadline ? { cls: 'ok', text: '已启用' } : { cls: 'off', text: '已禁用' },
@@ -658,7 +668,7 @@ export function CauSettings(props: any) {
     },
     {
       key: null,
-      icon: '☁️',
+      icon: 'database',
       name: '数据源',
       desc: 'GitHub 云端数据（每 2 小时自动更新）+ 统一门户 · 校内通知 —— 开关在页面内',
       badge: mods.cloud ? { cls: 'ok', text: '已连接云端' } : { cls: 'err', text: '已禁用! 插件无数据' },
@@ -667,7 +677,7 @@ export function CauSettings(props: any) {
     },
     {
       key: null,
-      icon: '📧',
+      icon: 'mail',
       name: '每日邮件报告',
       desc: '每天 8:00 自动推送今日摘要到邮箱（错过自动补发）；授权码仅存本机',
       badge: mailCfg.enabled ? { cls: 'ok', text: '已启用' } : mailCfg.sender ? { cls: 'warn', text: '未启用' } : { cls: 'off', text: '未配置' },
@@ -676,7 +686,7 @@ export function CauSettings(props: any) {
     },
     {
       key: null,
-      icon: '🔐',
+      icon: 'lock',
       name: '统一门户 · 账号',
       desc: 'one.cau.edu.cn 校内通知 —— 一键登录 / 查看状态 / 清除（独立入口）',
       badge: { cls: 'ok', text: '账号入口' },
@@ -704,13 +714,15 @@ export function CauSettings(props: any) {
             <div key={c.name} className={'dsh-cau_setCard' + (c.alt ? ' dsh-cau_setCardAlt' : '')} role="button" tabIndex={0} onClick={() => setPage(c.page)} onKeyDown={(e) => e.key === 'Enter' && setPage(c.page)}>
               <div className="dsh-cau_cardMain">
                 <span className="dsh-cau_cardName">
-                  <span className="dsh-cau_cardIcon">{c.icon}</span>
+                  <span className="dsh-cau_cardIcon">
+                    <Ic n={c.icon} />
+                  </span>
                   {c.name}
                   <span className={`dsh-cau_cardBadge ${c.badge.cls}`}>{c.badge.text}</span>
                 </span>
                 <span className="dsh-cau_cardDesc">{c.desc}</span>
               </div>
-              {c.key ? <Toggle on={mods[c.key]} onToggle={() => toggleMod(c.key)} label={`切换 ${c.name}`} /> : c.icon === '📧' ? <Toggle on={mailCfg.enabled} onToggle={() => void doMailToggle()} label="切换 每日邮件报告" /> : null}
+              {c.key ? <Toggle on={mods[c.key]} onToggle={() => toggleMod(c.key)} label={`切换 ${c.name}`} /> : c.page === 'mail' ? <Toggle on={mailCfg.enabled} onToggle={() => void doMailToggle()} label="切换 每日邮件报告" /> : null}
             </div>
           ))}
         </div>
@@ -722,7 +734,8 @@ export function CauSettings(props: any) {
     <div className="dsh-cau_set">
       <div className="dsh-cau_setPageHead">
         <button type="button" className="dsh-cau_setSubBack" onClick={() => setPage('home')}>
-          ‹ 返回
+          <Ic n="chevLeft" />
+          返回
         </button>
         <div className="dsh-cau_setTitle" style={{ margin: 0 }}>
           {page === 'ai' ? 'AI 加工 · 模型配置' : page === 'tokens' ? '令牌管理' : page === 'prefs' ? '面板偏好 · 引用协同' : page === 'cloud' ? '数据源' : page === 'mail' ? '每日邮件报告' : '安全 · 门户'}
@@ -848,7 +861,7 @@ export function CauSettings(props: any) {
         <div className="dsh-cau_setBlocks">
           <div className="dsh-cau_setBlock">
             <div className="dsh-cau_setTitle">令牌登记</div>
-            <div className="dsh-cau_setDesc">每枚令牌可选启用/禁用；「值」仅存本机浏览器；过期日期用于到期提醒；「管理 ↗」跳转 GitHub 令牌管理页。停用全部令牌 = 面板无数据（顶部红条提醒）。</div>
+            <div className="dsh-cau_setDesc">每枚令牌可选启用/禁用；「值」仅存本机浏览器；过期日期用于到期提醒；「管理」跳转 GitHub 令牌管理页。停用全部令牌 = 面板无数据（顶部红条提醒）。</div>
             <div className="dsh-cau_tokList">
               {tokens.length === 0 && <div className="dsh-cau_setHint">暂未登记令牌。请添加 GitHub 数据令牌（细粒度 PAT，Contents: Read，私有数据仓）。</div>}
               {tokens.map((t) => {
@@ -874,7 +887,8 @@ export function CauSettings(props: any) {
                     <div className="dsh-cau_tokActs">
                       {t.adminUrl && (
                         <a className="dsh-cau_tokBtn" href={t.adminUrl} target="_blank" rel="noreferrer">
-                          管理 ↗
+                          管理
+                          <Ic n="ext" />
                         </a>
                       )}
                       <button type="button" className="dsh-cau_tokBtn" onClick={() => startEdit(t)}>
@@ -891,7 +905,8 @@ export function CauSettings(props: any) {
             {!tokEditing ? (
               <div className="dsh-cau_setRow">
                 <button type="button" className="dsh-cau_setBtn" onClick={() => startEdit()}>
-                  + 添加令牌
+                  <Ic n="plus" />
+                  添加令牌
                 </button>
               </div>
             ) : (
@@ -939,11 +954,14 @@ export function CauSettings(props: any) {
           </div>
           <div className="dsh-cau_setBlock">
             <div className="dsh-cau_setTitle">待办提醒 · 关注</div>
-            <div className="dsh-cau_setDesc">首页「待办卡」展示未过期截止事项（≤7 天），支持留存/归档；关注无上限，文章页 ★ 加入。关闭本模块后待办卡与关注入口隐藏。</div>
+            <div className="dsh-cau_setDesc">首页「待办卡」展示未过期截止事项（≤7 天），支持留存/归档；关注无上限，文章页点星标加入。关闭本模块后待办卡与关注入口隐藏。</div>
           </div>
           <div className="dsh-cau_setBlock">
-            <div className="dsh-cau_setTitle">🎯 关注规则（关键词/来源订阅）</div>
-            <div className="dsh-cau_setDesc">命中的通知在首页「今日要览」标 🎯、可触发系统通知（下方开关）。规则保存于本机浏览器；关键示例：推免、选课、奖学金、成绩、土地学院、教务处…</div>
+            <div className="dsh-cau_setTitle">
+              <Ic n="target" />
+              关注规则（关键词/来源订阅）
+            </div>
+            <div className="dsh-cau_setDesc">命中的通知在首页「今日要览」标出、可触发系统通知（下方开关）。规则保存于本机浏览器；关键示例：推免、选课、奖学金、成绩、土地学院、教务处…</div>
             <div className="dsh-cau_tokList">
               {rules.length === 0 && <div className="dsh-cau_setHint">暂无规则。添加关键词后会标出所有来源命中的条目（多规则取并集）。</div>}
               {rules.map((r) => (
@@ -999,7 +1017,10 @@ export function CauSettings(props: any) {
             </div>
           </div>
           <div className="dsh-cau_setBlock">
-            <div className="dsh-cau_setTitle">🔔 系统通知（可选）</div>
+            <div className="dsh-cau_setTitle">
+              <Ic n="bell" />
+              系统通知（可选）
+            </div>
             <div className="dsh-cau_setDesc">页面开着（不限是否打开面板）时每 10 分钟检查：命中关注规则或新增高重要通知即弹系统通知。首次需点「请求通知授权」。</div>
             <label className="dsh-cau_setCheck">
               <input type="checkbox" checked={!!settings.notifyOn} onChange={(e) => upd({ ...settings, notifyOn: e.target.checked })} />
@@ -1023,7 +1044,7 @@ export function CauSettings(props: any) {
           </div>
           <div className="dsh-cau_setBlock">
             <div className="dsh-cau_setTitle">面板固定</div>
-            <div className="dsh-cau_setDesc">面板头部 📌 固定后，点击外部/Esc 不关闭，仅 ✕ 关闭（状态持久化）。</div>
+            <div className="dsh-cau_setDesc">面板头部图钉固定后，点击外部/Esc 不关闭，仅 ✕ 关闭（状态持久化）。</div>
           </div>
         </div>
       )}
@@ -1032,7 +1053,10 @@ export function CauSettings(props: any) {
         <div className="dsh-cau_setBlocks">
           <div className="dsh-cau_setBlock">
             <div className="dsh-cau_setRow" style={{ gap: 8 }}>
-              <div className="dsh-cau_setTitle" style={{ margin: 0 }}>☁️ 数据源 · GitHub 云端</div>
+              <div className="dsh-cau_setTitle" style={{ margin: 0 }}>
+                <Ic n="database" />
+                数据源 · GitHub 云端
+              </div>
               <Toggle on={mods.cloud} onToggle={() => toggleMod('cloud')} label="切换 数据源" />
             </div>
             <div className="dsh-cau_setDesc">
@@ -1048,14 +1072,18 @@ export function CauSettings(props: any) {
             <div className="dsh-cau_links">
               {KEY_LINKS.slice(0, 3).map((l) => (
                 <a className="dsh-cau_link" key={l.key} href={l.url} target="_blank" rel="noreferrer">
-                  {l.label} ↗
+                  {l.label}
+                  <Ic n="ext" />
                 </a>
               ))}
             </div>
           </div>
           <div className="dsh-cau_setBlock">
             <div className="dsh-cau_setRow" style={{ gap: 8 }}>
-              <div className="dsh-cau_setTitle" style={{ margin: 0 }}>🏛 统一门户 · 校内通知</div>
+              <div className="dsh-cau_setTitle" style={{ margin: 0 }}>
+                <Ic n="bank" />
+                统一门户 · 校内通知
+              </div>
               <Toggle on={mods.portal} onToggle={() => toggleMod('portal')} label="切换 统一门户" />
             </div>
             <div className="dsh-cau_setDesc">
@@ -1068,7 +1096,10 @@ export function CauSettings(props: any) {
       {page === 'mail' && (
         <div className="dsh-cau_setBlocks">
           <div className="dsh-cau_setBlock">
-            <div className="dsh-cau_setTitle">📧 每日报告邮件</div>
+            <div className="dsh-cau_setTitle">
+              <Ic n="mail" />
+              每日报告邮件
+            </div>
             <div className="dsh-cau_setDesc">
               每天 <b>{mailCfg.sendTime}</b> 自动把「今日高重要通知 + 3 天内截止 + 命中关注规则 + 昨日回顾」推送到你的邮箱；若发送时间已过才开机，会自动<b>补发</b>。发件与收件可填同一个邮箱（自己发给自己）。授权码只存本机（仓库外），不会上传或显示在日志里。
             </div>
@@ -1111,10 +1142,11 @@ export function CauSettings(props: any) {
             </label>
             <div className="dsh-cau_setRow">
               <button type="button" className="dsh-cau_setBtn" disabled={mailState === 'loading'} onClick={() => void doMailSave()}>
-                {mailState === 'loading' ? '保存中…' : '💾 保存配置'}
+                {mailState === 'loading' ? '保存中…' : (<><Ic n="check" />保存配置</>)}
               </button>
               <button type="button" className="dsh-cau_setBtn" disabled={mailState === 'loading'} onClick={() => void doMailTest()}>
-                ✉️ 测试发送
+                <Ic n="mail" />
+                测试发送
               </button>
               <button type="button" className="dsh-cau_setBtn" onClick={() => void refreshMailInfo()}>
                 刷新状态
@@ -1127,7 +1159,7 @@ export function CauSettings(props: any) {
             {mailLast && <div className="dsh-cau_setHint">{mailLast}</div>}
             <div className="dsh-cau_infoCard">
               <span className="dsh-cau_setDesc">
-                关注规则（🎯）已同步 {mailCfg.rulesCount} 条给报告；改规则后自动更新。找不到邮箱授权码？最常用路径——
+                关注规则已同步 {mailCfg.rulesCount} 条给报告；改规则后自动更新。找不到邮箱授权码？最常用路径——
                 <b>QQ 邮箱</b>：网页版 → 设置 → 账户 → 开启「SMTP 服务」→ 按提示发短信后生成 16 位授权码（不是 QQ 密码）。
                 <b>163</b>：设置 → POP3/SMTP/IMAP → 开启 SMTP → 客户端授权密码。
               </span>
@@ -1147,10 +1179,11 @@ export function CauSettings(props: any) {
             <input id="cauPortalPwd" className="dsh-cau_setInput" type="password" value={portalPwd} onChange={(e) => setPortalPwd(e.target.value)} placeholder="密码（仅提交本机服务端）" autoComplete="new-password" />
             <div className="dsh-cau_setRow">
               <button type="button" className="dsh-cau_setBtn" disabled={portalState === 'loading'} onClick={() => void doPortalLogin()}>
-                {portalState === 'loading' ? (portalAct === 'sync' ? '同步中…' : '登录中…') : '🔑 一键登录 / 测试'}
+                {portalState === 'loading' ? (portalAct === 'sync' ? '同步中…' : '登录中…') : (<><Ic n="key" />一键登录 / 测试</>)}
               </button>
               <button type="button" className="dsh-cau_setBtn" disabled={portalState === 'loading'} onClick={() => void doPortalSync()}>
-                ⟳ 立即同步校内通知
+                <Ic n="refresh" />
+                立即同步校内通知
               </button>
               <button type="button" className="dsh-cau_setBtn danger" onClick={() => void doPortalClear()}>
                 清除密码与登录态
@@ -1170,7 +1203,8 @@ export function CauSettings(props: any) {
             <div className="dsh-cau_links">
               {KEY_LINKS.map((l) => (
                 <a className="dsh-cau_link" key={l.key} href={l.url} target="_blank" rel="noreferrer">
-                  {l.label} ↗
+                  {l.label}
+                  <Ic n="ext" />
                 </a>
               ))}
             </div>

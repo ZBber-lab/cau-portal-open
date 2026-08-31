@@ -6,22 +6,25 @@
  */
 import { useMemo } from 'react'
 import { requestOpenArticle } from './bus'
+import { Ic } from './icons'
 
 export const TOOLVIEW_CSS = `
 .dsh-cau_tvWrap{display:flex;flex-direction:column;gap:8px;width:100%}
-.dsh-cau_tvCard{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.1));border-radius:12px;background:var(--dsw-specific-tip,rgba(255,255,255,.03))}
-.dsh-cau_tvTitle{font-size:13px;line-height:18px;font-weight:500;color:var(--dsw-alias-label-primary,#e6e8eb);cursor:pointer;word-break:break-word}
-.dsh-cau_tvTitle:hover{color:var(--cau-brand,#008038)}
-.dsh-cau_tvMeta{font-size:11px;color:var(--dsw-alias-label-tertiary,#8b95a5)}
-.dsh-cau_tvSum{font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary,#9aa4b2);word-break:break-word}
+.dsh-cau_tvCard{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--cau-line-soft);border-radius:12px;background:var(--dsw-specific-tip,rgba(255,255,255,.03))}
+.dsh-cau_tvTitle{font-size:13px;line-height:18px;font-weight:500;color:var(--cau-ink);cursor:pointer;word-break:break-word}
+.dsh-cau_tvTitle:hover{color:var(--cau-brand)}
+.dsh-cau_tvMeta{font-size:11px;color:var(--cau-ink3)}
+.dsh-cau_tvSum{font-size:12px;line-height:17px;color:var(--cau-ink2);word-break:break-word}
 .dsh-cau_tvActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.dsh-cau_tvBtn{display:inline-flex;align-items:center;height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.16));border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary,#e6e8eb);font-size:11px;cursor:pointer;text-decoration:none}
-.dsh-cau_tvBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
-.dsh-cau_tvBtnPrimary{background:var(--dsw-alias-state-business-primary,#4176e6);border-color:transparent;color:#fff}
+.dsh-cau_tvBtn{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 10px;border:1px solid var(--cau-line);border-radius:8px;background:transparent;color:var(--cau-ink);font-size:11px;cursor:pointer;text-decoration:none}
+.dsh-cau_tvBtn:hover{border-color:var(--cau-brand-a35);color:var(--cau-brand);background:var(--cau-brand-a6)}
+.dsh-cau_tvBtn svg{width:11px;height:11px}
+.dsh-cau_tvBtnPrimary{background:var(--cau-brand);border-color:transparent;color:#fff}
+.dsh-cau_tvBtnPrimary:hover{background:var(--cau-brand);color:#fff;opacity:.9}
 .dsh-cau_tvImp{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:500}
-.dsh-cau_tvImp-high{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#e5484d) 15%,transparent);color:var(--dsw-alias-state-error-primary,#e5484d)}
-.dsh-cau_tvImp-mid{background:color-mix(in srgb,var(--dsw-alias-state-warn,#ffb400) 15%,transparent);color:var(--dsw-alias-state-warn,#ffb400)}
-.dsh-cau_tvImp-low{background:color-mix(in srgb,var(--dsw-alias-state-business-tertiary,#4176e6) 15%,transparent);color:var(--dsw-alias-state-business-tertiary,#4176e6)}
+.dsh-cau_tvImp-high{background:color-mix(in srgb,var(--cau-err) 15%,transparent);color:var(--cau-err)}
+.dsh-cau_tvImp-mid{background:color-mix(in srgb,var(--cau-warn) 15%,transparent);color:var(--cau-warn)}
+.dsh-cau_tvImp-low{background:var(--cau-fill);color:var(--cau-ink3)}
 `
 
 function tryJson(t: string): any | null {
@@ -104,7 +107,8 @@ function Card({ it }: { it: any }) {
         ) : null}
         {itemUrl(it) ? (
           <a className="dsh-cau_tvBtn" href={itemUrl(it)} target="_blank" rel="noreferrer">
-            查看原文 ↗
+            查看原文
+            <Ic n="ext" />
           </a>
         ) : null}
       </div>

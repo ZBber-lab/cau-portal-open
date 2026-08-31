@@ -26,6 +26,7 @@ import {
   daysLeft,
 } from './data'
 import { Empty } from './empty'
+import { Ic } from './icons'
 
 type DeadlineItem = { item: string; date: string; title: string; article_id?: string; url?: string; column?: string; source?: string; time?: string | null }
 
@@ -179,10 +180,11 @@ export function HomeView(props: {
 
   const allImportantIds = useMemo(() => important.map((it: any) => it.article_id || it.url), [important])
 
-  /** 要闻行（两块共用）：点标题进步详情 / ☆ 关注 / 📥 归档自动补位 */
+  /** 要闻行（两块共用）：点标题进步详情 / ☆ 关注 / 归档自动补位 */
   const newsRow = (it: any, i: number, sibs: { id: string; title: string }[]) => {
     const id = it.article_id || it.url
     const read = readSet.includes(id)
+    const followed = follow.some((x) => x.id === id)
     return (
       <div className="dsh-cau_impRow" key={id}>
         <span className="dsh-cau_impDot" data-read={read ? '1' : '0'} />
@@ -190,7 +192,11 @@ export function HomeView(props: {
           <span className="dsh-cau_impTop">
             <span className="dsh-cau_impTitle">{it.title}</span>
             <ImpBadge level={it.importance} />
-            {matchRules(watchRules, it).length > 0 && <span className="dsh-cau_impHit" title="命中关注规则">🎯</span>}
+            {matchRules(watchRules, it).length > 0 && (
+              <span className="dsh-cau_impHit" title="命中关注规则">
+                <Ic n="target" />
+              </span>
+            )}
           </span>
           {it.summary && <span className="dsh-cau_impSummary">{it.summary}</span>}
           <span className="dsh-cau_impMeta">{[it.column, it.source, fmtCn(it.time)].filter(Boolean).join(' · ')}</span>
@@ -198,14 +204,14 @@ export function HomeView(props: {
         <span className="dsh-cau_impActs">
           <button
             type="button"
-            className={'dsh-cau_followBtn' + (follow.some((x) => x.id === id) ? ' dsh-cau_on' : '')}
-            title={follow.some((x) => x.id === id) ? '取消关注' : '加入关注'}
+            className={'dsh-cau_followBtn' + (followed ? ' dsh-cau_on' : '')}
+            title={followed ? '取消关注' : '加入关注'}
             onClick={() => toggleFollow({ id, title: it.title, url: it.url, time: it.time, source: it.source, column: it.column, importance: it.importance, summary: it.summary })}
           >
-            {follow.some((x) => x.id === id) ? '⭐' : '☆'}
+            <Ic n={followed ? 'starFill' : 'star'} />
           </button>
           <button type="button" className="dsh-cau_impArch" title="归档（从此处移除，可在「归档」视图中找回）" onClick={() => archiveFromNews(id)}>
-            📥
+            <Ic n="archive" />
           </button>
         </span>
       </div>
@@ -240,21 +246,32 @@ export function HomeView(props: {
         <>
           {!summary && <div className="dsh-cau_hint">聚合数据生成中…栏目与快捷入口仍可用。</div>}
           {(summary?.summaryReason === 'missing' || summary?.summaryReason === 'error') && (
-            <div className="dsh-cau_hint">⭐ 待办与要闻聚合暂不可用（云端 summary.json 未就绪），其余功能正常。</div>
+            <div className="dsh-cau_hint">待办与要闻聚合暂不可用（云端 summary.json 未就绪），其余功能正常。</div>
           )}
 
-          {/* 📌 今日要览：打开面板第一眼（高重要新进 · 即将截止 · 关注规则命中） */}
+          {/* 今日要览：打开面板第一眼（高重要新进 · 即将截止 · 关注规则命中） */}
           {(overview.high > 0 || overview.due > 0 || overview.hits > 0) && (
             <div className="dsh-cau_ov">
-              <span className="dsh-cau_ovTitle">📌 今日要览</span>
+              <span className="dsh-cau_ovTitle">
+                <Ic n="sparkle" />
+                今日要览
+              </span>
               {overview.high > 0 && <span className="dsh-cau_ovChip hl">高重要新进 {overview.high}</span>}
-              {overview.due > 0 && <span className="dsh-cau_ovChip due">⏰ 3 天内截止 {overview.due}</span>}
-              {overview.hits > 0 && <span className="dsh-cau_ovChip hit">🎯 命中关注 {overview.hits}</span>}
+              {overview.due > 0 && (
+                <span className="dsh-cau_ovChip due">
+                  <Ic n="clock" />3 天内截止 {overview.due}
+                </span>
+              )}
+              {overview.hits > 0 && (
+                <span className="dsh-cau_ovChip hit">
+                  <Ic n="target" />命中关注 {overview.hits}
+                </span>
+              )}
               {overview.top.length > 0 && (
                 <div className="dsh-cau_ovList">
                   {overview.top.map((it: any) => (
                     <span key={String(it.article_id || it.url)} className="dsh-cau_ovRow" onClick={() => openArt(it, [], 0)}>
-                      <em>{it.tag === 'high' ? '高' : '🎯'}</em>
+                      <em>{it.tag === 'high' ? '高' : <Ic n="target" />}</em>
                       <span className="dsh-cau_ovTitleTxt">{it.title}</span>
                       <i>{[it.column, it.source].filter(Boolean).join(' · ')}</i>
                     </span>
@@ -269,10 +286,14 @@ export function HomeView(props: {
             <div className="dsh-cau_sec">
               <div className="dsh-cau_secHead">
                 <span className="dsh-cau_secMark" />
-                <span className="dsh-cau_secTitle">⭐ 我的事项</span>
+                <span className="dsh-cau_secTitle">
+                  <Ic n="star" />
+                  我的事项
+                </span>
+                <span className="dsh-cau_secLine" />
                 <span className="dsh-cau_secActs">
                   <button type="button" className="dsh-cau_textBtn" onClick={() => startMineEdit()}>
-                    + 自定义事项
+                    <Ic n="plus" />自定义事项
                   </button>
                   {allDeadlines > 0 && (
                     <button type="button" className="dsh-cau_textBtn" onClick={onViewDeadlines}>
@@ -282,7 +303,7 @@ export function HomeView(props: {
                 </span>
               </div>
               {mineRows.length === 0 ? (
-                <Empty icon="🗒️" main="还没有我的事项" sub="点「+ 自定义事项」直接记录要办的事；或在「全部待办」/文章页点「⭐ 我的事项」精选（附原文链接）" />
+                <Empty icon={<Ic n="note" />} main="还没有我的事项" sub="点「+ 自定义事项」直接记录要办的事；或在「全部待办」/文章页点「我的事项」精选（附原文链接）" />
               ) : (
                 <div className="dsh-cau_mineGrid">
                   {mineRows.map(({ id, title, date, column, artUrl, artTitle }: any) => {
@@ -326,7 +347,8 @@ export function HomeView(props: {
                                   if (id) openArt({ article_id: id, url: artUrl }, [], 0)
                                 }}
                               >
-                                原文 ↗
+                                原文
+                                <Ic n="ext" />
                               </button>
                             )}
                             <button
@@ -337,7 +359,7 @@ export function HomeView(props: {
                                 startMineEdit(id)
                               }}
                             >
-                              ✎ 编辑
+                              <Ic n="edit" />编辑
                             </button>
                             <button
                               type="button"
@@ -348,7 +370,7 @@ export function HomeView(props: {
                                 setMine(loadMine())
                               }}
                             >
-                              ☆ 移出
+                              <Ic n="close" />移出
                             </button>
                           </span>
                         </div>
@@ -430,7 +452,8 @@ export function HomeView(props: {
               )}
               <div className="dsh-cau_deadlineEntry">
                 <span className="dsh-cau_deadlineEntryMain" role="button" onClick={onViewDeadlines}>
-                  📋 全部待办（含所有截止事项）
+                  <Ic n="clipboard" />
+                  全部待办（含所有截止事项）
                   <span className="dsh-cau_deadlineEntryArrow">筛选与查看 ›</span>
                 </span>
                 {archiveCount > 0 && (
@@ -446,7 +469,11 @@ export function HomeView(props: {
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
-              <span className="dsh-cau_secTitle">📌 要闻</span>
+              <span className="dsh-cau_secTitle">
+                <Ic n="flame" />
+                要闻
+              </span>
+              <span className="dsh-cau_secLine" />
               {important.length > 0 && (
                 <button
                   type="button"
@@ -464,14 +491,18 @@ export function HomeView(props: {
               {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
               {mods.portal && (
                 <div className="dsh-cau_newsSubHead">
-                  <span>🏛 校内平台</span>
+                  <span>
+                    <Ic n="bank" /> 校内平台
+                  </span>
                   <em>{portalNews.length} 条</em>
                 </div>
               )}
               {mods.portal && summary && portalNews.length === 0 && <div className="dsh-cau_empty">暂无校内平台重要通知</div>}
               {mods.portal && portalNews.map((it: any, i: number) => newsRow(it, i, portalNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
               <div className="dsh-cau_newsSubHead">
-                <span>✦ 其他来源</span>
+                <span>
+                  <Ic n="news" /> 其他来源
+                </span>
                 <em>{otherNews.length} 条</em>
               </div>
               {summary && otherNews.length === 0 && <div className="dsh-cau_empty">暂无其他来源重要通知</div>}
@@ -484,7 +515,11 @@ export function HomeView(props: {
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
-              <span className="dsh-cau_secTitle">⭐ 关注</span>
+              <span className="dsh-cau_secTitle">
+                <Ic n="bookmark" />
+                关注
+              </span>
+              <span className="dsh-cau_secLine" />
               {follow.length > 0 && (
                 <button type="button" className="dsh-cau_textBtn" onClick={onViewFollow}>
                   查看全部 {follow.length}
@@ -492,7 +527,7 @@ export function HomeView(props: {
               )}
             </div>
             <div className="dsh-cau_card">
-              {follow.length === 0 && <Empty icon="⭐" main="还没有关注内容" sub="在文章里点「加入关注」，重要内容集中在这，不设上限" />}
+              {follow.length === 0 && <Empty icon={<Ic n="bookmark" />} main="还没有关注内容" sub="在文章里点「加入关注」，重要内容集中在这，不设上限" />}
               {follow.slice(0, 5).map((it) => (
                 <div className="dsh-cau_row" key={it.id}>
                   <span className="dsh-cau_rowMain" onClick={() => onOpenArticle(it.id, follow.map((x) => ({ id: x.id, title: x.title })), 0)}>
@@ -500,7 +535,7 @@ export function HomeView(props: {
                     <span className="dsh-cau_rowMeta">{[it.column, it.source, fmtCn(it.time)].filter(Boolean).join(' · ')}</span>
                   </span>
                   <button type="button" className="dsh-cau_followBtn dsh-cau_on" title="取消关注" onClick={() => toggleFollow(it)}>
-                    ⭐
+                    <Ic n="starFill" />
                   </button>
                 </div>
               ))}
@@ -512,7 +547,11 @@ export function HomeView(props: {
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
-              <span className="dsh-cau_secTitle">📚 栏目频道</span>
+              <span className="dsh-cau_secTitle">
+                <Ic n="books" />
+                栏目频道
+              </span>
+              <span className="dsh-cau_secLine" />
             </div>
             {(indexJson?.sites || []).filter((site: any) => mods.portal || site.id !== 'portal').map((site: any) => (
               <div className="dsh-cau_colGroup" key={site.id}>
@@ -535,13 +574,17 @@ export function HomeView(props: {
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
-              <span className="dsh-cau_secTitle">🔗 快捷入口</span>
+              <span className="dsh-cau_secTitle">
+                <Ic n="link" />
+                快捷入口
+              </span>
+              <span className="dsh-cau_secLine" />
             </div>
             <div className="dsh-cau_quick">
-              <a className="dsh-cau_quickLink" href="https://one.cau.edu.cn" target="_blank" rel="noreferrer">统一门户 ↗</a>
-              <a className="dsh-cau_quickLink" href="https://clst.cau.edu.cn" target="_blank" rel="noreferrer">学院官网 ↗</a>
-              <a className="dsh-cau_quickLink" href="https://jwc.cau.edu.cn" target="_blank" rel="noreferrer">教务处 ↗</a>
-              <a className="dsh-cau_quickLink" href="https://news.cau.edu.cn" target="_blank" rel="noreferrer">校新闻网 ↗</a>
+              <a className="dsh-cau_quickLink" href="https://one.cau.edu.cn" target="_blank" rel="noreferrer">统一门户<Ic n="ext" /></a>
+              <a className="dsh-cau_quickLink" href="https://clst.cau.edu.cn" target="_blank" rel="noreferrer">学院官网<Ic n="ext" /></a>
+              <a className="dsh-cau_quickLink" href="https://jwc.cau.edu.cn" target="_blank" rel="noreferrer">教务处<Ic n="ext" /></a>
+              <a className="dsh-cau_quickLink" href="https://news.cau.edu.cn" target="_blank" rel="noreferrer">校新闻网<Ic n="ext" /></a>
             </div>
           </div>
         </>

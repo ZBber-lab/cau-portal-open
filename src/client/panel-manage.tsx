@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { readCloudJson, readFeed, loadFollow, loadMine, loadDeadlineOps, isPruned, queuePruneRequest } from './data'
 import { Empty } from './empty'
+import { Ic } from './icons'
 
 type MgRow = {
   id: string // 文章 base 或 URL（用于本地过滤/显示）
@@ -184,7 +185,8 @@ export function ManageView(props: { onBack: () => void }) {
     <div className="dsh-cau_view">
       <div className="dsh-cau_bread">
         <button type="button" className="dsh-cau_backBtn" onClick={onBack}>
-          ‹ 退出管理
+          <Ic n="chevLeft" />
+          退出管理
         </button>
         <span className="dsh-cau_breadPath">数据管理</span>
       </div>
@@ -277,7 +279,7 @@ export function ManageView(props: { onBack: () => void }) {
           {error && <div className="dsh-cau_mgMsg error">{error}</div>}
 
           <div className="dsh-cau_mgList">
-            {shown.length === 0 && <Empty icon="🔍" main="没有符合条件的数据" sub="放宽日期/站点筛选或清空搜索词再试" />}
+            {shown.length === 0 && <Empty icon={<Ic n="search" />} main="没有符合条件的数据" sub="放宽日期/站点筛选或清空搜索词再试" />}
             {sites
               .map(([k, n]) => ({ k, n, items: shown.filter((r) => r.siteKey === k) }))
               .filter((g) => g.items.length)
@@ -292,9 +294,21 @@ export function ManageView(props: { onBack: () => void }) {
                         <span className="dsh-cau_mgRowMain">
                           <span className="dsh-cau_mgRowTitle">
                             {highlight(r.title, query)}
-                            {r.mined && <span className="dsh-cau_mgMine" title="我的事项">◎</span>}
-                            {r.followed && <span className="dsh-cau_mgStar" title="关注中">★</span>}
-                            {r.archived && <span className="dsh-cau_mgArch" title="已归档（全部待办不再显示，可取消归档）">📥</span>}
+                            {r.mined && (
+                              <span className="dsh-cau_mgMine" title="我的事项">
+                                <Ic n="star" />
+                              </span>
+                            )}
+                            {r.followed && (
+                              <span className="dsh-cau_mgStar" title="关注中">
+                                <Ic n="starFill" />
+                              </span>
+                            )}
+                            {r.archived && (
+                              <span className="dsh-cau_mgArch" title="已归档（全部待办不再显示，可取消归档）">
+                                <Ic n="archive" />
+                              </span>
+                            )}
                           </span>
                           <span className="dsh-cau_mgRowSub">
                             {r.colName}

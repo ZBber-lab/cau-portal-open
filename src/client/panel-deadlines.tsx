@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { readCloudJson, loadMine, addMine, removeMine, isMine, mineDeadlineOf, loadDeadlineOps, setDeadlineOp, daysLeft } from './data'
 import { Empty } from './empty'
+import { Ic } from './icons'
 
 export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: string) => void }) {
   const { onBack, onOpenArticle } = props
@@ -59,12 +60,13 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
     <div className="dsh-cau_view">
       <div className="dsh-cau_bread">
         <button type="button" className="dsh-cau_backBtn" onClick={onBack}>
-          ‹ 返回
+          <Ic n="chevLeft" />
+          返回
         </button>
         <span className="dsh-cau_breadPath">全部待办</span>
       </div>
       <div className="dsh-cau_dlHint">
-        所有含截止日期的事项（未过期，按截止日升序）。「⭐ 我的事项」可精选到首页大卡面板；「📥 归档」后从本列表消失，可在首页「归档」入口找回或取消归档。
+        所有含截止日期的事项（未过期，按截止日升序）。「我的事项」可精选到首页大卡面板；「归档」后从本列表消失，可在首页「归档」入口找回或取消归档。
         {archivedCount > 0 && <span className="dsh-cau_dlArch">已归档 {archivedCount} 条</span>}
       </div>
       <div className="dsh-cau_chips" style={{ marginBottom: 8 }}>
@@ -81,7 +83,7 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
           <span>加载中…</span>
         </div>
       ) : sorted.length === 0 ? (
-        <Empty icon="📋" main="当前筛选下暂无截止事项" sub={`全部未过期截止共 ${(summary?.deadlines || []).length} 条`} />
+        <Empty icon={<Ic n="clipboard" />} main="当前筛选下暂无截止事项" sub={`全部未过期截止共 ${(summary?.deadlines || []).length} 条`} />
       ) : (
         <div className="dsh-cau_dlList">
           {sorted.map(({ d, n }: any) => {
@@ -103,7 +105,8 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
                   </span>
                   <span className="dsh-cau_dlAct">
                     <button type="button" className={'dsh-cau_textBtn' + (mined ? ' dsh-cau_on' : '')} disabled={busy === id} onClick={() => void toggleMine(d)}>
-                      {mined ? '⭐ 已在我的事项' : '☆ 我的事项'}
+                      <Ic n={mined ? 'starFill' : 'star'} />
+                      {mined ? '已在我的事项' : '我的事项'}
                     </button>
                     <button
                       type="button"
@@ -115,7 +118,8 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
                         setDeadlineOp(id, 'archive')
                       }}
                     >
-                      📥 归档
+                      <Ic n="archive" />
+                      归档
                     </button>
                   </span>
                 </div>

@@ -23,6 +23,7 @@ import {
   loadModules,
 } from './data'
 import { addAttached, removeAttached, hasAttached } from './bus'
+import { Ic } from './icons'
 
 const idOf = (it: { article_id?: string; url?: string }) => it.article_id || it.url || ''
 
@@ -152,7 +153,8 @@ export function ArticleView(props: {
     <div className="dsh-cau_view">
       <div className="dsh-cau_bread">
         <button type="button" className="dsh-cau_backBtn" onClick={onBack}>
-          ‹ 返回
+          <Ic n="chevLeft" />
+          返回
         </button>
         <span className="dsh-cau_breadPath">
           {[siteName || art?.source, columnName].filter(Boolean).join(' · ')}
@@ -213,7 +215,7 @@ export function ArticleView(props: {
               <div className="dsh-cau_asumText dsh-cau_empty">本文暂无 AI 加工（摘要/分类/重要度/deadline）。</div>
               <div className="dsh-cau_aactions">
                 <button type="button" className="dsh-cau_aBtn" disabled={aiBusy} onClick={() => void runEnrich()}>
-                  {aiBusy ? '加工中…' : '✨ AI 补摘要'}
+                  {aiBusy ? '加工中…' : (<><Ic n="sparkle" />AI 补摘要</>)}
                 </button>
               </div>
               {aiErr && <div className="dsh-cau_setErr">{aiErr}</div>}
@@ -237,7 +239,9 @@ export function ArticleView(props: {
 
           {hasDeadline && (
             <div className="dsh-cau_adeadline">
-              <span className="dsh-cau_adeadlineIcon">⏰</span>
+              <span className="dsh-cau_adeadlineIcon">
+                <Ic n="clock" />
+              </span>
               <span className="dsh-cau_adeadlineItem">{art.ai.deadline.item}</span>
               <span className="dsh-cau_adeadlineDate">{art.ai.deadline.date}</span>
               {art.ai.deadline.evidence && <span className="dsh-cau_adeadlineEv">「{art.ai.deadline.evidence}」</span>}
@@ -247,7 +251,10 @@ export function ArticleView(props: {
           <div className="dsh-cau_abody">
             {isPortal(art?.url) ? (
               <div className="dsh-cau_portalCard">
-                <div className="dsh-cau_portalCardTitle">🪪 校内平台通知</div>
+                <div className="dsh-cau_portalCardTitle">
+                  <Ic n="idCard" />
+                  校内平台通知
+                </div>
                 <div className="dsh-cau_portalCardDesc">
                   本篇来自<b>统一门户</b>（校内平台），正文在门户内、需登录后查看。为保护个人敏感信息（名单、成绩、学籍等不受控），
                   插件按隐私原则<b>不收录正文</b>，只保留标题、来源与 AI 摘要。
@@ -255,7 +262,8 @@ export function ArticleView(props: {
                 <div className="dsh-cau_aactions">
                   {art.url && (
                     <a className="dsh-cau_aBtn dsh-cau_aBtnPrimary" href={art.url} target="_blank" rel="noreferrer">
-                      📖 新标签打开门户原文
+                      <Ic n="ext" />
+                      新标签打开门户原文
                     </a>
                   )}
                 </div>
@@ -268,7 +276,8 @@ export function ArticleView(props: {
           <div className="dsh-cau_aactions">
             {art.url && (
               <a className="dsh-cau_aBtn" href={art.url} target="_blank" rel="noreferrer">
-                查看原文 ↗
+                查看原文
+                <Ic n="ext" />
               </a>
             )}
             {mods.context && (
@@ -286,7 +295,8 @@ export function ArticleView(props: {
                 className={'dsh-cau_aBtn' + (followed ? ' dsh-cau_aBtnOn' : '')}
                 onClick={toggleFollowNow}
               >
-                {followed ? '已关注 ⭐' : '加入关注'}
+                <Ic n={followed ? 'starFill' : 'star'} />
+                {followed ? '已关注' : '加入关注'}
               </button>
             )}
             {hasDeadline && (
@@ -296,7 +306,8 @@ export function ArticleView(props: {
                   className={'dsh-cau_aBtn' + (mined ? ' dsh-cau_aBtnOn' : '')}
                   onClick={() => void toggleMineNow()}
                 >
-                  {mined ? '⭐ 已在我的事项' : '☆ 我的事项'}
+                  <Ic n={mined ? 'starFill' : 'star'} />
+                  {mined ? '已在我的事项' : '我的事项'}
                 </button>
                 <button
                   type="button"
@@ -317,7 +328,8 @@ export function ArticleView(props: {
                   className="dsh-cau_anavBtn"
                   onClick={() => onOpenArticle(siblings[index - 1].id, siblings, index - 1)}
                 >
-                  ‹ 上一篇
+                  <Ic n="chevLeft" />
+                  上一篇
                 </button>
               ) : (
                 <span />
@@ -328,7 +340,8 @@ export function ArticleView(props: {
                   className="dsh-cau_anavBtn"
                   onClick={() => onOpenArticle(siblings[index + 1].id, siblings, index + 1)}
                 >
-                  下一篇 ›
+                  下一篇
+                  <Ic n="chevRight" />
                 </button>
               ) : (
                 <span />

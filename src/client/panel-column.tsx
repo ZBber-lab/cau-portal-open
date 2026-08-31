@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { readCloudJson, loadReadSet, readFeed, isPruned, loadModules } from './data'
 import { Empty } from './empty'
+import { Ic } from './icons'
 
 type Row = {
   id: string
@@ -129,7 +130,8 @@ export function ColumnView(props: {
     <div className="dsh-cau_view">
       <div className="dsh-cau_bread">
         <button type="button" className="dsh-cau_backBtn" onClick={onBack}>
-          ‹ 返回
+          <Ic n="chevLeft" />
+          返回
         </button>
         <span className="dsh-cau_breadPath">{column ? [siteLabel, colLabel].filter(Boolean).join(' / ') : siteLabel || site}</span>
       </div>
@@ -167,7 +169,7 @@ export function ColumnView(props: {
           )}
 
           <div className="dsh-cau_list">
-            {visible.length === 0 && <Empty icon="📄" main="暂无内容" sub="换个栏目或筛选条件试试" />}
+            {visible.length === 0 && <Empty icon={<Ic n="doc" />} main="暂无内容" sub="换个栏目或筛选条件试试" />}
             {visible.map((r, i) => {
               const read = r.id && readSet.includes(r.id)
               return (
