@@ -81,7 +81,18 @@ DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8   # AI 加工
 
 ### 第 5 步：定时自动抓取（可选）
 
-把 `.github/workflows/crawl.yml` 复制到你**自己的数据仓库**，配置 Secret `DEEPSEEK_API_KEY`，即可每 2 小时自动抓取 + 加工（北京时间 8:00–23:00；免费私有仓的 schedule 需要 cron-job.org 之类外部触发器，见 workflow 内注释）。
+把 `.github/workflows/crawl.yml` 复制到你**自己的数据仓库**，并配置仓库 Secret `DEEPSEEK_API_KEY`（AI 加工用；缺省时抓取照常、AI 加工跳过）。
+
+本 workflow 用 `workflow_dispatch`（手动触发）而非原生 `schedule`，因为 **GitHub 免费私有仓的 `schedule` 触发器不生效**。要实现「每 2 小时自动」，需用外部触发器调用 Actions 的 dispatch 接口，常用 **cron-job.org**（免费）：
+
+1. 在数据仓建一个**尽量最小权限**的细粒度令牌：仅选该数据仓，Permissions → **Actions: Read & write**；
+2. 到 cron-job.org 新建一个 cron job：
+   - Method：`POST`，URL：`https://api.github.com/repos/<你的用户名>/<你的数据仓>/actions/workflows/crawl.yml/dispatches`
+   - Headers：`Authorization: Bearer <第 1 步的令牌>`、`Accept: application/vnd.github+json`
+   - Body：`{"ref":"main"}`
+3. 设执行频率（如每 2 小时），保存即可。
+
+> 安全提醒：该调度令牌只用于触发，请只授予 `Actions: Read & write` 一个最小权限，且**不要写进任何仓库或共享给他人**。
 
 ### 第 6 步：接入对话查询（MCP，推荐）
 

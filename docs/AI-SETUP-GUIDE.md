@@ -79,8 +79,17 @@ git add data && git commit -m "data: first crawl" && git push
 
 把 `.github/workflows/crawl.yml` 复制到用户**数据仓**，配 Secret `DEEPSEEK_API_KEY`。
 
-- 免费私有仓的 `schedule` 触发器需要外部触发（workflow 内注释说明了 cron-job.org 的配置）；
+免费私有仓的 `schedule` 触发器不生效，需外部触发（常用 cron-job.org）：
+
+1. 用户在数据仓建一个最小权限细粒度令牌：仅该仓库 → Actions: Read & write；
+2. 到 cron-job.org 新建 cron job：
+   - Method `POST`，URL `https://api.github.com/repos/<用户>/<数据仓>/actions/workflows/crawl.yml/dispatches`
+   - Headers `Authorization: Bearer <令牌>`、`Accept: application/vnd.github+json`
+   - Body `{"ref":"main"}`
+3. 设频率（如每 2 小时）并保存。
+
 - **验证点**：Actions 页出现一次成功运行，数据仓有新的自动提交。
+- 提醒用户：调度令牌只给 `Actions: Read & write` 一个最小权限，**不要写进仓库或共享**。
 
 ### 步骤 E2：接入 MCP（对话查询，推荐）
 
