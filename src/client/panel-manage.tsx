@@ -82,28 +82,33 @@ export function ManageView(props: { onBack: () => void }) {
     const mineSet = new Set(Object.keys(loadMine()))
     const opsMap = loadDeadlineOps()
     const out: MgRow[] = []
+    // 并发拉取全部站点/栏目的 feed（单个失败跳过）
+    const jobs: { site: any; col: any }[] = []
     for (const site of idx.sites as any[]) {
-      for (const col of site.columns || []) {
-        const f = await readFeed(site.id, col.key)
-        if (!f || !Array.isArray(f.items)) continue
-        for (const it of f.items || []) {
-          if (!it?.url) continue
-          const id = idKey(it)
-          if (isPruned(id)) continue
-          out.push({
-            id,
-            submit: submitKey(it),
-            url: it.url,
-            title: it.title || '(无标题)',
-            date: it.date || null,
-            siteKey: site.id,
-            siteName: f.site_name || site.name || site.id,
-            colName: f.column_name || col.name || '',
-            followed: followSet.has(id),
-            mined: mineSet.has(id),
-            archived: opsMap[id] === 'archive',
-          })
-        }
+      for (const col of site.columns || []) jobs.push({ site, col })
+    }
+    const results = await Promise.all(jobs.map((j) => readFeed(j.site.id, j.col.key)))
+    for (let i = 0; i < jobs.length; i++) {
+      const { site, col } = jobs[i]
+      const f = results[i]
+      if (!f || !Array.isArray(f.items)) continue
+      for (const it of f.items || []) {
+        if (!it?.url) continue
+        const id = idKey(it)
+        if (isPruned(id)) continue
+        out.push({
+          id,
+          submit: submitKey(it),
+          url: it.url,
+          title: it.title || '(无标题)',
+          date: it.date || null,
+          siteKey: site.id,
+          siteName: f.site_name || site.name || site.id,
+          colName: f.column_name || col.name || '',
+          followed: followSet.has(id),
+          mined: mineSet.has(id),
+          archived: opsMap[id] === 'archive',
+        })
       }
     }
     setRows(out)

@@ -23,6 +23,7 @@ import {
   migrateMineFromPin,
   loadRules,
   matchRules,
+  daysLeft,
 } from './data'
 
 type DeadlineItem = { item: string; date: string; title: string; article_id?: string; url?: string; column?: string; source?: string; time?: string | null }
@@ -31,12 +32,6 @@ function fmtCn(iso: string | null | undefined): string {
   if (!iso) return ''
   const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(iso)
   return m ? `${+m[2]}月${+m[3]}日` : ''
-}
-function daysLeft(date: string): number {
-  const d = Date.parse(date)
-  if (!Number.isFinite(d)) return Number.NaN
-  const day0 = new Date(); day0.setHours(0, 0, 0, 0)
-  return Math.round((d - day0.getTime()) / 86400000)
 }
 
 function ImpBadge({ level }: { level?: string }) {
@@ -136,7 +131,12 @@ export function HomeView(props: {
   // ---------- 今日要览（主动察觉层：高重要新进 · 3天内截止 · 关注规则命中） ----------
   const watchRules = useMemo(() => loadRules().filter((r) => r.enabled), [])
   const overview = useMemo(() => {
-    const imp = (summary?.important || []).filter((it: any) => !isPruned(it.article_id || it.url) && (mods.portal || !isPortalIt(it)))
+    const imp = (summary?.important || []).filter(
+      (it: any) =>
+        !isPruned(it.article_id || it.url) &&
+        ops[it.article_id || it.url] !== 'archive' &&
+        (mods.portal || !isPortalIt(it)),
+    )
     const cut = Date.now() - 3 * 86400000
     const recentOk = (t: any) => {
       const x = Date.parse(String(t || ''))
@@ -159,8 +159,11 @@ export function HomeView(props: {
     [summary, ops],
   )
 
-  const openArt = (id: string, title: string, sibs: { id: string; title: string }[], index: number) => {
+  /** 打开文章：40 位 hex id → 面板内阅读；否则（无正文条目/自定义事项）新标签开原文 */
+  const openArt = (it: any, sibs: { id: string; title: string }[], index: number) => {
+    const id = it.article_id || it.url
     if (id && /^[0-9a-f]{40}$/.test(id.replace(/\.json$/, ''))) onOpenArticle(id, sibs, index)
+    else if (it.url) window.open(it.url, '_blank', 'noopener')
   }
 
   const toggleFollow = (it: any) => {
@@ -182,7 +185,7 @@ export function HomeView(props: {
     return (
       <div className="dsh-cau_impRow" key={id}>
         <span className="dsh-cau_impDot" data-read={read ? '1' : '0'} />
-        <span className="dsh-cau_impMain" onClick={() => openArt(id, it.title, sibs, i)}>
+        <span className="dsh-cau_impMain" onClick={() => openArt(it, sibs, i)}>
           <span className="dsh-cau_impTop">
             <span className="dsh-cau_impTitle">{it.title}</span>
             <ImpBadge level={it.importance} />
@@ -249,7 +252,7 @@ export function HomeView(props: {
               {overview.top.length > 0 && (
                 <div className="dsh-cau_ovList">
                   {overview.top.map((it: any) => (
-                    <span key={String(it.article_id || it.url)} className="dsh-cau_ovRow" onClick={() => openArt(it.article_id || it.url, it.title, [], 0)}>
+                    <span key={String(it.article_id || it.url)} className="dsh-cau_ovRow" onClick={() => openArt(it, [], 0)}>
                       <em>{it.tag === 'high' ? '高' : '🎯'}</em>
                       <span className="dsh-cau_ovTitleTxt">{it.title}</span>
                       <i>{[it.column, it.source].filter(Boolean).join(' · ')}</i>
@@ -319,7 +322,7 @@ export function HomeView(props: {
                                 title="打开对应文章"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  if (id) openArt(id, title, [], 0)
+                                  if (id) openArt({ article_id: id, url: artUrl }, [], 0)
                                 }}
                               >
                                 原文 ↗
@@ -491,7 +494,6 @@ export function HomeView(props: {
               {follow.length === 0 && <div className="dsh-cau_empty">在文章里点「加入关注」，重要内容集中在这，不设上限</div>}
               {follow.slice(0, 5).map((it) => (
                 <div className="dsh-cau_row" key={it.id}>
-                  <span className="dsh-cau_rowDot" data-read="0" />
                   <span className="dsh-cau_rowMain" onClick={() => onOpenArticle(it.id, follow.map((x) => ({ id: x.id, title: x.title })), 0)}>
                     <span className="dsh-cau_rowTitle">{it.title}</span>
                     <span className="dsh-cau_rowMeta">{[it.column, it.source, fmtCn(it.time)].filter(Boolean).join(' · ')}</span>

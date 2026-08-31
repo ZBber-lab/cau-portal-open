@@ -4,11 +4,7 @@
  * 顶部时间跨度筛选（剩余天数 7/30/90/全部）；每条可点进文章、可加/移「⭐ 我的事项」。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadMine, addMine, removeMine, isMine, mineDeadlineOf, loadDeadlineOps, setDeadlineOp } from './data'
-
-function daysLeft(date: string): number {
-  return Math.ceil((Date.parse(date) - Date.now()) / 86400e3)
-}
+import { readCloudJson, loadMine, addMine, removeMine, isMine, mineDeadlineOf, loadDeadlineOps, setDeadlineOp, daysLeft } from './data'
 
 export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: string) => void }) {
   const { onBack, onOpenArticle } = props
@@ -96,7 +92,7 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
                 <div className="dsh-cau_dlTop">
                   <span className="dsh-cau_dlItem">{d.item || '截止事项'}</span>
                   <span className="dsh-cau_dlDate">
-                    {d.date} · {n === 0 ? '今天' : `剩 ${n} 天`}
+                    {d.date} · {n < 0 ? '已过期' : n === 0 ? '今天' : `剩 ${n} 天`}
                   </span>
                   {d.column && <span className="dsh-cau_dlCol">{d.column}</span>}
                 </div>
@@ -129,9 +125,4 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
       )}
     </div>
   )
-}
-
-/** 供首页复用：行是否已在「我的事项」 */
-export function mineIdOf(d: any): string {
-  return d?.article_id || d?.url || ''
 }

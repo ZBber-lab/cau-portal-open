@@ -87,7 +87,6 @@ export const SETTINGS_CSS = `
 .dsh-cau_infoCard{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:8px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.03))}
 /* ---- 用量图 ---- */
 .dsh-cau_chart{display:block;width:100%;height:150px;color:var(--dsw-alias-label-secondary,#9aa4b2)}
-.dsh-cau_chips{display:flex;flex-wrap:wrap;gap:6px}
 .dsh-cau_setChip{height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.14));border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary,#9aa4b2);font-size:11px;cursor:pointer}
 .dsh-cau_setChip.on{background:color-mix(in srgb,var(--cau-brand,#008038) 14%,transparent);border-color:var(--cau-brand,#008038);color:var(--cau-brand,#00b856)}
 .dsh-cau_usageTable{width:100%;border-collapse:collapse;font-size:12px;color:var(--dsw-alias-label-secondary,#9aa4b2)}

@@ -132,13 +132,12 @@ export function ToolCard(props: any) {
   )
 }
 
+/** 只接管「新闻条目形」结果（标题/摘要/重要度）的工具；用量、站点目录等非新闻形结果交还 DSH 默认渲染 */
 const TOOL_KEYS = [
   'mcp__cau__get_article',
   'mcp__cau__search_news',
   'mcp__cau__list_latest',
   'mcp__cau__list_deadlines',
-  'mcp__cau__list_sites',
-  'mcp__cau__get_usage',
 ]
 
 export function registerToolViews(ctx: any) {

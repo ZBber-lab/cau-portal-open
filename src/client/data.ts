@@ -67,15 +67,27 @@ async function serverProxyText(rel: string, token: string): Promise<string> {
   return data.text
 }
 
-/** 读取 data/ 下相对子路径的文本；未配置令牌时抛错 */
+/** 读取 data/ 下相对子路径的文本；未配置令牌时抛错。
+ * 多令牌故障转移：依次尝试启用的令牌，仅鉴权类错误（401/403）换下一枚；
+ * 404（文件不存在）等非鉴权错误不换令牌；全部失败后走服务端代理兜底。 */
 export async function readCloudText(rel: string, token?: string): Promise<string> {
   if (!loadModules().cloud) throw new Error('数据源已在设置中禁用')
-  const t = token || activeTokenValues()[0]
-  if (!t) throw new Error('未配置 GitHub 只读令牌')
+  const tokens = (token ? [token] : activeTokenValues()).filter(Boolean)
+  if (!tokens.length) throw new Error('未配置 GitHub 只读令牌')
+  let lastErr: unknown = null
+  for (const t of tokens) {
+    try {
+      return await ghFetchText(rel, t)
+    } catch (e: any) {
+      lastErr = e
+      const m = String(e?.message || e)
+      if (!/(401|403|Bad credentials|Unauthorized)/i.test(m)) break
+    }
+  }
   try {
-    return await ghFetchText(rel, t)
-  } catch {
-    return serverProxyText(rel, t)
+    return await serverProxyText(rel, tokens[0])
+  } catch (e) {
+    throw lastErr || e
   }
 }
 
@@ -384,26 +396,21 @@ export function readFollowCache(id: string): any | null {
   return loadFollowCacheAll()[id]?.article ?? null
 }
 
-/** 一次性补齐关注缓存：对尚未缓存的关注文章尝试从云端拉取快照（面板挂载时静默调用） */
-export async function backfillFollowCaches(token?: string): Promise<number> {
-  const follow = loadFollow()
-  const cache = loadFollowCacheAll()
-  let got = 0
-  for (const f of follow) {
-    if (!f?.id || (cache[f.id] && cache[f.id].article)) continue
-    const art = await readCloudJson(`data/articles/${f.id}.json`, token)
-    if (art) {
-      cache[f.id] = { cached_at: Date.now(), article: art }
-      got++
-    }
-    // 云端已裁剪的旧关注：跳过（该文章仅在关注时之外无快照，阅读时走「已过保留期」提示）
-  }
-  if (got) saveFollowCacheAll(cache)
-  return got
-}
-
 // ---- 待办留存/归档（localStorage；键 dsh.cau-portal.deadline.v1，article_id → 'pin'|'archive'|null）----
 // 用户手动决定某条待办是「保留(驻留)」还是「归档」；不同人关注不同
+
+/**
+ * 剩余天数（以本地今天 0 点为基准，整天对齐）；非法/无法解析日期返回 NaN。
+ * 全项目唯一实现：首页我的事项/今日要览与待办中心共用同一口径。
+ */
+export function daysLeft(date: string): number {
+  if (!/^\d{4}-\d{1,2}-\d{1,2}/.test(String(date || ''))) return Number.NaN
+  const d = Date.parse(date)
+  if (!Number.isFinite(d)) return Number.NaN
+  const day0 = new Date()
+  day0.setHours(0, 0, 0, 0)
+  return Math.round((d - day0.getTime()) / 86400000)
+}
 
 export type DeadlineOp = 'pin' | 'archive' | null
 

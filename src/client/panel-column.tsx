@@ -64,16 +64,13 @@ export function ColumnView(props: {
       const cn = column ? siteDir?.columns?.find((c: any) => c.key === column)?.name || columnName || '' : ''
       setColLabel(cn)
     }
-    // 加载 feed
-    let feeds: any[] = []
+    // 加载 feed（站点视图并发拉取各栏目；单个失败不影响其余）
+    const feeds: any[] = []
     if (!column && idx) {
       const siteDir = (idx.sites || []).find((s: any) => s.id === site)
-      if (siteDir) {
-        for (const c of siteDir.columns || []) {
-          const f = await readFeed(site, c.key)
-          if (f && Array.isArray(f.items)) feeds.push(f)
-        }
-      }
+      const cols = siteDir?.columns || []
+      const results = await Promise.all(cols.map((c: any) => readFeed(site, c.key)))
+      for (const f of results) if (f && Array.isArray(f.items)) feeds.push(f)
     } else {
       const f = await readFeed(site, column as string)
       if (f && Array.isArray(f.items)) feeds.push(f)

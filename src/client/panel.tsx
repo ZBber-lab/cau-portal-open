@@ -22,8 +22,6 @@ import {
   loadDeadlineOps,
   setDeadlineOp,
   activeTokenValues,
-  loadTokens,
-  saveTokens,
   loadModules,
 } from './data'
 import { getOpenRequest, clearOpenRequest, subscribeBus } from './bus'
@@ -75,11 +73,13 @@ async function loadBundle(token: string): Promise<Loaded> {
   return bundle
 }
 
-/** 未读候选：summary.important 中（门户模块开关关闭时排除门户条目） */
+/** 未读候选：summary.important 中（门户模块开关关闭时排除门户条目；已归档的不计未读） */
 function unreadCandidates(summary: any): any[] {
   const list = (summary?.important || []) as any[]
-  if (loadModules().portal) return list
-  return list.filter((it: any) => !/tp_up/.test(String(it.url || '')))
+  const ops = loadDeadlineOps()
+  const active = list.filter((it: any) => ops[it.article_id || it.url] !== 'archive')
+  if (loadModules().portal) return active
+  return active.filter((it: any) => !/tp_up/.test(String(it.url || '')))
 }
 
 /** 页面加载时初始化按钮未读计数（不弹窗；无令牌/无 summary 时返回 0） */
@@ -90,38 +90,6 @@ export async function fetchUnreadCount(): Promise<number> {
   if (!b.summary) return 0
   const readSet = loadReadSet()
   return unreadCandidates(b.summary).filter((it: any) => !readSet.includes(it.article_id || it.url)).length
-}
-
-function ensureToken(): string | null {
-  const existing = activeTokenValues()[0]
-  if (existing) return existing
-  const input = window.prompt(
-    '农大门户需要 GitHub 只读令牌才能读取云端数据。\n请粘贴 cau-portal-read 令牌（github_pat_ 开头）：',
-  )
-  if (!input) return null
-  const t = input.trim()
-  if (!t.startsWith('github_pat_')) {
-    window.alert('令牌格式不对（应以 github_pat_ 开头），未保存。')
-    return null
-  }
-  // 写入令牌登记（设置页「令牌管理」可见可管），与数据读取同一口径，不再只写旧 githubToken 键
-  const list = loadTokens()
-  const rec = list.find((x) => x.id === 'github-read' && x.value)
-  if (rec) {
-    rec.value = t
-  } else {
-    list.unshift({
-      id: 'github-read',
-      name: 'GitHub 数据令牌',
-      usage: '读取云端数据（面板/MCP）',
-      value: t,
-      expires: '',
-      adminUrl: 'https://github.com/settings/personal-access-tokens',
-      enabled: true,
-    })
-  }
-  saveTokens(list)
-  return t
 }
 
 function shortTime(iso: string | null | undefined): string {
@@ -169,7 +137,7 @@ function ArchiveView(props: { onBack: () => void; onOpenArticle: (id: string) =>
   const [rows, setRows] = useState<any[]>([])
   const refresh = () => {
     void (async () => {
-      const token = activeTokenValues()[0] || loadSettings().githubToken || ''
+      const token = activeTokenValues()[0]
       if (!token) return
       const b = await loadBundle(token)
       const ops = loadDeadlineOps()
@@ -591,6 +559,7 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_quickLink{display:flex;align-items:center;justify-content:center;padding:7px 8px;border:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.12));border-radius:6px;font-size:12px;color:var(--dsw-alias-label-secondary,#555);text-decoration:none}
 .dsh-cau_quickLink:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05));color:var(--dsw-alias-label-primary,#111)}
 .dsh-cau_tags{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:8px}
+.dsh-cau_chips{display:flex;flex-wrap:wrap;gap:6px}
 .dsh-cau_tag{padding:3px 9px;border:none;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05));color:var(--dsw-alias-label-secondary,#555);font-size:11px;cursor:pointer}
 .dsh-cau_tagOn{background:color-mix(in srgb,var(--cau-brand) 18%,transparent);color:var(--cau-brand)}
 .dsh-cau_list{display:flex;flex-direction:column}
