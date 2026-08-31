@@ -28,8 +28,9 @@ const nameSvg = '__CAU_NAME_SVG__'
 const nameSvgCurrent = '__CAU_NAME_CURRENT_SVG__'
 
 const CSS = `
-/* ---- UI 批②：设计 token 层（:root 级，面板/设置/工具卡片/上下文条/侧栏按钮共享） ---- */
-:root{
+/* ---- UI 批②：设计 token 层（挂 body：DSH 的 --dsw-* token 定义在 body/[data-ds-dark-theme] 上，
+     挂 :root 会在求值时找不到它们、全部烤成兜底值（暗色下标题变黑的教训 2026-08-31） ---- */
+body{
   --cau-brand:#008038;
   --cau-brand-a6:color-mix(in srgb,var(--cau-brand) 6%,transparent);
   --cau-brand-a9:color-mix(in srgb,var(--cau-brand) 9%,transparent);
@@ -127,7 +128,7 @@ function CauButton(props: any) {
         <CauPanel
           outsideIgnore={rowRef.current}
           emblem={emblemSvg}
-          nameSvg={nameSvg}
+          nameSvg={nameSvgCurrent}
           onClose={() => setOpen(false)}
           onUnreadChange={setCount}
         />

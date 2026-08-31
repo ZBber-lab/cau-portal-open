@@ -434,6 +434,8 @@ export function CauPanel(props: {
 
 export const PANEL_CSS = `
 .dsh-cau_panel{position:fixed;top:var(--cau-panel-top,12px);right:12px;bottom:12px;z-index:30;display:flex;flex-direction:column;width:var(--cau-panel-w,540px);max-width:calc(100vw - 48px);background:color-mix(in srgb,var(--dsw-specific-menu,#fff) 86%,transparent);backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);border:1px solid var(--cau-line);border-radius:var(--cau-r-l);box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(8,12,18,.16)),inset 0 1px 0 rgba(255,255,255,.06);overflow:hidden;animation:dsh-cau-rise .18s ease-out}
+body[data-ds-dark-theme] .dsh-cau_panel{background:color-mix(in srgb,var(--dsw-specific-menu,#14161a) 93%,transparent)}
+body[data-ds-dark-theme] .dsh-cau_ov{background:var(--cau-brand-a9)}
 body.dsh-cau-drawer-open{--cau-panel-w:max(0px,min(540px,calc(100vw - 640px)))}
 body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-panel-w) + 24px);transition:margin-right var(--ds-transition-duration-slow,.2s) var(--ds-ease-in-out,ease-out)}
 @keyframes dsh-cau-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
@@ -443,7 +445,7 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_panelEmblem{flex:none;display:flex;color:var(--cau-brand);margin-right:3px}
 .dsh-cau_panelEmblem svg{display:block;height:18px;width:auto}
 .dsh-cau_panelName{flex:1;min-width:0;display:flex;align-items:center;gap:8px;overflow:hidden}
-.dsh-cau_panelNameImg{flex:none;display:flex;align-items:center}
+.dsh-cau_panelNameImg{flex:none;display:flex;align-items:center;color:var(--cau-brand)}
 .dsh-cau_panelNameImg svg{display:block;width:auto;height:20px}
 .dsh-cau_panelTitle{flex:none;font-size:12px;font-weight:600;letter-spacing:.05em;color:var(--cau-ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-cau_iconBtn{flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:var(--cau-r-s);background:transparent;color:var(--cau-ink3);cursor:pointer}
