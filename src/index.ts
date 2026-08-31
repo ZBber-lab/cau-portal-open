@@ -187,8 +187,14 @@ export function apply(ctx: any) {
       }
       const rel = String(input?.path ?? '')
       const token = String(input?.token ?? '')
+      const repo = String(input?.repo ?? 'zhouxuanting52-lab/cau-portal').replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '')
       if (!rel || !token) {
         json(res, 400, { ok: false, error: 'path/token required' })
+        return
+      }
+      // 仓库名白名单格式（owner/repo，仅字母数字 _ - . 与单斜杠，防 SSRF/注入）
+      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) {
+        json(res, 403, { ok: false, error: 'repo not allowed' })
         return
       }
       // 路径白名单：仅允许读取 data/ 下文件与 sites.json（禁止 .. 逃逸）
@@ -198,7 +204,7 @@ export function apply(ctx: any) {
       }
       try {
         const gh = await fetch(
-          `https://api.github.com/repos/zhouxuanting52-lab/cau-portal/contents/${rel}?ref=main`,
+          `https://api.github.com/repos/${repo}/contents/${rel}?ref=main`,
           {
             headers: {
               Authorization: `Bearer ${token}`,

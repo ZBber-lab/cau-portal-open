@@ -17,11 +17,24 @@ export type SettingsV1 = {
   panelPinned?: boolean
   /** 系统通知开关（命中关注规则/高重要时弹浏览器通知；默认关） */
   notifyOn?: boolean
+  /** 数据仓库（owner/repo；空=默认仓）。开源后安装者填自己的数据仓。 */
+  dataRepo?: string
 }
 
 const SETTINGS_KEY = 'dsh.cau-portal.settings.v1'
-const GH_REPO = 'zhouxuanting52-lab/cau-portal'
+const DEFAULT_DATA_REPO = 'zhouxuanting52-lab/cau-portal'
 const GH_BRANCH = 'main'
+
+/** 当前数据仓库（owner/repo）：设置页可配，空=默认仓；兼容粘贴完整 URL / .git 后缀 */
+export function dataRepo(): string {
+  try {
+    const r = String(loadSettings().dataRepo || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '')
+    if (r && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(r)) return r
+  } catch {
+    /* 忽略 */
+  }
+  return DEFAULT_DATA_REPO
+}
 
 export function loadSettings(): SettingsV1 {
   try {
@@ -40,7 +53,7 @@ export function saveSettings(s: SettingsV1) {
 }
 
 async function ghFetchText(rel: string, token: string): Promise<string> {
-  const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`, {
+  const res = await fetch(`https://api.github.com/repos/${dataRepo()}/contents/${rel}?ref=${GH_BRANCH}`, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github.raw',
@@ -55,7 +68,7 @@ async function serverProxyText(rel: string, token: string): Promise<string> {
   const res = await fetch('/api/cau/data', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: rel, token }),
+    body: JSON.stringify({ path: rel, token, repo: dataRepo() }),
   })
   let data: any = null
   try {
@@ -110,7 +123,7 @@ const PRUNED_KEY = 'dsh.cau-portal.pruned.v1'
 
 /** 读取 GitHub 文件元信息（sha + 解码文本）；文件不存在返回空 */
 async function ghFetchShaAndText(rel: string, token: string): Promise<{ sha: string; text: string }> {
-  const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`, {
+  const res = await fetch(`https://api.github.com/repos/${dataRepo()}/contents/${rel}?ref=${GH_BRANCH}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'cau-portal-panel' },
   })
   if (res.status === 404) return { sha: '', text: '' }
@@ -131,7 +144,7 @@ async function ghPutText(rel: string, token: string, content: string, sha: strin
     branch: GH_BRANCH,
   }
   if (sha) body.sha = sha
-  const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${rel}`, {
+  const res = await fetch(`https://api.github.com/repos/${dataRepo()}/contents/${rel}`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,

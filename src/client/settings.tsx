@@ -332,7 +332,7 @@ export function CauSettings(props: any) {
       setTokEditing(t.id)
       setTokDraft({ ...t })
     } else {
-      setTokEditing(null)
+      setTokEditing('new')
       setTokDraft({ id: '', name: '', usage: '', value: '', expires: '', adminUrl: 'https://github.com/settings/personal-access-tokens', enabled: true })
     }
   }
@@ -340,7 +340,7 @@ export function CauSettings(props: any) {
     const d = tokDraft
     if (!d.name.trim()) return
     const rec: TokenRecord = { ...d, id: d.id || `tok-${Date.now().toString(36)}`, value: d.value || '' }
-    const next = tokEditing ? tokens.map((t) => (t.id === tokEditing ? rec : t)) : [...tokens, rec]
+    const next = tokEditing && tokEditing !== 'new' ? tokens.map((t) => (t.id === tokEditing ? rec : t)) : [...tokens, rec]
     persistTokens(next)
     setTokEditing(null)
     flash()
@@ -853,7 +853,7 @@ export function CauSettings(props: any) {
               </div>
             ) : (
               <div className="dsh-cau_infoCard">
-                <div className="dsh-cau_setTitle" style={{ fontSize: 12 }}>{tokEditing ? '编辑令牌' : '添加令牌'}</div>
+                <div className="dsh-cau_setTitle" style={{ fontSize: 12 }}>{tokEditing && tokEditing !== 'new' ? '编辑令牌' : '添加令牌'}</div>
                 <div className="dsh-cau_setRow">
                   <input className="dsh-cau_setInput" placeholder="名称（如 GitHub 数据令牌）" value={tokDraft.name} onChange={(e) => setTokDraft({ ...tokDraft, name: e.target.value })} />
                 </div>
@@ -1017,7 +1017,10 @@ export function CauSettings(props: any) {
               <Toggle on={mods.cloud} onToggle={() => toggleMod('cloud')} label="切换 数据源" />
             </div>
             <div className="dsh-cau_setDesc">
-              数据存于 GitHub 私有仓库（`zhouxuanting52-lab/cau-portal` 的 data/），由 Actions 每 2 小时抓取+AI 加工并提交；面板与 MCP 直接读云端。关闭本开关将完全停止数据读取（顶部红条提醒）。
+              数据存于 GitHub 仓库的 `data/`（每 2 小时抓取+AI 加工并提交）；面板与 MCP 直接读云端。默认指向 `zhouxuanting52-lab/cau-portal`；自建数据者改为自己的仓库。关闭本开关将完全停止数据读取（顶部红条提醒）。
+<label className="dsh-cau_setLabel" htmlFor="cauDataRepo">数据仓库（owner/repo）</label>
+<input id="cauDataRepo" className="dsh-cau_setInput" value={settings.dataRepo || ''} onChange={(e) => upd({ ...settings, dataRepo: e.target.value })} placeholder="如 zhouxuanting52-lab/cau-portal（留空=默认）" spellCheck={false} autoComplete="off" />
+<div className="dsh-cau_setHint">指向含 `data/` 与爬虫产物的仓库；读取/写入用「令牌管理」页配置的令牌。支持填完整 GitHub 链接。</div>
             </div>
             <div className="dsh-cau_setRow">
               <button type="button" className="dsh-cau_setBtn" disabled={cloudState === 'loading'} onClick={() => void checkCloud()}>
