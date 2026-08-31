@@ -131,7 +131,8 @@ export async function syncPortal() {
 }
 
 /* ---------------- 定时调度（服务端 apply 时启动；6h 一次 + 启动补抓） ---------------- */
-const STATE_FILE = join(_dir, 'sync-state.json');
+const _store = process.env.CAU_PORTAL_STORE_DIR || join(process.env.USERPROFILE || 'C:\\Users\\1', '.dsh', 'profiles', 'web', 'cau-portal-store');
+const STATE_FILE = join(_store, 'sync-state.json'); // 仓库外，插件重装不清
 const INTERVAL_MS = 6 * 3600 * 1000;
 let timer = null;
 

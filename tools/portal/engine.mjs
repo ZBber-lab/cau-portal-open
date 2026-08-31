@@ -1,21 +1,24 @@
 // tools/portal/engine.mjs — 农大门户「统一门户」引擎（本机专用）
 // 功能：3DES 加密登录（onecas CAS）、会话 cookie 存取、登录态探活、HTTP 抓取助手。
-// 安全：账号密码仅存本机 gitignore 文件（tools/portal/account.json）；
-//       会话 cookie 仅存本机 gitignore 文件（tools/portal/session.json）；均不进仓库/对话/日志。
+// 安全：账号密码仅存本机 gitignore 文件（account.json）；
+//       会话 cookie 仅存本机 gitignore 文件（session.json）；均不进仓库/对话/日志。
+//       ⚠️ 存于 profile 根目录 cau-portal-store/（仓库外），插件重装（pnpm update）不清除。
 // 来源：strEnc 3DES 实现为 onecas 登录页 /tpass/comm/js/des.js 原样抓取（tools/portal/des.js），
 //       按页面 login6.js 的调用方式复刻：rsa = strEnc(username + password + lt, '1', '2', '3')。
 //       注意：des.js 是浏览器非严格模式代码（隐式全局变量），故用 new Function（默认非严格）包装加载，
 //       与页面执行环境行为一致；Node ESM 严格模式直接加载会炸（实测 ReferenceError）。
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const _dir = dirname(fileURLToPath(import.meta.url));
 const _desSrc = readFileSync(join(_dir, 'des.js'), 'utf8');
 const { strEnc } = new Function(_desSrc + '\n; return { strEnc: strEnc };')();
-export const SESSION_FILE = join(_dir, 'session.json');
-export const ACCOUNT_FILE = join(_dir, 'account.json');
+const _store = process.env.CAU_PORTAL_STORE_DIR || join(process.env.USERPROFILE || 'C:\\Users\\1', '.dsh', 'profiles', 'web', 'cau-portal-store');
+try { mkdirSync(_store, { recursive: true }); } catch { /* 已存在 */ }
+export const SESSION_FILE = join(_store, 'session.json');
+export const ACCOUNT_FILE = join(_store, 'account.json');
 
 export const CAS_HOST = 'https://onecas.cau.edu.cn';
 export const PORTAL_HOST = 'https://one.cau.edu.cn';
