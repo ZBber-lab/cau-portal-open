@@ -190,17 +190,19 @@ export function HomeView(props: {
           {it.summary && <span className="dsh-cau_impSummary">{it.summary}</span>}
           <span className="dsh-cau_impMeta">{[it.column, it.source, fmtCn(it.time)].filter(Boolean).join(' · ')}</span>
         </span>
-        <button
-          type="button"
-          className={'dsh-cau_followBtn' + (follow.some((x) => x.id === id) ? ' dsh-cau_on' : '')}
-          title={follow.some((x) => x.id === id) ? '取消关注' : '加入关注'}
-          onClick={() => toggleFollow({ id, title: it.title, url: it.url, time: it.time, source: it.source, column: it.column, importance: it.importance, summary: it.summary })}
-        >
-          {follow.some((x) => x.id === id) ? '⭐' : '☆'}
-        </button>
-        <button type="button" className="dsh-cau_impArch" title="归档（从此处移除，可在「归档」视图中找回）" onClick={() => archiveFromNews(id)}>
-          📥
-        </button>
+        <span className="dsh-cau_impActs">
+          <button
+            type="button"
+            className={'dsh-cau_followBtn' + (follow.some((x) => x.id === id) ? ' dsh-cau_on' : '')}
+            title={follow.some((x) => x.id === id) ? '取消关注' : '加入关注'}
+            onClick={() => toggleFollow({ id, title: it.title, url: it.url, time: it.time, source: it.source, column: it.column, importance: it.importance, summary: it.summary })}
+          >
+            {follow.some((x) => x.id === id) ? '⭐' : '☆'}
+          </button>
+          <button type="button" className="dsh-cau_impArch" title="归档（从此处移除，可在「归档」视图中找回）" onClick={() => archiveFromNews(id)}>
+            📥
+          </button>
+        </span>
       </div>
     )
   }
@@ -435,27 +437,12 @@ export function HomeView(props: {
             </div>
           )}
 
-          {/* 要闻 · 校内平台（统一门户；正文在门户内，详情页为专属界面） */}
+          {/* 要闻（一个大框，内分两支：校内平台 / 其他来源；各 ≤8 条，归档自动补位） */}
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
-              <span className="dsh-cau_secTitle">🏛 校内平台要闻</span>
-              {portalNews.length > 0 && <span className="dsh-cau_secCount">{portalNews.length} 条</span>}
-            </div>
-            <div className="dsh-cau_card">
-              {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
-              {summary && portalNews.length === 0 && <div className="dsh-cau_empty">暂无校内平台重要通知</div>}
-              {portalNews.map((it: any, i: number) => newsRow(it, i, portalNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
-            </div>
-          </div>
-
-          {/* 要闻 · 其他来源（学院/教务处/新闻网，含正文） */}
-          <div className="dsh-cau_sec">
-            <div className="dsh-cau_secHead">
-              <span className="dsh-cau_secMark" />
-              <span className="dsh-cau_secTitle">✦ 其他要闻</span>
-              {otherNews.length > 0 && <span className="dsh-cau_secCount">{otherNews.length} 条</span>}
-              {otherNews.length > 0 && (
+              <span className="dsh-cau_secTitle">📌 要闻</span>
+              {important.length > 0 && (
                 <button type="button" className="dsh-cau_textBtn" onClick={() => setReadSet(markAllRead(allImportantIds))}>
                   全部已读
                 </button>
@@ -463,6 +450,16 @@ export function HomeView(props: {
             </div>
             <div className="dsh-cau_card">
               {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
+              <div className="dsh-cau_newsSubHead">
+                <span>🏛 校内平台</span>
+                <em>{portalNews.length} 条</em>
+              </div>
+              {summary && portalNews.length === 0 && <div className="dsh-cau_empty">暂无校内平台重要通知</div>}
+              {portalNews.map((it: any, i: number) => newsRow(it, i, portalNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
+              <div className="dsh-cau_newsSubHead">
+                <span>✦ 其他来源</span>
+                <em>{otherNews.length} 条</em>
+              </div>
               {summary && otherNews.length === 0 && <div className="dsh-cau_empty">暂无其他来源重要通知</div>}
               {otherNews.map((it: any, i: number) => newsRow(it, i, otherNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
             </div>

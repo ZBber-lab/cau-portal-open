@@ -520,9 +520,13 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_followBtn{flex:none;align-self:flex-start;height:24px;min-width:24px;margin-right:10px;padding:0 4px;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#999);font-size:15px;line-height:24px;cursor:pointer}
 .dsh-cau_followBtn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}
 .dsh-cau_followBtn.dsh-cau_on{color:var(--cau-brand)}
-.dsh-cau_impArch{flex:none;align-self:flex-start;height:24px;min-width:24px;margin-left:2px;padding:0 4px;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#999);font-size:13px;line-height:24px;cursor:pointer}
+.dsh-cau_impActs{flex:none;display:flex;align-items:flex-start;gap:2px;margin-right:10px;align-self:flex-start}
+.dsh-cau_impRow .dsh-cau_followBtn{margin-right:0}
+.dsh-cau_impArch{flex:none;height:24px;min-width:24px;padding:0 4px;border:none;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#999);font-size:13px;line-height:24px;cursor:pointer}
 .dsh-cau_impArch:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.05))}
-.dsh-cau_impArch:disabled{opacity:.35;cursor:default}
+.dsh-cau_newsSubHead{display:flex;align-items:center;gap:6px;padding:6px 8px 2px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary,#555);margin-top:4px;border-top:1px solid var(--dsw-alias-border-inverted,rgba(15,17,21,.10))}
+.dsh-cau_newsSubHead:first-child{border-top:none;margin-top:0;padding-top:0}
+.dsh-cau_newsSubHead em{font-style:normal;font-size:10px;font-weight:500;color:var(--dsw-alias-label-tertiary,#999)}
 .dsh-cau_secCount{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#999);margin-right:6px}
 .dsh-cau_portalTag{flex:none;font-size:10px;line-height:16px;padding:0 6px;border-radius:4px;font-weight:500;color:var(--cau-brand,#008038);background:color-mix(in srgb,var(--cau-brand,#008038) 14%,transparent)}
 .dsh-cau_portalCard{display:flex;flex-direction:column;gap:9px;padding:12px;border:1px dashed color-mix(in srgb,var(--cau-brand,#008038) 55%,transparent);border-radius:10px;background:color-mix(in srgb,var(--cau-brand,#008038) 6%,transparent)}
