@@ -465,7 +465,7 @@ export function HomeView(props: {
             </div>
           )}
 
-          {/* 要闻（一个大框，内分两支：校内平台 / 其他来源；各 ≤8 条，归档自动补位） */}
+          {/* 要闻（一个大框，其他来源；≤8 条，归档自动补位） */}
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
