@@ -81,6 +81,27 @@ git add data && git commit -m "data: first crawl" && git push
 - 免费私有仓的 `schedule` 触发器需要外部触发（workflow 内注释说明了 cron-job.org 的配置）；
 - **验证点**：Actions 页出现一次成功运行，数据仓有新的自动提交。
 
+### 步骤 E2：接入 MCP（对话查询，推荐）
+
+让 AI 能在对话里直接查询数据，需注册 MCP：
+
+1. 装 MCP 依赖：`cd tools/mcp && pnpm install`；
+2. 在 DSH profile `cordis.patch.yml` 加 mcp client（`@deepseek-ai/dsh-mcp-client`）：
+   ```yaml
+   - id: mcp-cau
+     name: '@deepseek-ai/dsh-mcp-client'
+     serverName: cau
+     transport: stdio
+     command: <Node 可执行路径>
+     args: [<本仓库路径>\tools\mcp\index.mjs]
+     cwd: <本仓库路径>\tools\mcp
+     env:
+       CAU_GITHUB_TOKEN: <数据仓只读令牌>
+   ```
+3. 重启 dsh web 生效。
+
+- **验证点**：对话里问"最近有什么通知"，AI 能调用 `mcp__cau__list_latest` 返回结果。
+
 ### 步骤 F：体验验证
 
 让用户确认以下"与作者一致"的体验：

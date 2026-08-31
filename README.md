@@ -47,10 +47,10 @@
 ### 第 1 步：安装插件
 
 ```bash
-dsh plugin --profile web add "github:YOUR_ORG/cau-portal"
+dsh plugin --profile web add "github:zhouxuanting52-lab/cau-portal-open"
 ```
 
-（把 `YOUR_ORG/cau-portal` 换成实际仓库地址；安装后侧边栏出现「农大门户」入口。）
+（这是官方仓库；若你 fork 了自己的一份，把地址换成你自己的 `github:你的用户名/仓库名`。安装后侧边栏出现「农大门户」入口。）
 
 ### 第 2 步：准备数据仓库
 
@@ -81,6 +81,30 @@ DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8   # AI 加工
 
 把 `.github/workflows/crawl.yml` 复制到你**自己的数据仓库**，配置 Secret `DEEPSEEK_API_KEY`，即可每 2 小时自动抓取 + 加工（北京时间 8:00–23:00；免费私有仓的 schedule 需要 cron-job.org 之类外部触发器，见 workflow 内注释）。
 
+### 第 6 步：接入对话查询（MCP，推荐）
+
+想让 AI 直接在对话里查询（如`最近有什么通知`、`推免报名截止几号`），需把 MCP 服务器接入 DSH：
+
+1. **安装 MCP 依赖**（一次性）：
+   ```bash
+   cd tools/mcp && pnpm install
+   ```
+2. **注册 MCP client**：在 DSH profile 的 `cordis.patch.yml` 里加（`@deepseek-ai/dsh-mcp-client` 是 DSH 内置插件；`<...>` 换成你的实际路径）：
+   ```yaml
+   - id: mcp-cau
+     name: '@deepseek-ai/dsh-mcp-client'
+     serverName: cau
+     transport: stdio
+     command: <Node 可执行文件路径，如 D:\nodejs1\node.exe>
+     args: [<本仓库路径>\tools\mcp\index.mjs]
+     cwd: <本仓库路径>\tools\mcp
+     env:
+       CAU_GITHUB_TOKEN: <你的数据仓只读令牌>   # 与面板令牌一致
+   ```
+3. **重启 dsh web**，对话里即可使用 `mcp__cau__*` 工具（共 6 个：最新通知 / 检索 / 截止事项 / 站点目录 / 用量统计 / 文章详情）。
+
+> 说明：MCP 服务器与面板都读你配置的数据仓库；两者共用同一个只读令牌（`CAU_GITHUB_TOKEN`）。
+
 ## 配置项一览（设置页）
 
 | 模块 | 说明 |
@@ -105,8 +129,8 @@ DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8   # AI 加工
 ├── src/                  # 插件源码（服务端路由 + 客户端面板）
 ├── lib/                  # 构建产物（随包发布）
 ├── tools/
-│   ├── scraper/          # 爬虫 + AI 加工管道（零重型依赖）
-│   └── mcp/              # MCP 服务器（6 个查询工具）
+│   ├── scraper/          # 爬虫 + AI 加工管道（零重型依赖，Node fetch 手写解析）
+│   └── mcp/              # MCP 服务器（6 个查询工具；需 pnpm install + cordis.yaml 注册，见快速开始第 6 步）
 ├── assets/               # 品牌素材（校徽/题字 SVG）
 ├── sites.json            # 站点/栏目配置（数据驱动，可自行增改）
 ├── docs/AI-SETUP-GUIDE.md# 给 AI agent 的配置指南（见下）
