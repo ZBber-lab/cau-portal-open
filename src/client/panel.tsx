@@ -609,6 +609,9 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_colGroup:last-child{margin-bottom:0}
 .dsh-cau_colSiteBtn{display:block;width:100%;padding:5px 8px;border:none;border-radius:var(--cau-r-s);background:transparent;text-align:left;font-size:13px;font-weight:500;color:var(--cau-ink);cursor:pointer}
 .dsh-cau_colSiteBtn:hover{background:var(--cau-hover)}
+.dsh-cau_colSiteBtn.dsh-cau_dis{color:var(--cau-ink3);cursor:default}
+.dsh-cau_colSiteBtn.dsh-cau_dis:hover{background:transparent}
+.dsh-cau_disTag{display:inline-flex;align-items:center;margin-left:6px;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--cau-warn) 16%,transparent);color:var(--cau-warn);font-size:11px;font-weight:500}
 .dsh-cau_colChips{display:flex;flex-wrap:wrap;gap:6px;padding-left:8px}
 .dsh-cau_chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--cau-line-soft);border-radius:999px;font-size:12px;color:var(--cau-ink2);cursor:default;background:transparent}
 .dsh-cau_chipBtn{cursor:pointer}

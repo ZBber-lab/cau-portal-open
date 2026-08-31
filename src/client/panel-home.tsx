@@ -100,7 +100,7 @@ export function HomeView(props: {
     [summary, ops],
   )
 
-  /** 要闻分块：校内平台（统一门户）/ 其他；各限 8 条，归档一条自动补一条 */
+  /** 要闻分块：其他来源；各限 8 条，归档一条自动补一条 */
   const isPortalIt = (it: any) => /tp_up/.test(String(it.url || ''))
   const portalNews = useMemo(() => (mods.portal ? important.filter(isPortalIt).slice(0, 8) : []), [important, mods.portal])
   const otherNews = useMemo(() => important.filter((it: any) => !isPortalIt(it)).slice(0, 8), [important])
@@ -489,16 +489,6 @@ export function HomeView(props: {
             </div>
             <div className="dsh-cau_card">
               {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
-              {mods.portal && (
-                <div className="dsh-cau_newsSubHead">
-                  <span>
-                    <Ic n="bank" /> 校内平台
-                  </span>
-                  <em>{portalNews.length} 条</em>
-                </div>
-              )}
-              {mods.portal && summary && portalNews.length === 0 && <div className="dsh-cau_empty">暂无校内平台重要通知</div>}
-              {mods.portal && portalNews.map((it: any, i: number) => newsRow(it, i, portalNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
               <div className="dsh-cau_newsSubHead">
                 <span>
                   <Ic n="news" /> 其他来源
@@ -553,21 +543,26 @@ export function HomeView(props: {
               </span>
               <span className="dsh-cau_secLine" />
             </div>
-            {(indexJson?.sites || []).filter((site: any) => mods.portal || site.id !== 'portal').map((site: any) => (
-              <div className="dsh-cau_colGroup" key={site.id}>
-                <button type="button" className="dsh-cau_colSiteBtn" onClick={() => onOpenColumn(site.id, null)}>
-                  {site.name} ›
-                </button>
-                <div className="dsh-cau_colChips">
-                  {(site.columns || []).map((c: any) => (
-                    <button key={c.key} type="button" className="dsh-cau_chip dsh-cau_chipBtn" onClick={() => onOpenColumn(site.id, c.key)}>
-                      {c.name}
-                      {typeof c.items === 'number' && <em className="dsh-cau_chipCount">{c.items}</em>}
-                    </button>
-                  ))}
+            {(indexJson?.sites || []).map((site: any) => {
+              const off = site.id === 'portal'
+              return (
+                <div className="dsh-cau_colGroup" key={site.id}>
+                  <button type="button" className={'dsh-cau_colSiteBtn' + (off ? ' dsh-cau_dis' : '')} disabled={off} onClick={() => !off && onOpenColumn(site.id, null)}>
+                    {site.name} ›{off && <span className="dsh-cau_disTag">不可用</span>}
+                  </button>
+                  {!off && (
+                    <div className="dsh-cau_colChips">
+                      {(site.columns || []).map((c: any) => (
+                        <button key={c.key} type="button" className="dsh-cau_chip dsh-cau_chipBtn" onClick={() => onOpenColumn(site.id, c.key)}>
+                          {c.name}
+                          {typeof c.items === 'number' && <em className="dsh-cau_chipCount">{c.items}</em>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* 快捷入口 */}
