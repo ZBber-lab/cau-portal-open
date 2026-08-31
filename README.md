@@ -1,45 +1,130 @@
 # 农大门户（cau-portal）
 
-给中国农业大学（土地科学与技术学院）学生做的 DeepSeek Harness 插件与数据管道：抓取学院/学校通知公告，AI 摘要/分类/截止日期提取，在 DSH 侧边栏面板浏览，AI 可在对话中查询。
+给中国农业大学学生用的 **DeepSeek Harness（DSH）插件与数据管道**：自动抓取学院/学校通知公告，AI 生成摘要/分类/重要度/截止日期，在 DSH 侧边栏面板浏览，并可在对话中直接查询（MCP 工具）。
 
-> 私有仓库；完整规格见 [SPEC.md](SPEC.md)（含路线图与全部实测事实）。
+> 本项目**只开源工具本身**：数据由每位使用者自己收集、自己保管，不作为工具服务的一部分。校内数据版权归学校所有，公开页面信息仅作个人学习使用（见文末免责声明）。
 
-## 结构
+## 功能特性
+
+- **侧边栏面板**：右侧全高抽屉，今日要览 / 我的事项（截止提醒）/ 栏目频道 / 关注与归档 / 文章阅读（原文 + AI 摘要 + deadline 高亮 + 一键引用到对话）
+- **对话查询**：6 个 MCP 工具（最新通知 / 关键词检索 / 截止事项 / 站点目录 / 用量统计 / 文章详情），AI 可以直接在对话中回答"最近有什么通知""推免报名截止几号"
+- **AI 加工**：DeepSeek 模型生成一句话摘要、分类（通知/新闻/讲座/竞赛/评奖/选课/学术）、重要度、截止日期（本地校验防幻觉）
+- **数据自主**：数据仓库可配置（owner/repo），完全由你掌控；令牌仅存本机浏览器
+- **定时管道**：GitHub Actions 每 2 小时自动抓取 + AI 加工（无需电脑开机）
+
+## 架构
 
 ```
-├── package.json          # 插件包元数据（阶段4 起承载 DSH 客户端插件）
-├── sites.json            # 站点/栏目配置（数据驱动）
-├── data/                 # 爬虫产出的新闻数据（JSON）
-│   ├── index.json        # 聚合目录与统计
-│   ├── feed/             # 栏目条目列表（<site>__<column>.json）
-│   ├── articles/         # 单篇全文 + AI 元数据（<sha1>.json）
-│   └── usage.jsonl       # DeepSeek API 用量账本（成本记录）
+┌─────────────┐   GitHub Contents API / 代理    ┌──────────────────┐
+│  DSH 浏览器  │ ──────────────────────────────▶ │  你的数据仓库       │
+│  侧边栏面板  │                                 │  data/           │
+│  （插件）    │                                 │  ├ index.json     │
+└──────┬──────┘                                 │  ├ feed/ 栏目列表  │
+       │                                        │  ├ articles/ 全文  │
+┌──────▼──────┐   MCP（stdio）                  │  └ usage.jsonl     │
+│  对话查询    │ ──────────────────────────────▶ └──────────────────┘
+│  mcp__cau__*│
+└─────────────┘
+        ▲
+        │ 工具代码公开；数据各自收集
+┌───────┴────────────────────────────────────────┐
+│  爬虫管道 tools/scraper（本仓库，公开）           │
+│  抓取 → AI 加工 → 提交到**你自己的**数据仓库       │
+└────────────────────────────────────────────────┘
+```
+
+**数据流**：爬虫抓取公开网页 → AI 加工（DeepSeek API）→ 产物提交到你的数据仓库 `data/` → 插件与 MCP 读取展示。数据仓库与你绑定，与工具代码解耦。
+
+## 快速开始
+
+### 前置要求
+
+- DeepSeek Harness（DSH）web 环境
+- Node.js 18+
+- 一个 GitHub 账号与一个**私有仓库**（存放你的数据；见下）
+- DeepSeek API Key（管道 AI 加工用；`deepseek-v4-flash` 等）
+
+### 第 1 步：安装插件
+
+```bash
+dsh plugin --profile web add "github:YOUR_ORG/cau-portal"
+```
+
+（把 `YOUR_ORG/cau-portal` 换成实际仓库地址；安装后侧边栏出现「农大门户」入口。）
+
+### 第 2 步：准备数据仓库
+
+1. 新建（或复用）一个 GitHub 仓库（建议私有），作为你的数据仓；
+2. 在该仓库开通一个**细粒度令牌**（Contents: Read；如需面板删除功能再加 Write），令牌只存在你自己浏览器里；
+3. 仓库内建 `data/` 目录（可先留空，管道会自动生成内容）。
+
+### 第 3 步：配置插件
+
+打开 DSH 侧边栏 →「设置」：
+
+1. **数据源**：把「数据仓库（owner/repo）」填成你的数据仓（如 `yourname/cau-data`）；
+2. **令牌管理**：登记第 2 步的令牌；
+3. **AI 加工 · 模型配置**：选择管道/面板按需加工用的模型（独立配置槽，与主对话模型解耦）。
+
+### 第 4 步：运行管道攒数据
+
+本地试跑（在插件仓库目录）：
+
+```bash
+node tools/scraper/crawl.mjs --pages 2 --articles 8   # 抓取
+DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8   # AI 加工
+```
+
+确认 `data/` 出现 `index.json` / `feed/` / `articles/` 后，提交推送，插件即可读到数据。
+
+### 第 5 步：定时自动抓取（可选）
+
+把 `.github/workflows/crawl.yml` 复制到你**自己的数据仓库**，配置 Secret `DEEPSEEK_API_KEY`，即可每 2 小时自动抓取 + 加工（北京时间 8:00–23:00；免费私有仓的 schedule 需要 cron-job.org 之类外部触发器，见 workflow 内注释）。
+
+## 配置项一览（设置页）
+
+| 模块 | 说明 |
+|---|---|
+| AI 加工 · 模型配置 | 独立模型槽 + 用量柱状图（次数/token/费用，7/30/90 天） |
+| 令牌管理 | 多令牌登记：值/过期日/剩余天数/逐枚开关 |
+| 数据源 | 数据仓库（owner/repo）、GitHub 云端开关、连通性检查 |
+| 面板偏好 · 引用协同 | 自动附加阅读上下文、引用到对话、面板固定 |
+| 待办提醒 · 关注 | 关注规则（关键词/来源/重要度）、系统通知 |
+| 每日邮件报告 | 每天定时把今日高重要通知/截止事项推到邮箱 |
+| 统一门户 · 账号 | one.cau.edu.cn 校内通知登录（学号/工号，密码仅存本机） |
+
+## 安全与隐私
+
+- 令牌 / API Key / 邮箱授权码 / 门户密码：**只存在本机**（浏览器 localStorage / 本地工具目录），不进仓库、不进日志、不经过任何第三方服务；
+- 数据仓库完全由你掌控，可随时停更或删除；
+- 插件代码不含任何凭据与个人数据。
+
+## 目录结构
+
+```
+├── src/                  # 插件源码（服务端路由 + 客户端面板）
+├── lib/                  # 构建产物（随包发布）
 ├── tools/
-│   ├── scraper/          # Node 爬虫 + AI 加工管道（零重型依赖，fetch 手写解析）
-│   └── mcp/              # Node MCP 服务器（@modelcontextprotocol/sdk，6 个查询工具）
-├── assets/               # 品牌资产（校徽/题字 SVG、预览页）
-├── docs/                 # 调研文档（FEASIBILITY.md 等）
-└── .github/workflows/    # Actions 定时抓取
+│   ├── scraper/          # 爬虫 + AI 加工管道（零重型依赖）
+│   └── mcp/              # MCP 服务器（6 个查询工具）
+├── assets/               # 品牌素材（校徽/题字 SVG）
+├── sites.json            # 站点/栏目配置（数据驱动，可自行增改）
+├── docs/AI-SETUP-GUIDE.md# 给 AI agent 的配置指南（见下）
+└── .github/workflows/    # Actions 定时抓取模板
 ```
 
-## 数据管道
+站点/栏目是数据驱动的（`sites.json`）：默认内置中国农业大学土地科学与技术学院 / 教务处 / 校新闻网 / 统一门户的栏目；想适配其他院校或栏目，改 `sites.json` 即可。
 
-- 来源：土地科学与技术学院（clst.cau.edu.cn）、教务处（jwc.cau.edu.cn）、校新闻网（news.cau.edu.cn），共 11 栏目。
-- 抓取：增量更新，URL 去重，列表翻页走博达 dataproxy XML；详情页按 CMS 标记清洗正文。
-- AI 加工：DeepSeek API（`deepseek-v4-flash`，非思考模式 + 错峰调度）生成一句话摘要/分类/重要度/deadline（本地校验防幻觉）；花费写入 `data/usage.jsonl`。
-- 本地运行：
-  ```bash
-  node tools/scraper/crawl.mjs --pages 2 --articles 8   # 抓取
-  node tools/scraper/enrich.mjs --limit 8               # AI 加工（需 DEEPSEEK_API_KEY）
-  ```
+## 给 AI 看的文档
 
-## GitHub Actions
+本项目同时提供 **[docs/AI-SETUP-GUIDE.md](docs/AI-SETUP-GUIDE.md)**——写给 DSH 里的 AI agent 看的配置指南：把本文件路径发给 AI，或让用户把文件内容贴给 AI，AI 就能按步骤指导用户完成完整配置（安装 → 令牌 → 数据源 → 跑管道 → 验证）。
 
-- 北京时间 8:00–23:00 每 2 小时自动抓取 + AI 加工（cron-job.org 定时触发 GitHub Actions），变更提交回本仓库（无需电脑开机）。
-- 需要仓库 Secret：`DEEPSEEK_API_KEY`（缺省时抓取照常、AI 加工跳过）。
+## 免责声明
 
-## 接入 DSH
+- 本项目抓取的数据来源于各学校/单位**公开网页**，版权归原作者/单位所有；本项目不存储、不提供任何数据服务，仅提供工具与数据处理能力；
+- 请遵守目标网站的使用条款，合理抓取频率；
+- 本项目按现状提供（AS-IS），不承担任何因使用产生的责任。
 
-- MCP：在 DSH web profile 的 `cordis.patch.yml` 注册 `@deepseek-ai/dsh-mcp-client`（serverName `cau`，stdio 指向 `tools/mcp/index.mjs`），聊天区即获得 `mcp__cau__*` 工具。MCP 服务器依赖需在安装包内单独装一次：`cd tools/mcp && pnpm install`（依赖 `@modelcontextprotocol/sdk`、`zod`，不含在插件主包依赖中）。
-- Skill：`~/.dsh/skills/cau-portal.md`（本仓库同款指引见 [SPEC.md §6](SPEC.md)）。
-- 侧边栏插件：阶段 4（见 SPEC 路线图）。
+## 许可证
+
+见 [LICENSE](LICENSE)。
