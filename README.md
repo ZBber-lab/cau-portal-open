@@ -55,7 +55,7 @@ dsh plugin --profile web add "github:zhouxuanting52-lab/cau-portal-open"
 ### 第 2 步：准备数据仓库
 
 1. 新建（或复用）一个 GitHub 仓库（建议私有），作为你的数据仓；
-2. 在该仓库开通一个**细粒度令牌**（Contents: Read；如需面板删除功能再加 Write），令牌只存在你自己浏览器里；
+2. 在该仓库开通一个**细粒度令牌**：GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → 选「**Only select repositories**」→ 勾选你的数据仓 → Permissions → **Contents: Read**（如需面板「删除」功能再加 **Read and write**）；令牌只存在你自己浏览器里；
 3. 仓库内建 `data/` 目录（可先留空，管道会自动生成内容）。
 
 ### 第 3 步：配置插件
@@ -75,6 +75,8 @@ node tools/scraper/crawl.mjs --pages 2 --articles 8   # 抓取
 DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8   # AI 加工
 ```
 
+> Windows PowerShell 用户：用 `$env:DEEPSEEK_API_KEY='sk-...'; node tools/scraper/enrich.mjs --limit 8`（第 4 步的 `DEEPSEEK_API_KEY=... node ...` 是 macOS/Linux shell 语法）。
+
 确认 `data/` 出现 `index.json` / `feed/` / `articles/` 后，提交推送，插件即可读到数据。
 
 ### 第 5 步：定时自动抓取（可选）
@@ -89,7 +91,7 @@ DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8   # AI 加工
    ```bash
    cd tools/mcp && pnpm install
    ```
-2. **注册 MCP client**：在 DSH profile 的 `cordis.patch.yml` 里加（`@deepseek-ai/dsh-mcp-client` 是 DSH 内置插件；`<...>` 换成你的实际路径）：
+2. **注册 MCP client**：在 DSH profile 的 `cordis.patch.yml` 里加（Windows：`C:\Users\<你>\.dsh\profiles\web\cordis.patch.yml`；macOS/Linux：`~/.dsh/profiles/web/cordis.patch.yml`；`@deepseek-ai/dsh-mcp-client` 是 DSH 内置插件；`<...>` 换成你的实际路径）：
    ```yaml
    - id: mcp-cau
      name: '@deepseek-ai/dsh-mcp-client'

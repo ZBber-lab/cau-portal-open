@@ -60,7 +60,8 @@ dsh plugin --profile web add "github:zhouxuanting52-lab/cau-portal-open"
 # 1) 抓取（可选限制页数/条数，先小批量试跑）
 node tools/scraper/crawl.mjs --pages 2 --articles 8
 
-# 2) AI 加工（需要 DeepSeek API Key）
+# 2) AI 加工（需要 DeepSeek API Key）。macOS/Linux：`DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8`
+#    Windows PowerShell：`$env:DEEPSEEK_API_KEY='sk-...'; node tools/scraper/enrich.mjs --limit 8`
 DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8
 ```
 
@@ -86,7 +87,7 @@ git add data && git commit -m "data: first crawl" && git push
 让 AI 能在对话里直接查询数据，需注册 MCP：
 
 1. 装 MCP 依赖：`cd tools/mcp && pnpm install`；
-2. 在 DSH profile `cordis.patch.yml` 加 mcp client（`@deepseek-ai/dsh-mcp-client`）：
+2. 在 DSH profile `cordis.patch.yml`（Windows：`C:\Users\<你>\.dsh\profiles\web\cordis.patch.yml`；macOS/Linux：`~/.dsh/profiles/web/cordis.patch.yml`）加 mcp client（`@deepseek-ai/dsh-mcp-client`）：
    ```yaml
    - id: mcp-cau
      name: '@deepseek-ai/dsh-mcp-client'
