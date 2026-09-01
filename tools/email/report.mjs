@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 
-const OWNER = 'zhouxuanting52-lab';
+const OWNER = 'ZBber-lab';
 const REPO = 'cau-portal';
 
 export function tokenFromEnvOrYml() {

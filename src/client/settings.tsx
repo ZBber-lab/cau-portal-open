@@ -155,8 +155,8 @@ function expiryBadge(expires: string): { cls: string; text: string } {
 
 const KEY_LINKS: { key: string; label: string; url: string }[] = [
   { key: 'github-read', label: 'GitHub 令牌管理', url: 'https://github.com/settings/personal-access-tokens' },
-  { key: 'repo', label: '数据仓库', url: 'https://github.com/zhouxuanting52-lab/cau-portal' },
-  { key: 'actions', label: '定时抓取 Actions', url: 'https://github.com/zhouxuanting52-lab/cau-portal/actions' },
+  { key: 'repo', label: '数据仓库', url: 'https://github.com/ZBber-lab/cau-portal' },
+  { key: 'actions', label: '定时抓取 Actions', url: 'https://github.com/ZBber-lab/cau-portal/actions' },
   { key: 'cron', label: 'cron-job.org', url: 'https://console.cron-job.org/jobs' },
   { key: 'ds', label: 'DeepSeek 平台', url: 'https://platform.deepseek.com' },
   { key: 'portal', label: '统一门户', url: 'https://one.cau.edu.cn' },
@@ -1017,9 +1017,9 @@ export function CauSettings(props: any) {
               <Toggle on={mods.cloud} onToggle={() => toggleMod('cloud')} label="切换 数据源" />
             </div>
             <div className="dsh-cau_setDesc">
-              数据存于 GitHub 仓库的 `data/`（每 2 小时抓取+AI 加工并提交）；面板与 MCP 直接读云端。默认指向 `zhouxuanting52-lab/cau-portal`；自建数据者改为自己的仓库。关闭本开关将完全停止数据读取（顶部红条提醒）。
+              数据存于 GitHub 仓库的 `data/`（每 2 小时抓取+AI 加工并提交）；面板与 MCP 直接读云端。默认指向 `ZBber-lab/cau-portal`；自建数据者改为自己的仓库。关闭本开关将完全停止数据读取（顶部红条提醒）。
 <label className="dsh-cau_setLabel" htmlFor="cauDataRepo">数据仓库（owner/repo）</label>
-<input id="cauDataRepo" className="dsh-cau_setInput" value={settings.dataRepo || ''} onChange={(e) => upd({ ...settings, dataRepo: e.target.value })} placeholder="如 zhouxuanting52-lab/cau-portal（留空=默认）" spellCheck={false} autoComplete="off" />
+<input id="cauDataRepo" className="dsh-cau_setInput" value={settings.dataRepo || ''} onChange={(e) => upd({ ...settings, dataRepo: e.target.value })} placeholder="如 ZBber-lab/cau-portal（留空=默认）" spellCheck={false} autoComplete="off" />
 <div className="dsh-cau_setHint">指向含 `data/` 与爬虫产物的仓库；读取/写入用「令牌管理」页配置的令牌。支持填完整 GitHub 链接。</div>
             </div>
             <div className="dsh-cau_setRow">

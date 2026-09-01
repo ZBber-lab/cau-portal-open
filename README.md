@@ -59,7 +59,7 @@
 ### 第 1 步：安装插件
 
 ```bash
-dsh plugin --profile web add "github:zhouxuanting52-lab/cau-portal-open"
+dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"
 ```
 
 （这是官方仓库；若你 fork 了自己的一份，把地址换成你自己的 `github:你的用户名/仓库名`。安装后侧边栏出现「农大门户」入口。）

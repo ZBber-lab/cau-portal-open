@@ -18,7 +18,7 @@ const ART_DIR = path.join(DATA_DIR, 'articles')
 
 // ---- GitHub 云端数据源（阶段4 第3步）：CAU_GITHUB_TOKEN 存在即切换 ----
 const GH_TOKEN = process.env.CAU_GITHUB_TOKEN || ''
-const GH_REPO = process.env.CAU_GITHUB_REPO || 'zhouxuanting52-lab/cau-portal'
+const GH_REPO = process.env.CAU_GITHUB_REPO || 'ZBber-lab/cau-portal'
 const GH_BRANCH = process.env.CAU_GITHUB_BRANCH || 'main'
 const GH_MODE = !!GH_TOKEN
 const ghCache = new Map() // rel -> { t, text }

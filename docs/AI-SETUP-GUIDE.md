@@ -24,7 +24,7 @@
 ### 步骤 A：安装插件
 
 ```bash
-dsh plugin --profile web add "github:zhouxuanting52-lab/cau-portal-open"
+dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"
 ```
 
 - 若用户 fork 了自己的一份，用他自己的 `github:用户名/仓库名`。

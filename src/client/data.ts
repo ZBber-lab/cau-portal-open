@@ -22,7 +22,7 @@ export type SettingsV1 = {
 }
 
 const SETTINGS_KEY = 'dsh.cau-portal.settings.v1'
-const DEFAULT_DATA_REPO = 'zhouxuanting52-lab/cau-portal'
+const DEFAULT_DATA_REPO = 'ZBber-lab/cau-portal'
 const GH_BRANCH = 'main'
 
 /** 当前数据仓库（owner/repo）：设置页可配，空=默认仓；兼容粘贴完整 URL / .git 后缀 */
