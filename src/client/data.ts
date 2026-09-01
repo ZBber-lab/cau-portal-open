@@ -760,7 +760,7 @@ export function computeAlerts(): { level: 'error' | 'warn'; text: string; page?:
     else if (perm === 'denied') out.push({ level: 'warn', text: '系统通知已开启但被浏览器拒绝：请在浏览器站点设置中允许通知', page: 'follow' })
     else if (perm === 'unsupported') out.push({ level: 'warn', text: '系统通知已开启，但当前浏览器不支持通知 API', page: 'follow' })
   }
-  // 过期日登记（settings.keyExpiries 独立键）：不被令牌列表覆盖的键提醒（如 cau-portal-read/bridge）
+  // 过期日登记（settings.keyExpiries 独立键）：不被令牌列表覆盖的键提醒（如 github-read/bridge）
   const keyExp = s.keyExpiries || {}
   const tokenDates = new Set(tokens.map((t) => t.expires).filter(Boolean))
   for (const [k, exp] of Object.entries(keyExp)) {
