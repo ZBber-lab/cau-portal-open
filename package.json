@@ -12,12 +12,16 @@
   },
   "files": [
     "lib",
-    "tools/portal",
-    "tools/email",
+    "tools/scraper",
     "tools/mcp",
+    "tools/email",
     "cordis.patch.yml",
     "dsh.plugin.json",
-    "README.md"
+    "README.md",
+    "AGENTS.md",
+    "LICENSE",
+    "sites.json",
+    "docs"
   ],
   "dsh": {
     "bundle": {
