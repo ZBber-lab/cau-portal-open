@@ -339,7 +339,14 @@ export type FollowItem = {
 
 const FOLLOW_KEY = 'dsh.cau-portal.follow.v1'
 
+let _followTitlesRepaired = false
+
 export function loadFollow(): FollowItem[] {
+  // 一次性修复：早期「我的事项」同步进关注时把条目名当做了关注标题，这里用关注缓存里的新闻标题纠正
+  if (!_followTitlesRepaired) {
+    _followTitlesRepaired = true
+    repairFollowTitles()
+  }
   try {
     const v = JSON.parse(localStorage.getItem(FOLLOW_KEY) || '[]')
     return Array.isArray(v) ? v.filter((x) => x && typeof x.id === 'string') : []
@@ -351,6 +358,32 @@ export function loadFollow(): FollowItem[] {
 export function saveFollow(list: FollowItem[]) {
   try {
     localStorage.setItem(FOLLOW_KEY, JSON.stringify(list))
+  } catch {
+    /* 静默 */
+  }
+}
+
+/**
+ * 一次性修复关注条目标题：凡是关注缓存里能拿到新闻标题、且与当前存储标题不同的，
+ * 说明是早期 bug（存成了事项名「报名」之类）→ 纠正为新闻标题。
+ * 关注区始终应显示新闻标题，因此纠正总是安全；合法条目（标题本就=新闻标题）不变。
+ */
+function repairFollowTitles() {
+  try {
+    const v = JSON.parse(localStorage.getItem(FOLLOW_KEY) || '[]')
+    if (!Array.isArray(v)) return
+    let changed = false
+    const next = v.map((it: FollowItem) => {
+      if (!it || typeof it.id !== 'string' || !it.title) return it
+      // 只用关注缓存（本机快照）里的新闻标题；无缓存则保持原样
+      const cachedTitle = readFollowCache(it.id)?.title
+      if (cachedTitle && cachedTitle !== it.title) {
+        changed = true
+        return { ...it, title: cachedTitle }
+      }
+      return it
+    })
+    if (changed) saveFollow(next)
   } catch {
     /* 静默 */
   }
@@ -515,8 +548,9 @@ export function isMine(id: string): boolean {
   return !!loadMine()[id]
 }
 
-/** 加入我的事项（title=事项名；同步进关注列表 + 异步补本地全文快照） */
-export async function addMine(id: string, item: { title: string; url?: string; deadline?: string; source?: string; column?: string; custom?: boolean }): Promise<void> {
+/** 加入我的事项（title=事项名；同步进关注列表 + 异步补本地全文快照）。
+ * 关注区显示「新闻标题」而非事项名：articleTitle 传入新闻标题，缺失时回退 item.title。 */
+export async function addMine(id: string, item: { title: string; articleTitle?: string; url?: string; deadline?: string; source?: string; column?: string; custom?: boolean }): Promise<void> {
   migrateMineFromPin()
   const m = loadMine()
   if (!m[id]) {
@@ -524,10 +558,11 @@ export async function addMine(id: string, item: { title: string; url?: string; d
     saveMine(m)
   }
   // 同步进关注列表（有关联文章时；无上限；重复自动去重）
+  // 关注条目 title = 新闻标题（用户给定事项名只用于「我的事项」），保证关注区显示的是新闻名
   if (item.url) {
     const cur = loadFollow()
     if (!cur.some((x) => x.id === id)) {
-      saveFollow([{ id, title: item.title, url: item.url, time: null, source: item.source, column: item.column, importance: undefined, summary: undefined }, ...cur])
+      saveFollow([{ id, title: item.articleTitle || item.title, url: item.url, time: null, source: item.source, column: item.column, importance: undefined, summary: undefined }, ...cur])
     }
   }
   // 异步补本地全文快照（成功则缓存，失败静默）

@@ -140,6 +140,7 @@ export function ArticleView(props: {
     } else {
       await addMine(articleId, {
         title: art?.ai?.deadline?.item || art?.title || '事项',
+        articleTitle: art?.title,
         url: art?.url || '',
         deadline: hasDeadline ? art.ai.deadline.date : undefined,
         source: art?.source || '',
