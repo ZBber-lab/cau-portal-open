@@ -57,7 +57,7 @@ const SITE_HOST = {
 }
 const CATEGORIES = ['通知', '新闻', '讲座', '竞赛', '评奖', '选课', '学术', '其他']
 
-const server = new McpServer({ name: 'cau-portal', version: '0.1.0' })
+const server = new McpServer({ name: 'cau-portal', version: '0.1.1' })
 
 // ---------- 数据读取（统一源：GH 模式读 GitHub，否则本地 data/） ----------
 /** 读取 data/ 下的相对子路径文本；GH 模式带进程内缓存 */
