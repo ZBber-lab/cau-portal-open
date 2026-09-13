@@ -8,7 +8,7 @@
 export const name = 'cau-portal'
 export const inject = ['webServer', 'llm']
 
-const VERSION = '0.1.2'
+const VERSION = '0.2.0'
 
 const SYSTEM_PROMPT = `你是中国农业大学新闻处理助手。阅读给定文章，输出一个 JSON 对象（只输出 JSON，不要输出任何其他文字）。
 

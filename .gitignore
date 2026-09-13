@@ -18,7 +18,7 @@ fix-log.txt
 cau-fix-push.bat
 .push-clone/
 
-# ÃÅ»§»á»°/ÃÜÂë£¨±¾»úÃô¸Ğ£¬¾ø²»½ø²Ö£©
+# é—¨æˆ·ä¼šè¯/å¯†ç ï¼ˆæœ¬æœºæ•æ„Ÿï¼Œç»ä¸è¿›ä»“ï¼‰
 tools/portal/session.json
 tools/portal/account.json
 tools/portal/pw.json
