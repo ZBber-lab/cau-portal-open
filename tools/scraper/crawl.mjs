@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { fetchText, sleep } from './fetch.mjs';
+import { fetchText, sleep, absUrl } from './fetch.mjs';
 import { parseListPage, parseDataproxy } from './parse-list.mjs';
 import { parseArticle } from './parse-article.mjs';
 import { parseNewsListPage, parseNewsArticle } from './parse-news.mjs';
@@ -22,7 +22,8 @@ const arg = (name, def) => {
 const sha1 = (s) => createHash('sha1').update(s).digest('hex');
 const now = () => new Date().toISOString();
 
-const dataproxyUrl = (base, page, colId, unitid, webid, webname) =>
+/** 博达 dataproxy 分页 URL（probe.mjs 复用，故导出） */
+export const dataproxyUrl = (base, page, colId, unitid, webid, webname) =>
   `${base}/module/web/jpage/dataproxy.jsp?page=${page}&appid=1&webid=${webid}&path=/&columnid=${colId}&unitid=${unitid}&webname=${encodeURIComponent(webname)}&permissiontype=0`;
 
 /** 读已有 feed 条目（不存在则空） */
@@ -366,7 +367,7 @@ async function crawlColumn(site, column, opts) {
     let hasArticle = existsSync(artPath);
     if (!hasArticle && Number(opts.articles) > 0 && out.articles < Number(opts.articles)) {
       await sleep(opts.delay);
-      const abs = it.url.startsWith('http') ? it.url : `${base}${it.url}`;
+      const abs = absUrl(base, it.url);
       const r = await fetchText(abs, { referer: colUrl });
       if (r.ok) {
         const a = parseArticle(r.text, abs);
@@ -399,7 +400,9 @@ async function crawlColumn(site, column, opts) {
 }
 
 async function main() {
-  const cfg = JSON.parse(readFileSync(`${ROOT}/sites.json`, 'utf-8'));
+  // --sites 可指向「候选配置」文件：接入新站点前先拿它空跑验证，不动正式 sites.json
+  const sitesPath = arg('sites', `${ROOT}/sites.json`);
+  const cfg = JSON.parse(readFileSync(sitesPath, 'utf-8'));
   const opts = {
     pages: Number(arg('pages', 1)),
     articles: Number(arg('articles', 0)),

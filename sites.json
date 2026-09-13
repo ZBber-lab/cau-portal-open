@@ -37,6 +37,18 @@
         { "key": "bnxs", "name": "百廿学术", "path": "bnxs" }
       ],
       "note": "文章页容器 id=articleDiv；翻页 index.htm/indexN.htm；图说农大(tsnd)与校报平台(ihwrm)留待 v2"
+    },
+    {
+      "id": "youth",
+      "name": "校团委",
+      "baseUrl": "https://youth.cau.edu.cn",
+      "cms": "boda",
+      "columns": [
+        { "id": 45078, "key": "notice", "name": "通知公告" },
+        { "id": 44849, "key": "activity", "name": "校园活动" },
+        { "id": 44850, "key": "yuanxi", "name": "院系团讯" }
+      ],
+      "note": "2026-09-13 用 tools/scraper/probe.mjs 探测后接入（首个走「添加栏目」流程的站点）；「新闻动态」(44875) 为会议/活动报道，暂不收录；「标兵风采」(56715)/「社会实践」(56716) 列表无 unitid/webid 且无条目，未收录"
     }
   ]
 }

@@ -16,6 +16,10 @@ import {
   readCloudText,
   loadModules,
   saveModules,
+  loadChannels,
+  saveChannels,
+  siteShown,
+  loadSiteDirectory,
   loadTokens,
   saveTokens,
   loadUsageRows,
@@ -28,9 +32,12 @@ import {
   type WatchRule,
   type TokenRecord,
   type ModuleKey,
+  type ChannelConfig,
+  type DirSite,
 } from './data'
 import { getCtx } from './ctx'
 import { Ic } from './icons'
+import { requestDraft, getDraftAck, subscribeBus } from './bus'
 
 const noop = () => {}
 
@@ -153,6 +160,23 @@ function expiryBadge(expires: string): { cls: string; text: string } {
   return { cls: 'dsh-cau_setOk', text: `${n} 天后过期` }
 }
 
+/**
+ * 「添加栏目」：把用户填的名称/网址编成一段请求，交给主对话（智能体）去探测并接入。
+ * 只填聊天输入框、不自动发送 —— 用户是最终确认人（设计点②，2026-09-13 拍板）。
+ * 前缀标记 `〔cau:add-column〕` 供后续 cau-portal-add-column skill 识别意图。
+ */
+function buildAddPrompt(name: string, url: string): string {
+  const u = /^https?:\/\//i.test(url) ? url : `https://${url}`
+  return [
+    '〔cau:add-column〕给「农大门户」插件接入一个新来源：',
+    `· 名称：${name || '（未填，请按站点标题推断）'}`,
+    `· 网址：${u}`,
+    '',
+    '请先探测这个站点：判断它属于哪类（博达 CMS / 自研 / 需登录），列出可用的栏目（栏目名 + 栏目 id 或 path），',
+    '并给出结论「能直接接 / 需要写解析器 / 接不了」。**先只报告，等我确认后再写进 sites.json 并推送**，不要提前改文件。',
+  ].join('\n')
+}
+
 const KEY_LINKS: { key: string; label: string; url: string }[] = [
   { key: 'github-read', label: 'GitHub 令牌管理', url: 'https://github.com/settings/personal-access-tokens' },
   { key: 'repo', label: '数据仓库', url: 'https://github.com/ZBber-lab/cau-portal' },
@@ -214,11 +238,29 @@ export function CauSettings(props: any) {
   const sessions = props.sessions ?? _ctx.sessions
   const modelDirectories = props.modelDirectories ?? _ctx.modelDirectories
 
-  const [page, setPage] = useState<'home' | 'ai' | 'tokens' | 'prefs' | 'follow' | 'cloud' | 'security' | 'mail'>('home')
+  const [page, setPage] = useState<'home' | 'ai' | 'tokens' | 'prefs' | 'follow' | 'cloud' | 'security' | 'mail' | 'channels'>('home')
   const [settings, setSettings] = useState(() => loadSettings())
   const [mods, setMods] = useState(() => loadModules())
+  const [channels, setChannels] = useState<ChannelConfig>(() => loadChannels())
+  const [siteList, setSiteList] = useState<DirSite[] | null>(null)
   const [tokens, setTokens] = useState<TokenRecord[]>(() => loadTokens())
   const [savedFlash, setSavedFlash] = useState(false)
+
+  // 栏目频道管理：站点清单**以仓库 sites.json 为权威**（index.json 只补条目数）
+  // → 新来源「添加」推送后，哪怕 Actions 还没抓到一条数据，也会立刻出现在这里（标「尚未抓取」）
+  useEffect(() => {
+    let alive = true
+    void loadSiteDirectory()
+      .then((list) => {
+        if (alive) setSiteList(list)
+      })
+      .catch(() => {
+        if (alive) setSiteList([])
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const upd = (next: any) => {
     setSettings(next)
@@ -233,6 +275,33 @@ export function CauSettings(props: any) {
     setTokens(next)
     saveTokens(next)
   }
+
+  const persistChannels = (next: ChannelConfig) => {
+    setChannels(next)
+    saveChannels(next)
+    flash()
+  }
+  const toggleSite = (id: string) =>
+    persistChannels({ ...channels, sites: { ...channels.sites, [id]: !siteShown(channels, id) } })
+  const resetChannels = () => persistChannels({ version: 1, sites: {}, columns: {} })
+
+  // 「添加栏目」：填名称+网址 → 经总线把请求填进主聊天输入框（只填不发送）；draftAck 回执判断是否真填上了
+  const [addName, setAddName] = useState('')
+  const [addUrl, setAddUrl] = useState('')
+  const [addSeq, setAddSeq] = useState(0)
+  const draftAck = useSyncExternalStore(subscribeBus, getDraftAck)
+  const addFilled = addSeq > 0 && draftAck >= addSeq
+  const addNow = () => setAddSeq(requestDraft(buildAddPrompt(addName.trim(), addUrl.trim())))
+
+  /** 可管理的站点（校内平台不在此管理，仍由「数据源」子页的统一门户开关控制） */
+  const managedSites = (siteList || []).filter((s: any) => s.id !== 'portal')
+  const hiddenSites = managedSites.filter((s: any) => !siteShown(channels, s.id)).length
+  const channelBadge =
+    siteList === null
+      ? { cls: 'off', text: '读取中…' }
+      : hiddenSites > 0
+        ? { cls: 'warn', text: `已关 ${hiddenSites}/${managedSites.length}` }
+        : { cls: 'ok', text: `全部 ${managedSites.length} 个` }
 
   const alerts = useMemo(() => computeAlerts(), [mods, tokens, settings])
 
@@ -538,7 +607,7 @@ export function CauSettings(props: any) {
   })()
 
   // ---------- 首页分组卡片（功能卡有开关；凭据卡无开关、淡底区分）----------
-  type CardDef = { key: ModuleKey | null; icon: string; name: string; desc: string; badge: { cls: string; text: string }; need: boolean; page: 'ai' | 'tokens' | 'prefs' | 'follow' | 'cloud' | 'security' | 'mail'; alt?: boolean }
+  type CardDef = { key: ModuleKey | null; icon: string; name: string; desc: string; badge: { cls: string; text: string }; need: boolean; page: 'ai' | 'tokens' | 'prefs' | 'follow' | 'cloud' | 'security' | 'mail' | 'channels'; alt?: boolean }
   const cardGroups: { title: string; cards: CardDef[] }[] = [
     {
       title: '智能与数据',
@@ -560,6 +629,16 @@ export function CauSettings(props: any) {
           badge: mods.cloud ? { cls: 'ok', text: '已连接云端' } : { cls: 'err', text: '已禁用! 插件无数据' },
           need: mods.cloud,
           page: 'cloud',
+        },
+        {
+          key: null,
+          icon: 'books',
+          name: '栏目频道管理',
+          desc: '首页「栏目频道」「要闻」「今日要览」显示哪些来源；关闭只是不显示，数据照抓',
+          badge: channelBadge,
+          need: true,
+          page: 'channels',
+          alt: true,
         },
         {
           key: null,
@@ -670,7 +749,7 @@ export function CauSettings(props: any) {
           返回
         </button>
         <div className="dsh-cau_setTitle" style={{ margin: 0 }}>
-          {page === 'ai' ? 'AI 加工 · 模型配置' : page === 'tokens' ? '令牌管理' : page === 'prefs' ? '面板偏好 · 引用协同' : page === 'follow' ? '待办提醒 · 关注' : page === 'cloud' ? '数据源' : page === 'mail' ? '每日邮件报告' : '统一门户 · 账号'}
+          {page === 'ai' ? 'AI 加工 · 模型配置' : page === 'tokens' ? '令牌管理' : page === 'prefs' ? '面板偏好 · 引用协同' : page === 'follow' ? '待办提醒 · 关注' : page === 'cloud' ? '数据源' : page === 'mail' ? '每日邮件报告' : page === 'channels' ? '栏目频道管理' : '统一门户 · 账号'}
         </div>
         {otherCount > 0 && (
           <button type="button" className="dsh-cau_setOther" title="返回设置首页查看全部提醒" onClick={() => setPage('home')}>
@@ -1048,6 +1127,121 @@ export function CauSettings(props: any) {
             </div>
             <div className="dsh-cau_setDesc">
               门户数据来自统一门户（one.cau.edu.cn），需登录校园网/SSO 看原文（账号入口见首页「统一门户 · 账号」）。关闭此开关后，面板隐藏门户通知（要闻 / 栏目 / 待办 / 未读计数）；对话查询不受影响。默认开启。
+            </div>
+          </div>
+        </div>
+      )}
+
+      {page === 'channels' && (
+        <div className="dsh-cau_setBlocks">
+          <div className="dsh-cau_setBlock">
+            <div className="dsh-cau_setTitle">
+              <Ic n="books" />
+              首页显示哪些来源
+            </div>
+            <div className="dsh-cau_setDesc">
+              关掉的来源不再出现在首页「栏目频道」「要闻」和「今日要览」里（未读计数同步）。<b>只是不显示</b>——数据照常抓取、AI 照常加工，待办、关注、归档与对话查询都不受影响；重新打开立刻恢复，不用等下一次抓取。
+            </div>
+            <div className="dsh-cau_tokList">
+              {siteList === null && <div className="dsh-cau_setHint">读取站点目录中…</div>}
+              {siteList !== null && managedSites.length === 0 && (
+                <div className="dsh-cau_setHint">读不到站点目录（请先到「数据源」子页确认连通性 / 令牌）。</div>
+              )}
+              {managedSites.map((s: any) => {
+                const on = siteShown(channels, s.id)
+                const cols = (s.columns || []) as any[]
+                const items = typeof s.items === 'number' ? s.items : cols.reduce((n: number, c: any) => n + (typeof c.items === 'number' ? c.items : 0), 0)
+                return (
+                  <div key={s.id} className="dsh-cau_tok">
+                    <Toggle on={on} onToggle={() => toggleSite(s.id)} label={`切换 ${s.name}`} />
+                    <div className="dsh-cau_tokMain">
+                      <span className="dsh-cau_tokName">
+                        {s.name}
+                        {!on && <span className="dsh-cau_cardBadge off">已关闭</span>}
+                        {s.pending && (
+                          <span className="dsh-cau_cardBadge off" title="配置已就位，等下一轮抓取后出现条目">
+                            尚未抓取
+                          </span>
+                        )}
+                      </span>
+                      <span className="dsh-cau_tokMeta">
+                        <span>{cols.map((c: any) => c.name).join(' · ') || '—'}</span>
+                        <span>
+                          {cols.length} 个栏目 · {s.pending ? '尚未抓取' : `${items} 条`}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="dsh-cau_setRow">
+              <button type="button" className="dsh-cau_setBtn" disabled={hiddenSites === 0} onClick={resetChannels}>
+                <Ic n="undo" />
+                恢复默认（全部显示）
+              </button>
+            </div>
+            <div className="dsh-cau_setHint">
+              语义是「黑名单」：只有被你关掉的来源才隐藏。<b>以后新接入的站点/栏目默认就是显示的</b>，接入后会自动出现在这个列表里，不需要手动打开。
+            </div>
+          </div>
+
+          <div className="dsh-cau_setBlock">
+            <div className="dsh-cau_setTitle">
+              <Ic n="plus" />
+              添加新来源
+            </div>
+            <div className="dsh-cau_setDesc">
+              填名称和网址 → 点「添加到聊天框」，一段请求会放进<b>主聊天输入框</b>（<b>不会自动发送</b>）。你按发送后，智能体会先探测这个站点能不能直接接入、有哪些栏目，把结论报告给你；<b>你确认之后</b>它才写入配置、推送并开始抓取 —— 之后这个列表和首页会自动多出来源，不需要在这里手动打开。
+            </div>
+            <div className="dsh-cau_setRow">
+              <input
+                className="dsh-cau_setInput"
+                style={{ flex: '1 1 150px' }}
+                placeholder="名称（如 校团委）"
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+              />
+              <input
+                className="dsh-cau_setInput"
+                style={{ flex: '2 1 210px' }}
+                placeholder="网址（如 https://youth.cau.edu.cn）"
+                value={addUrl}
+                onChange={(e) => setAddUrl(e.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+              />
+              <button type="button" className="dsh-cau_setBtn" disabled={!addUrl.trim()} onClick={addNow}>
+                <Ic n="plus" />
+                添加到聊天框
+              </button>
+            </div>
+            {addSeq > 0 &&
+              (addFilled ? (
+                <div className="dsh-cau_setOk">✓ 已填入下方聊天输入框（只填不发送）—— 确认无误后按发送即可，本面板可以留着。</div>
+              ) : (
+                <div className="dsh-cau_setHint">已排队：当前没有打开的会话，等你打开一个会话后会自动填进输入框。</div>
+              ))}
+            <div className="dsh-cau_setHint">
+              站点能不能接取决于它的建站系统：校内多数站点是博达 CMS（只需登记站点 + 栏目 id，最省事）；自研站点要单独写解析器；需要登录的（如统一门户）不走这里。
+            </div>
+          </div>
+
+          <div className="dsh-cau_setBlock">
+            <div className="dsh-cau_setTitle">
+              <Ic n="bank" />
+              校内平台不在这里管理
+            </div>
+            <div className="dsh-cau_infoCard">
+              <span className="dsh-cau_setDesc">
+                统一门户「校内通知」要登录校园门户，属于数据源 / 凭据范畴，开关仍在「数据源」子页（当前<b>{mods.portal ? '已开启' : '已关闭'}</b>）。首页上它与学院/教务/新闻网之间有一条细分割线区分。开源版不提供统一门户抓取，该来源在首页标「不可用」。
+              </span>
+              <div className="dsh-cau_setRow">
+                <button type="button" className="dsh-cau_setBtn" onClick={() => setPage('cloud')}>
+                  <Ic n="bank" />
+                  去「数据源」管理统一门户
+                </button>
+              </div>
             </div>
           </div>
         </div>

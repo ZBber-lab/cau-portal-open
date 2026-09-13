@@ -5,7 +5,7 @@
  * 数据：index.json（站点/栏目目录）+ summary.json（ai_map 徽章与筛选）+ feed/<site>__<col>.json。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadReadSet, readFeed, isPruned, loadModules } from './data'
+import { readCloudJson, loadReadSet, readFeed, isPruned, loadModules, loadSiteDirectory, siteBaseUrl } from './data'
 import { Empty } from './empty'
 import { Ic } from './icons'
 
@@ -39,7 +39,7 @@ export function ColumnView(props: {
   const { site, column, siteName, columnName, onBack, onOpenArticle, onOpenColumn } = props
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
   const [summary, setSummary] = useState<any>(null)
-  const [indexJson, setIndexJson] = useState<any>(null)
+  const [sitePending, setSitePending] = useState(false)
   const [rows, setRows] = useState<Row[]>([])
   const [tag, setTag] = useState('全部')
   const [readSet, setReadSet] = useState<string[]>(() => loadReadSet())
@@ -55,22 +55,21 @@ export function ColumnView(props: {
     }
     setErrMsg('')
     setPhase('loading')
-    const [idx, sum] = await Promise.all([readCloudJson('data/index.json'), readCloudJson('data/summary.json')])
-    setIndexJson(idx)
+    // 站点目录（sites.json 配置 + index.json 数据）：站点/栏目中文名与「尚未抓取」判断都用它，
+    // 这样刚接入还没抓到的来源点进来也能显示正确的站名，而不是内部 id。
+    const [dir, sum] = await Promise.all([loadSiteDirectory(), readCloudJson('data/summary.json')])
+    const siteDir = (dir || []).find((s: any) => s.id === site)
     setSummary(sum)
-    // 从 index 推导站点/栏目中文名（shell 不传原名时用）
-    if (idx) {
-      const siteDir = (idx.sites || []).find((s: any) => s.id === site)
-      const sn = siteDir?.name || siteName || site
-      setSiteLabel(sn)
-      const cn = column ? siteDir?.columns?.find((c: any) => c.key === column)?.name || columnName || '' : ''
+    setSitePending(!!siteDir?.pending)
+    if (siteDir) {
+      setSiteLabel(siteDir.name || siteName || site)
+      const cn = column ? siteDir.columns?.find((c: any) => c.key === column)?.name || columnName || '' : ''
       setColLabel(cn)
     }
     // 加载 feed（站点视图并发拉取各栏目；单个失败不影响其余）
     const feeds: any[] = []
-    if (!column && idx) {
-      const siteDir = (idx.sites || []).find((s: any) => s.id === site)
-      const cols = siteDir?.columns || []
+    if (!column && siteDir) {
+      const cols = siteDir.columns || []
       const results = await Promise.all(cols.map((c: any) => readFeed(site, c.key)))
       for (const f of results) if (f && Array.isArray(f.items)) feeds.push(f)
     } else {
@@ -169,7 +168,12 @@ export function ColumnView(props: {
           )}
 
           <div className="dsh-cau_list">
-            {visible.length === 0 && <Empty icon={<Ic n="doc" />} main="暂无内容" sub="换个栏目或筛选条件试试" />}
+            {visible.length === 0 &&
+              (sitePending ? (
+                <Empty icon={<Ic n="doc" />} main="尚未抓取" sub="配置已就位，下一轮抓取（≤2 小时）后出现条目" />
+              ) : (
+                <Empty icon={<Ic n="doc" />} main="暂无内容" sub="换个栏目或筛选条件试试" />
+              ))}
             {visible.map((r, i) => {
               const read = r.id && readSet.includes(r.id)
               return (
@@ -197,7 +201,14 @@ export function ColumnView(props: {
 
 function resolveUrl(url: string, siteId: string): string {
   if (/^https?:\/\//i.test(url)) return url
-  const host: Record<string, string> = { clst: 'https://clst.cau.edu.cn', jwc: 'https://jwc.cau.edu.cn', news: 'https://news.cau.edu.cn' }
-  const root = host[siteId]
+  // 优先用「站点目录」里的 baseUrl（新接入的站点也能拼对原文链接），再退回内置 host 表
+  const root = siteBaseUrl(siteId) || HOST_FALLBACK[siteId]
   return root ? root + (url.startsWith('/') ? url : '/' + url) : url
+}
+
+/** 内置兜底 host 表（目录缓存还没建立时用） */
+const HOST_FALLBACK: Record<string, string> = {
+  clst: 'https://clst.cau.edu.cn',
+  jwc: 'https://jwc.cau.edu.cn',
+  news: 'https://news.cau.edu.cn',
 }

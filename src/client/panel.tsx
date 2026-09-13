@@ -25,6 +25,10 @@ import {
   setDeadlineOp,
   activeTokenValues,
   loadModules,
+  loadChannels,
+  siteShown,
+  siteOfItem,
+  loadSiteDirectory,
 } from './data'
 import { getOpenRequest, clearOpenRequest, subscribeBus } from './bus'
 
@@ -69,17 +73,29 @@ async function tryJson(rel: string, token: string) {
 
 async function loadBundle(token: string): Promise<Loaded> {
   if (bundleCache && Date.now() - bundleCache.ts < CACHE_MS) return bundleCache
-  const [idx, sum] = await Promise.all([tryJson('data/index.json', token), tryJson('data/summary.json', token)])
+  const [idx, sum] = await Promise.all([
+    tryJson('data/index.json', token),
+    tryJson('data/summary.json', token),
+    // 顺带刷新「站点目录」缓存（sites.json 配置 + index.json 数据）：
+    // siteOfItem 是同步函数，靠这份缓存才认得出新接入站点的条目归属（未读计数口径依赖它）
+    loadSiteDirectory().catch(() => []),
+  ])
   const bundle: Loaded = { ts: Date.now(), index: idx.ok ? idx.data : null, summary: sum.ok ? sum.data : null }
   bundleCache = bundle
   return bundle
 }
 
-/** 未读候选：summary.important 中（门户模块开关关闭时排除门户条目；已归档的不计未读） */
+/**
+ * 未读候选：summary.important 中（门户模块开关关闭时排除门户条目；已归档的不计未读；
+ * 被「栏目频道管理」关掉的站点也不计——与首页「要闻」同一口径，避免计数与列表对不上）
+ */
 function unreadCandidates(summary: any): any[] {
   const list = (summary?.important || []) as any[]
   const ops = loadDeadlineOps()
-  const active = list.filter((it: any) => ops[it.article_id || it.url] !== 'archive')
+  const channels = loadChannels()
+  const active = list.filter(
+    (it: any) => ops[it.article_id || it.url] !== 'archive' && siteShown(channels, siteOfItem(it)),
+  )
   if (loadModules().portal) return active
   return active.filter((it: any) => !/tp_up/.test(String(it.url || '')))
 }
@@ -269,6 +285,18 @@ export function CauPanel(props: {
     void loadHead()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /** 从设置页返回首页时重算未读：设置里的「栏目频道管理」可能改了「要闻」的过滤口径，
+   *  否则底栏计数会和列表对不上（首次挂载已由上面的 effect 处理，跳过第一轮）。 */
+  const firstSettingsPass = useRef(true)
+  useEffect(() => {
+    if (firstSettingsPass.current) {
+      firstSettingsPass.current = false
+      return
+    }
+    if (!showSettings) void loadHead()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSettings])
 
   /** ⟳ 强制刷新：清 60s 缓存 → 重拉状态栏 → 重挂载当前视图（各视图自行重取数据） */
   const refresh = async () => {
@@ -607,12 +635,16 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_badgeLow{color:var(--cau-ink3);background:var(--cau-fill)}
 .dsh-cau_colGroup{margin-bottom:10px}
 .dsh-cau_colGroup:last-child{margin-bottom:0}
+/* 校内平台与其余来源的细微分隔（首页栏目频道） */
+.dsh-cau_colGroupSplit{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--cau-line-soft)}
+.dsh-cau_newsMuted{display:flex;align-items:center;justify-content:center;gap:2px;padding:7px 8px 3px;margin-top:6px;border-top:1px solid var(--cau-line-soft);font-size:11px;color:var(--cau-ink3)}
 .dsh-cau_colSiteBtn{display:block;width:100%;padding:5px 8px;border:none;border-radius:var(--cau-r-s);background:transparent;text-align:left;font-size:13px;font-weight:500;color:var(--cau-ink);cursor:pointer}
 .dsh-cau_colSiteBtn:hover{background:var(--cau-hover)}
 .dsh-cau_colSiteBtn.dsh-cau_dis{color:var(--cau-ink3);cursor:default}
 .dsh-cau_colSiteBtn.dsh-cau_dis:hover{background:transparent}
 .dsh-cau_disTag{display:inline-flex;align-items:center;margin-left:6px;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--cau-warn) 16%,transparent);color:var(--cau-warn);font-size:11px;font-weight:500}
 .dsh-cau_colChips{display:flex;flex-wrap:wrap;gap:6px;padding-left:8px}
+.dsh-cau_colPending{padding:4px 0 0 8px;font-size:11px;color:var(--cau-ink3)}
 .dsh-cau_chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--cau-line-soft);border-radius:999px;font-size:12px;color:var(--cau-ink2);cursor:default;background:transparent}
 .dsh-cau_chipBtn{cursor:pointer}
 .dsh-cau_chipBtn:hover{border-color:var(--cau-brand-a35);color:var(--cau-brand);background:var(--cau-brand-a6)}

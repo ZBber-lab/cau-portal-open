@@ -15,6 +15,12 @@ import {
   setDeadlineOp,
   isPruned,
   loadModules,
+  loadChannels,
+  siteShown,
+  columnShown,
+  siteOfItem,
+  loadSiteDirectory,
+  type DirSite,
   loadMine,
   removeMine,
   updateMine,
@@ -51,7 +57,8 @@ export function HomeView(props: {
 }) {
   const { onOpenColumn, onOpenArticle, onViewArchive, onViewFollow, onViewDeadlines, onReadChange } = props
   const [phase, setPhase] = useState<'loading' | 'maybe-token' | 'error' | 'ready'>('loading')
-  const [indexJson, setIndexJson] = useState<any>(null)
+  /** 站点目录（sites.json 配置 + index.json 数据合并）——「栏目频道」的清单来源 */
+  const [dir, setDir] = useState<DirSite[]>([])
   const [summary, setSummary] = useState<any>(null)
   const [readSet, setReadSet] = useState<string[]>(() => loadReadSet())
   const [follow, setFollow] = useState<any[]>(() => loadFollow())
@@ -72,16 +79,22 @@ export function HomeView(props: {
   }
   const [needToken, setNeedToken] = useState(false)
   const mods = useMemo(() => loadModules(), [])
+  /** 栏目频道订阅（设置 → 栏目频道管理）；黑名单语义，缺省全开 */
+  const channels = useMemo(() => loadChannels(), [])
 
   const load = async () => {
     setPhase('loading')
-    const [idx, sum] = await Promise.all([readCloudJson('data/index.json'), readCloudJson('data/summary.json')])
+    const [idx, sum, directory] = await Promise.all([
+      readCloudJson('data/index.json'),
+      readCloudJson('data/summary.json'),
+      loadSiteDirectory(),
+    ])
+    setDir(Array.isArray(directory) ? directory : [])
     if (!idx && !sum) {
       setNeedToken(true)
       setPhase('maybe-token')
       return
     }
-    setIndexJson(idx)
     setSummary(sum)
     migrateMineFromPin()
     setMine(loadMine())
@@ -92,13 +105,36 @@ export function HomeView(props: {
     void load()
   }, [])
 
-  const important = useMemo(
+  /** 全部重要条目（已排除被清理/归档的） */
+  const importantAll = useMemo(
     () =>
       (summary?.important || []).filter(
         (it: any) => !isPruned(it.article_id || it.url) && ops[it.article_id || it.url] !== 'archive',
       ),
     [summary, ops],
   )
+
+  /**
+   * 要闻口径：被「栏目频道管理」关掉的站点，其条目不再进「要闻」「今日要览」与未读计数。
+   * 只影响首页呈现——数据照抓、AI 照加工、待办/关注/归档与 MCP 查询都不受影响。
+   * 依赖 dir：站点目录（含各站 baseUrl）加载完成后要重算一次，否则新接入站点的归属认不出来。
+   */
+  const important = useMemo(
+    () => importantAll.filter((it: any) => siteShown(channels, siteOfItem(it))),
+    [importantAll, channels, dir],
+  )
+
+  /** 被关掉的站点个数（用于给要闻区一句解释） */
+  const hiddenSiteCount = useMemo(() => {
+    const ids = dir.map((s: DirSite) => s.id).filter((id: string) => id !== 'portal')
+    return ids.filter((id: string) => !siteShown(channels, id)).length
+  }, [dir, channels])
+
+  /** 首页「栏目频道」可见站点：订阅开关过滤；清单来自站点目录（配置驱动）
+   *  → 刚添加、还没抓到的来源也会出现（标「尚未抓取」）；校内平台在开源版标「不可用」并禁用 */
+  const channelSites = useMemo(() => dir.filter((s: DirSite) => siteShown(channels, s.id)), [dir, channels])
+  const portalSite = channelSites.find((s: any) => s.id === 'portal') || null
+  const otherSites = channelSites.filter((s: any) => s.id !== 'portal')
 
   /** 要闻分块：其他来源；各限 8 条，归档一条自动补一条 */
   const isPortalIt = (it: any) => /tp_up/.test(String(it.url || ''))
@@ -133,12 +169,7 @@ export function HomeView(props: {
   // ---------- 今日要览（主动察觉层：高重要新进 · 3天内截止 · 关注规则命中） ----------
   const watchRules = useMemo(() => loadRules().filter((r) => r.enabled), [])
   const overview = useMemo(() => {
-    const imp = (summary?.important || []).filter(
-      (it: any) =>
-        !isPruned(it.article_id || it.url) &&
-        ops[it.article_id || it.url] !== 'archive' &&
-        (mods.portal || !isPortalIt(it)),
-    )
+    const imp = important.filter((it: any) => mods.portal || !isPortalIt(it))
     const cut = Date.now() - 3 * 86400000
     const recentOk = (t: any) => {
       const x = Date.parse(String(t || ''))
@@ -154,7 +185,7 @@ export function HomeView(props: {
       .filter((v: any, i: number, arr: any[]) => arr.findIndex((x) => (x.article_id || x.url) === (v.article_id || v.url)) === i)
       .slice(0, 3)
     return { high: high.length, due: dueSoon.length, hits: hits.length, top }
-  }, [summary, watchRules, ops, mods.portal])
+  }, [summary, important, watchRules, mods.portal])
 
   const archiveCount = useMemo(
     () => (summary?.deadlines || []).filter((d: DeadlineItem) => ops[d.article_id || d.url] === 'archive').length,
@@ -214,6 +245,41 @@ export function HomeView(props: {
             <Ic n="archive" />
           </button>
         </span>
+      </div>
+    )
+  }
+
+  /**
+   * 栏目频道分组（学院 / 教务处 / 校新闻网共用）。
+   * split=true 时在底部加一条细分割线——校内平台与其余来源在首页要有一点点视觉分隔；
+   * 开源版不提供统一门户（校内平台），该行渲染为禁用 +「不可用」标签。
+   * 新添加、还没抓到的来源：栏目名照显（来自 sites.json），但不显示条目数，另加一句「尚未抓取」。
+   */
+  const colGroup = (site: any, split?: boolean) => {
+    const off = site.id === 'portal'
+    return (
+      <div className={'dsh-cau_colGroup' + (split ? ' dsh-cau_colGroupSplit' : '')} key={site.id}>
+        <button
+          type="button"
+          className={'dsh-cau_colSiteBtn' + (off ? ' dsh-cau_dis' : '')}
+          disabled={off}
+          onClick={() => !off && onOpenColumn(site.id, null)}
+        >
+          {site.name} ›{off && <span className="dsh-cau_disTag">不可用</span>}
+        </button>
+        {!off && (
+          <div className="dsh-cau_colChips">
+            {(site.columns || [])
+              .filter((c: any) => columnShown(channels, site.id, c.key))
+              .map((c: any) => (
+                <button key={c.key} type="button" className="dsh-cau_chip dsh-cau_chipBtn" onClick={() => onOpenColumn(site.id, c.key)}>
+                  {c.name}
+                  {typeof c.items === 'number' && c.items > 0 && <em className="dsh-cau_chipCount">{c.items}</em>}
+                </button>
+              ))}
+          </div>
+        )}
+        {!off && site.pending && <div className="dsh-cau_colPending">尚未抓取 · 下一轮抓取后出现条目</div>}
       </div>
     )
   }
@@ -497,6 +563,9 @@ export function HomeView(props: {
               </div>
               {summary && otherNews.length === 0 && <div className="dsh-cau_empty">暂无其他来源重要通知</div>}
               {otherNews.map((it: any, i: number) => newsRow(it, i, otherNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
+              {hiddenSiteCount > 0 && (
+                <div className="dsh-cau_newsMuted">已在「设置 → 栏目频道管理」中关闭 {hiddenSiteCount} 个来源</div>
+              )}
             </div>
           </div>
 
@@ -543,26 +612,15 @@ export function HomeView(props: {
               </span>
               <span className="dsh-cau_secLine" />
             </div>
-            {(indexJson?.sites || []).map((site: any) => {
-              const off = site.id === 'portal'
-              return (
-                <div className="dsh-cau_colGroup" key={site.id}>
-                  <button type="button" className={'dsh-cau_colSiteBtn' + (off ? ' dsh-cau_dis' : '')} disabled={off} onClick={() => !off && onOpenColumn(site.id, null)}>
-                    {site.name} ›{off && <span className="dsh-cau_disTag">不可用</span>}
-                  </button>
-                  {!off && (
-                    <div className="dsh-cau_colChips">
-                      {(site.columns || []).map((c: any) => (
-                        <button key={c.key} type="button" className="dsh-cau_chip dsh-cau_chipBtn" onClick={() => onOpenColumn(site.id, c.key)}>
-                          {c.name}
-                          {typeof c.items === 'number' && <em className="dsh-cau_chipCount">{c.items}</em>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            {portalSite && colGroup(portalSite, true)}
+            {otherSites.map((site: any) => colGroup(site))}
+            {channelSites.length === 0 && (
+              <Empty
+                icon={<Ic n="books" />}
+                main="所有来源都已关闭"
+                sub="到「设置 → 栏目频道管理」把要看的栏目重新打开即可，数据一直都在"
+              />
+            )}
           </div>
 
           {/* 快捷入口 */}

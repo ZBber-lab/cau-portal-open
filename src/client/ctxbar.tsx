@@ -3,9 +3,20 @@
  * 面板打开文章时（bus.setAttached）自动在输入框上方显示「📄《标题》· 来源 ×」条，
  * 并按 autoAttach 设置在输入草稿注入标记行 `〔cau:article:<id>〕《标题》`，
  * 用户正常提问发送即可让 AI 经 mcp__cau__get_article 读全文作答；× 移除标记。
+ * 另：本组件是唯一持有 dock `inputActions` 的地方，故也负责消费总线上的「填入聊天框」请求
+ * （设置页「添加栏目」→ 把一段请求填进主输入框，只填不发送）。
  */
 import { Component, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { getAttached, removeAttached, clearAttached, subscribeAttached } from './bus'
+import {
+  getAttached,
+  removeAttached,
+  clearAttached,
+  subscribeAttached,
+  getDraftRequest,
+  clearDraftRequest,
+  ackDraftRequest,
+  subscribeBus,
+} from './bus'
 
 const MARKER_RE = /〔cau:article:[^〕]*〕[^\n]*\n?/g
 
@@ -58,6 +69,28 @@ export function CtxBar(props: any) {
       setTip('')
     }
   }, [attached])
+
+  // 外部「填入聊天框」请求（设置页「添加栏目」等）：只填不发送；已有草稿则接在后面
+  const lastDraftSeq = useRef(0)
+  useEffect(() => {
+    if (!inputActions || typeof inputActions.setDraft !== 'function') return
+    const consume = () => {
+      const req = getDraftRequest()
+      if (!req || !req.text || req.seq <= lastDraftSeq.current) return
+      lastDraftSeq.current = req.seq
+      try {
+        const cur = (draftRef.current || '').trim()
+        inputActions.setDraft(cur ? cur + '\n\n' + req.text : req.text)
+      } catch (e) {
+        console.error('[cau-portal ctxbar] fill draft', e)
+      }
+      ackDraftRequest(req.seq)
+      clearDraftRequest()
+    }
+    consume()
+    return subscribeBus(consume)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputActions])
 
   // 发送时自动附带引用标记（输入框平时干净；消息带上引用、AI 自动读取）
   useEffect(() => {

@@ -236,6 +236,161 @@ export function saveModules(m: Record<ModuleKey, boolean>) {
   }
 }
 
+// ---- 栏目频道订阅（设置页「栏目频道管理」；键 dsh.cau-portal.channels.v1）----
+// 语义 = **黑名单**：只有被显式关掉（false）的站点/栏目才隐藏，未记录的一律视为开启。
+// 站点清单来自「站点目录」（见下：sites.json 配置 + index.json 数据），配置一推送就可见，
+// 因此新接入的站点默认就是显示的，不需要用户手动打开，做到「添加即生效」。
+// columns 目前未启用（本次只做站点级），但格式先留好，将来细化到栏目级不用改存储格式。
+
+export type ChannelConfig = { version: number; sites: Record<string, boolean>; columns: Record<string, boolean> }
+
+const CHANNELS_KEY = 'dsh.cau-portal.channels.v1'
+
+export const DEFAULT_CHANNELS: ChannelConfig = { version: 1, sites: {}, columns: {} }
+
+export function loadChannels(): ChannelConfig {
+  try {
+    const v = JSON.parse(localStorage.getItem(CHANNELS_KEY) || '{}')
+    if (v && typeof v === 'object') {
+      return {
+        version: 1,
+        sites: v.sites && typeof v.sites === 'object' ? v.sites : {},
+        columns: v.columns && typeof v.columns === 'object' ? v.columns : {},
+      }
+    }
+  } catch {
+    /* 静默：损坏则回退全开 */
+  }
+  return { version: 1, sites: {}, columns: {} }
+}
+
+export function saveChannels(c: ChannelConfig) {
+  try {
+    localStorage.setItem(CHANNELS_KEY, JSON.stringify({ version: 1, sites: c?.sites || {}, columns: c?.columns || {} }))
+  } catch {
+    /* 静默 */
+  }
+}
+
+/** 站点是否显示：只有显式 false 才隐藏 */
+export function siteShown(c: ChannelConfig | null | undefined, siteId: string): boolean {
+  if (!siteId) return true
+  return c?.sites?.[siteId] !== false
+}
+
+/** 栏目是否显示：站点开关优先，再看栏目级（本次未开放栏目级 UI，预留） */
+export function columnShown(c: ChannelConfig | null | undefined, siteId: string, columnKey: string): boolean {
+  if (!siteShown(c, siteId)) return false
+  if (!columnKey) return true
+  return c?.columns?.[`${siteId}:${columnKey}`] !== false
+}
+
+/**
+ * 从一个条目（summary.important / deadlines 的元素）推断它属于哪个站点 id。
+ * **先按「站点目录」里的 baseUrl host 匹配** —— 这样「添加栏目」新接入的站点也认得出来
+ * （否则新站点条目的 siteOfItem 恒为 ''，用户在「栏目频道管理」里把它关掉会关不掉）；
+ * 再退回内置 host 表（目录缓存还没建立时兜底）。认不出来时返回 ''（调用方按「显示」处理）。
+ */
+export function siteOfItem(it: any): string {
+  const url = String(it?.url || '')
+  if (!url) return ''
+  if (/tp_up|one\.cau\.edu\.cn/.test(url)) return 'portal'
+  for (const s of loadSiteDirCache()) {
+    const h = hostOf(s.baseUrl)
+    if (h && url.includes(h)) return s.id
+  }
+  if (/clst\.cau\.edu\.cn/.test(url)) return 'clst'
+  if (/jwc\.cau\.edu\.cn/.test(url)) return 'jwc'
+  if (/news\.cau\.edu\.cn/.test(url)) return 'news'
+  return ''
+}
+
+// ---- 站点目录（**配置驱动**）----
+// 首页「栏目频道」、设置「栏目频道管理」、栏目页的站点清单**以仓库 `sites.json` 为权威**，
+// `data/index.json` 只用来补条目数。原因（2026-09-13 用户指出）：index.json 由 Actions 抓完才算出来，
+// 若清单取自它，新来源要等下一轮抓取（≤2h）才出现；而「添加」这个动作本身已经说明来源存在了。
+// 因此配置一推送（sites.json），来源与它的栏目就应立刻可见（标「尚未抓取」），抓完再自动补上条目数。
+// 目录会缓存到 localStorage，供 siteOfItem / 原文链接等**同步**场景使用（云端读取是异步的）。
+// sites.json 读不到（如数据仓与代码仓分离）时退回纯 index.json，行为与旧版一致，不会变空白。
+
+export type DirColumn = { key: string; name: string; items: number; latest_date: string | null; pending: boolean }
+export type DirSite = { id: string; name: string; baseUrl: string; columns: DirColumn[]; items: number; pending: boolean }
+
+const SITEDIR_KEY = 'dsh.cau-portal.sitedir.v1'
+
+/** 站点目录缓存（同步可读；未建立时返回空数组） */
+export function loadSiteDirCache(): DirSite[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(SITEDIR_KEY) || '[]')
+    return Array.isArray(v) ? (v as DirSite[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveSiteDirCache(list: DirSite[]) {
+  try {
+    localStorage.setItem(SITEDIR_KEY, JSON.stringify(list))
+  } catch {
+    /* 静默 */
+  }
+}
+
+function hostOf(baseUrl: string): string {
+  try {
+    return new URL(String(baseUrl)).hostname
+  } catch {
+    return ''
+  }
+}
+
+/** 站点 id → baseUrl（用于把 feed 里的相对路径拼成原文链接；目录里查不到返回空） */
+export function siteBaseUrl(siteId: string): string {
+  return loadSiteDirCache().find((s) => s.id === siteId)?.baseUrl || ''
+}
+
+function mergeDirSite(id: string, name: string, baseUrl: string, cfgColumns: any, data: any): DirSite {
+  const dataCols: any[] = Array.isArray(data?.columns) ? data.columns : []
+  const byKey = new Map<string, any>(dataCols.map((c: any) => [c.key, c]))
+  const columns: DirColumn[] = []
+  for (const c of Array.isArray(cfgColumns) ? cfgColumns : []) {
+    if (!c?.key) continue
+    const hit = byKey.get(c.key)
+    columns.push({
+      key: c.key,
+      name: c.name || hit?.name || c.key,
+      items: typeof hit?.items === 'number' ? hit.items : 0,
+      latest_date: hit?.latest_date ?? null,
+      pending: !hit,
+    })
+  }
+  // 数据里有、配置里没有的栏目（门户等由后端注入）也补上
+  for (const c of dataCols) {
+    if (!c?.key || columns.some((x) => x.key === c.key)) continue
+    columns.push({ key: c.key, name: c.name || c.key, items: c.items ?? 0, latest_date: c.latest_date ?? null, pending: false })
+  }
+  const items = columns.reduce((n, c) => n + (c.items || 0), 0)
+  return { id, name: name || data?.name || id, baseUrl: baseUrl || '', columns, items, pending: items === 0 }
+}
+
+/** 读云端站点目录（sites.json 配置 + index.json 数据合并）；成功后刷新本地缓存 */
+export async function loadSiteDirectory(): Promise<DirSite[]> {
+  const [cfg, idx] = await Promise.all([readCloudJson('sites.json'), readCloudJson('data/index.json')])
+  const cfgSites: any[] = Array.isArray(cfg?.sites) ? cfg.sites : []
+  const dataSites: any[] = Array.isArray(idx?.sites) ? idx.sites : []
+  const byId = new Map<string, any>(dataSites.map((s: any) => [s.id, s]))
+  const out: DirSite[] = []
+  for (const s of cfgSites) {
+    if (!s?.id) continue
+    out.push(mergeDirSite(s.id, s.name, s.baseUrl, s.columns, byId.get(s.id)))
+  }
+  const seen = new Set(out.map((s) => s.id))
+  for (const d of dataSites) if (d?.id && !seen.has(d.id)) out.push(mergeDirSite(d.id, d.name, '', null, d))
+  // 只有拿到配置（或本来没有缓存）时才覆盖缓存 —— 避免用「无 baseUrl 的退化目录」冲掉好数据
+  if (out.length && (cfgSites.length || !loadSiteDirCache().length)) saveSiteDirCache(out)
+  return out
+}
+
 // ---- 令牌登记（设置页令牌管理；键 dsh.cau-portal.tokens.v1，兼容旧 githubToken/keyExpiries）----
 
 export type TokenRecord = {
