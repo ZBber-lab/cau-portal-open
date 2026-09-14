@@ -314,7 +314,16 @@ export function siteOfItem(it: any): string {
 // sites.json 读不到（如数据仓与代码仓分离）时退回纯 index.json，行为与旧版一致，不会变空白。
 
 export type DirColumn = { key: string; name: string; items: number; latest_date: string | null; pending: boolean }
-export type DirSite = { id: string; name: string; baseUrl: string; columns: DirColumn[]; items: number; pending: boolean }
+/**
+ * 来源分组（2026-09-14 用户拍板）：校内平台（统一门户）/ 校内其他（农大各站）/ 校外来源（浙大、北大等）。
+ * 分组写在 `sites.json` 的站点上（`group`），**缺省 = campus** —— 新接入的农大来源不用额外填；
+ * 外校来源在接入时显式写 `"group": "external"`（「添加栏目」skill 里有这一步）。
+ */
+export type SiteGroup = 'portal' | 'campus' | 'external'
+export type DirSite = { id: string; name: string; baseUrl: string; columns: DirColumn[]; items: number; pending: boolean; group?: SiteGroup }
+
+export const GROUP_ORDER: SiteGroup[] = ['portal', 'campus', 'external']
+export const GROUP_LABEL: Record<SiteGroup, string> = { portal: '校内平台', campus: '校内其他', external: '校外来源' }
 
 const SITEDIR_KEY = 'dsh.cau-portal.sitedir.v1'
 
@@ -349,7 +358,26 @@ export function siteBaseUrl(siteId: string): string {
   return loadSiteDirCache().find((s) => s.id === siteId)?.baseUrl || ''
 }
 
-function mergeDirSite(id: string, name: string, baseUrl: string, cfgColumns: any, data: any): DirSite {
+/** 站点 id → 分组；目录里没有或没写 group 的一律按「校内其他」 */
+export function siteGroupOf(siteId: string): SiteGroup {
+  if (siteId === 'portal') return 'portal'
+  const g = siteId ? loadSiteDirCache().find((s) => s.id === siteId)?.group : undefined
+  return g === 'external' ? 'external' : g === 'portal' ? 'portal' : 'campus'
+}
+
+/** 条目 → 分组（门户条目按 URL 认；其余按站点目录的 group） */
+export function groupOfItem(it: any): SiteGroup {
+  const url = String(it?.url || '')
+  if (/tp_up|one\.cau\.edu\.cn/.test(url)) return 'portal'
+  const sid = siteOfItem(it)
+  if (sid) return siteGroupOf(sid)
+  // 认不出站点（目录缓存还没建立 / 跨站跳转的条目）：农大域名按本校算，其余按「校外来源」——
+  // 宁可把认不出的归到校外，也不要让它们冒充本校通知挤进首页（2026-09-14 用户关注点）
+  if (!url) return 'campus'
+  return /(^|\.)cau\.edu\.cn/i.test(url) ? 'campus' : 'external'
+}
+
+function mergeDirSite(id: string, name: string, baseUrl: string, cfgColumns: any, data: any, group?: SiteGroup): DirSite {
   const dataCols: any[] = Array.isArray(data?.columns) ? data.columns : []
   const byKey = new Map<string, any>(dataCols.map((c: any) => [c.key, c]))
   const columns: DirColumn[] = []
@@ -370,7 +398,7 @@ function mergeDirSite(id: string, name: string, baseUrl: string, cfgColumns: any
     columns.push({ key: c.key, name: c.name || c.key, items: c.items ?? 0, latest_date: c.latest_date ?? null, pending: false })
   }
   const items = columns.reduce((n, c) => n + (c.items || 0), 0)
-  return { id, name: name || data?.name || id, baseUrl: baseUrl || '', columns, items, pending: items === 0 }
+  return { id, name: name || data?.name || id, baseUrl: baseUrl || '', columns, items, pending: items === 0, ...(group ? { group } : {}) }
 }
 
 /** 读云端站点目录（sites.json 配置 + index.json 数据合并）；成功后刷新本地缓存 */
@@ -382,7 +410,8 @@ export async function loadSiteDirectory(): Promise<DirSite[]> {
   const out: DirSite[] = []
   for (const s of cfgSites) {
     if (!s?.id) continue
-    out.push(mergeDirSite(s.id, s.name, s.baseUrl, s.columns, byId.get(s.id)))
+    const g = s.group === 'external' ? 'external' : s.group === 'portal' ? 'portal' : s.group === 'campus' ? 'campus' : undefined
+    out.push(mergeDirSite(s.id, s.name, s.baseUrl, s.columns, byId.get(s.id), g as SiteGroup | undefined))
   }
   const seen = new Set(out.map((s) => s.id))
   for (const d of dataSites) if (d?.id && !seen.has(d.id)) out.push(mergeDirSite(d.id, d.name, '', null, d))

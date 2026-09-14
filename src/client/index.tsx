@@ -218,7 +218,7 @@ export function apply(ctx: any) {
         for (const a of alerts) {
           seen.add(a.id)
           try {
-            new Notification(`农大门户 · ${a.rule_hit ? '🎯 关注命中' : '高重要'}：${String(a.title || '').slice(0, 42)}`, {
+            new Notification(`农大门户 · ${a.rule_hit ? '关注命中' : '高重要'}：${String(a.title || '').slice(0, 42)}`, {
               body: [a.column, a.source, a.time ? String(a.time).slice(0, 10) : '', a.summary ? String(a.summary).slice(0, 90) : '']
                 .filter(Boolean)
                 .join(' · '),

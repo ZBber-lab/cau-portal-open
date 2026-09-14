@@ -8,6 +8,7 @@
 import { Component, useEffect, useRef, useState } from 'react'
 import { Ic } from './icons'
 import { HomeView } from './panel-home'
+import { NewsView } from './panel-news'
 import { ColumnView } from './panel-column'
 import { ArticleView } from './panel-article'
 import { ManageView } from './panel-manage'
@@ -56,6 +57,9 @@ type View =
   | { name: 'article'; id: string; back: View; siteName?: string; columnName?: string; siblings?: { id: string; title: string }[]; index?: number }
   | { name: 'archive' }
   | { name: 'follow' }
+  | { name: 'news' }
+  | { name: 'manage' }
+  | { name: 'deadlines' }
 
 // ---- 数据装载（内存缓存 60s，避免反复请求）----
 type Loaded = { ts: number; index: any; summary: any }
@@ -422,9 +426,10 @@ export function CauPanel(props: {
                 onViewArchive={() => setStack((s) => [...s, { name: 'archive' }])}
                 onViewFollow={() => setStack((s) => [...s, { name: 'follow' }])}
                 onViewDeadlines={() => setStack((s) => [...s, { name: 'deadlines' }])}
-                onReadChange={recountUnread}
+                onViewNews={() => setStack((s) => [...s, { name: 'news' }])}
               />
             )}
+            {view.name === 'news' && <NewsView onBack={back} onOpenArticle={(id) => openArticle(id)} onReadChange={recountUnread} />}
             {view.name === 'site' && (
               <ColumnView site={view.site} onBack={back} onOpenArticle={(id, sibs, idx) => openArticle(id, undefined, undefined, sibs, idx)} onOpenColumn={openColumn} />
             )}
@@ -637,6 +642,44 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_colGroup:last-child{margin-bottom:0}
 /* 校内平台与其余来源的细微分隔（首页栏目频道） */
 .dsh-cau_colGroupSplit{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--cau-line-soft)}
+/* 今日要览里的「校外」标记（外校条目保留参与，只做标记） */
+.dsh-cau_ovTag{flex:none;font-size:10px;line-height:14px;padding:0 5px;border-radius:999px;background:var(--cau-fill);color:var(--cau-ink3);border:1px solid var(--cau-line-soft)}
+/* ---- 首页「要闻」入口卡（2026-09-14：用户要求入口大一点、好看一点）---- */
+.dsh-cau_newsEntry{position:relative;display:flex;align-items:center;gap:11px;width:100%;padding:12px 12px 12px 16px;border:1px solid var(--cau-line-soft);border-radius:var(--cau-r-m);background:color-mix(in srgb,var(--dsw-specific-menu,#fff) 30%,transparent);box-shadow:0 1px 2px rgba(10,15,22,.03);cursor:pointer;text-align:left;overflow:hidden;font:inherit;color:inherit}
+.dsh-cau_newsEntry::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--cau-brand),var(--cau-brand-a35))}
+.dsh-cau_newsEntry:hover{border-color:var(--cau-brand-a35);background:var(--cau-brand-a6)}
+.dsh-cau_newsEntry:active{transform:translateY(1px)}
+.dsh-cau_newsEntryIcon{flex:none;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;background:var(--cau-brand-a12);color:var(--cau-brand)}
+.dsh-cau_newsEntryIcon svg{width:17px;height:17px}
+.dsh-cau_newsEntryBody{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.dsh-cau_newsEntryTop{display:flex;align-items:baseline;gap:7px}
+.dsh-cau_newsEntryTitle{font-size:13.5px;font-weight:600;letter-spacing:.02em;color:var(--cau-ink)}
+.dsh-cau_newsEntryCount{font-size:11px;color:var(--cau-ink3)}
+.dsh-cau_newsEntryMeta{display:flex;flex-wrap:wrap;gap:5px}
+.dsh-cau_newsChip{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:999px;background:var(--cau-fill);font-size:11px;line-height:16px;color:var(--cau-ink2)}
+.dsh-cau_newsChip svg{width:10px;height:10px;opacity:.8}
+.dsh-cau_newsChipExt{color:var(--cau-ink3)}
+.dsh-cau_newsEntryArrow{flex:none;display:flex;align-items:center;color:var(--cau-ink3);opacity:.75}
+.dsh-cau_newsEntryArrow svg{width:14px;height:14px}
+/* ---- 要闻二级页的来源分栏（2026-09-14 用户改定：上方三栏、点哪个显示哪个；不用胶囊、不加图标）---- */
+.dsh-cau_tabs{display:flex;align-items:stretch;border-bottom:1px solid var(--cau-line-soft)}
+.dsh-cau_tab{position:relative;flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:7px 10px 9px;border:none;background:transparent;font:inherit;text-align:left;cursor:pointer;color:var(--cau-ink2)}
+.dsh-cau_tab:hover{background:var(--cau-hover);color:var(--cau-ink)}
+.dsh-cau_tab+.dsh-cau_tab{border-left:1px solid var(--cau-line-soft)}
+.dsh-cau_tabLabel{font-size:13px;font-weight:500;letter-spacing:.02em}
+.dsh-cau_tabCount{font-size:11px;color:var(--cau-ink3)}
+.dsh-cau_tabOn{color:var(--cau-ink)}
+.dsh-cau_tabOn .dsh-cau_tabLabel{font-weight:600}
+.dsh-cau_tabOn::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--cau-brand)}
+.dsh-cau_tabNote{padding:8px 2px 9px;font-size:11px;line-height:16px;color:var(--cau-ink3)}
+/* 栏目频道来源分组（校内平台 / 校内其他 / 校外来源） */
+.dsh-cau_group{margin-top:16px}
+.dsh-cau_group:last-child{margin-bottom:0}
+.dsh-cau_groupHead{display:flex;align-items:center;gap:7px;margin-bottom:7px;padding:0 2px}
+.dsh-cau_groupIcon{flex:none;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:7px;background:var(--cau-brand-a12);color:var(--cau-brand)}
+.dsh-cau_groupIcon svg{width:12px;height:12px}
+.dsh-cau_groupTitle{flex:none;font-size:12px;font-weight:600;letter-spacing:.05em;color:var(--cau-ink)}
+.dsh-cau_groupHead em{flex:none;font-style:normal;font-size:11px;color:var(--cau-ink3)}
 .dsh-cau_newsMuted{display:flex;align-items:center;justify-content:center;gap:2px;padding:7px 8px 3px;margin-top:6px;border-top:1px solid var(--cau-line-soft);font-size:11px;color:var(--cau-ink3)}
 .dsh-cau_colSiteBtn{display:block;width:100%;padding:5px 8px;border:none;border-radius:var(--cau-r-s);background:transparent;text-align:left;font-size:13px;font-weight:500;color:var(--cau-ink);cursor:pointer}
 .dsh-cau_colSiteBtn:hover{background:var(--cau-hover)}

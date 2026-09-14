@@ -7,12 +7,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   readCloudJson,
-  loadReadSet,
-  markAllRead,
   loadFollow,
   saveFollow,
   loadDeadlineOps,
-  setDeadlineOp,
   isPruned,
   loadModules,
   loadChannels,
@@ -20,6 +17,10 @@ import {
   columnShown,
   siteOfItem,
   loadSiteDirectory,
+  groupOfItem,
+  siteGroupOf,
+  GROUP_LABEL,
+  type SiteGroup,
   type DirSite,
   loadMine,
   removeMine,
@@ -33,19 +34,9 @@ import {
 } from './data'
 import { Empty } from './empty'
 import { Ic } from './icons'
+import { fmtCn } from './news-row'
 
 type DeadlineItem = { item: string; date: string; title: string; article_id?: string; url?: string; column?: string; source?: string; time?: string | null }
-
-function fmtCn(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(iso)
-  return m ? `${+m[2]}月${+m[3]}日` : ''
-}
-
-function ImpBadge({ level }: { level?: string }) {
-  const cls = level === '高' ? 'dsh-cau_badgeHigh' : level === '中' ? 'dsh-cau_badgeMid' : 'dsh-cau_badgeLow'
-  return <span className={`dsh-cau_badge ${cls}`}>{level || '低'}</span>
-}
 
 export function HomeView(props: {
   onOpenColumn: (site: string, column: string | null) => void
@@ -53,14 +44,13 @@ export function HomeView(props: {
   onViewArchive: () => void
   onViewFollow: () => void
   onViewDeadlines: () => void
-  onReadChange?: () => void
+  onViewNews: () => void
 }) {
-  const { onOpenColumn, onOpenArticle, onViewArchive, onViewFollow, onViewDeadlines, onReadChange } = props
+  const { onOpenColumn, onOpenArticle, onViewArchive, onViewFollow, onViewDeadlines, onViewNews } = props
   const [phase, setPhase] = useState<'loading' | 'maybe-token' | 'error' | 'ready'>('loading')
   /** 站点目录（sites.json 配置 + index.json 数据合并）——「栏目频道」的清单来源 */
   const [dir, setDir] = useState<DirSite[]>([])
   const [summary, setSummary] = useState<any>(null)
-  const [readSet, setReadSet] = useState<string[]>(() => loadReadSet())
   const [follow, setFollow] = useState<any[]>(() => loadFollow())
   const [ops, setOps] = useState<Record<string, any>>(() => loadDeadlineOps())
   const [mine, setMine] = useState<Record<string, any>>(() => loadMine())
@@ -124,27 +114,28 @@ export function HomeView(props: {
     [importantAll, channels, dir],
   )
 
-  /** 被关掉的站点个数（用于给要闻区一句解释） */
-  const hiddenSiteCount = useMemo(() => {
-    const ids = dir.map((s: DirSite) => s.id).filter((id: string) => id !== 'portal')
-    return ids.filter((id: string) => !siteShown(channels, id)).length
-  }, [dir, channels])
-
   /** 首页「栏目频道」可见站点：订阅开关过滤；清单来自站点目录（配置驱动）
    *  → 刚添加、还没抓到的来源也会出现（标「尚未抓取」）；校内平台在开源版标「不可用」并禁用 */
   const channelSites = useMemo(() => dir.filter((s: DirSite) => siteShown(channels, s.id)), [dir, channels])
-  const portalSite = channelSites.find((s: any) => s.id === 'portal') || null
-  const otherSites = channelSites.filter((s: any) => s.id !== 'portal')
+  /** 三组来源（校内平台 / 校内其他 / 校外来源）—— 校外来源单独成组，避免挤占本校通知的视线 */
+  const sitesByGroup = useMemo(() => {
+    const out: Record<SiteGroup, DirSite[]> = { portal: [], campus: [], external: [] }
+    for (const s of channelSites) out[siteGroupOf(s.id)].push(s)
+    return out
+  }, [channelSites, dir])
 
-  /** 要闻分块：其他来源；各限 8 条，归档一条自动补一条 */
+  /** 要闻：首页只放一行入口，点进二级页看完整列表（2026-09-14 用户拍板）；这里只算各组条数 */
   const isPortalIt = (it: any) => /tp_up/.test(String(it.url || ''))
-  const portalNews = useMemo(() => (mods.portal ? important.filter(isPortalIt).slice(0, 8) : []), [important, mods.portal])
-  const otherNews = useMemo(() => important.filter((it: any) => !isPortalIt(it)).slice(0, 8), [important])
+  const newsCounts = useMemo(() => {
+    const out: Record<SiteGroup, number> = { portal: 0, campus: 0, external: 0 }
+    for (const it of important) {
+      if (!mods.portal && isPortalIt(it)) continue
+      out[groupOfItem(it)]++
+    }
+    return out
+  }, [important, mods.portal, dir])
+  const newsTotal = newsCounts.portal + newsCounts.campus + newsCounts.external
 
-  const archiveFromNews = (id: string) => {
-    setDeadlineOp(id, 'archive')
-    setOps((prev: any) => ({ ...(prev || {}), [id]: 'archive' }))
-  }
 
   /** 我的事项：精选大卡（标题/日期快照 + 云端 deadline 富集；含已过期） */
   const mineRows = useMemo(() => {
@@ -209,45 +200,10 @@ export function HomeView(props: {
     setFollow(next)
   }
 
-  const allImportantIds = useMemo(() => important.map((it: any) => it.article_id || it.url), [important])
-
-  /** 要闻行（两块共用）：点标题进步详情 / ☆ 关注 / 归档自动补位 */
-  const newsRow = (it: any, i: number, sibs: { id: string; title: string }[]) => {
-    const id = it.article_id || it.url
-    const read = readSet.includes(id)
-    const followed = follow.some((x) => x.id === id)
-    return (
-      <div className="dsh-cau_impRow" key={id}>
-        <span className="dsh-cau_impDot" data-read={read ? '1' : '0'} />
-        <span className="dsh-cau_impMain" onClick={() => openArt(it, sibs, i)}>
-          <span className="dsh-cau_impTop">
-            <span className="dsh-cau_impTitle">{it.title}</span>
-            <ImpBadge level={it.importance} />
-            {matchRules(watchRules, it).length > 0 && (
-              <span className="dsh-cau_impHit" title="命中关注规则">
-                <Ic n="target" />
-              </span>
-            )}
-          </span>
-          {it.summary && <span className="dsh-cau_impSummary">{it.summary}</span>}
-          <span className="dsh-cau_impMeta">{[it.column, it.source, fmtCn(it.time)].filter(Boolean).join(' · ')}</span>
-        </span>
-        <span className="dsh-cau_impActs">
-          <button
-            type="button"
-            className={'dsh-cau_followBtn' + (followed ? ' dsh-cau_on' : '')}
-            title={followed ? '取消关注' : '加入关注'}
-            onClick={() => toggleFollow({ id, title: it.title, url: it.url, time: it.time, source: it.source, column: it.column, importance: it.importance, summary: it.summary })}
-          >
-            <Ic n={followed ? 'starFill' : 'star'} />
-          </button>
-          <button type="button" className="dsh-cau_impArch" title="归档（从此处移除，可在「归档」视图中找回）" onClick={() => archiveFromNews(id)}>
-            <Ic n="archive" />
-          </button>
-        </span>
-      </div>
-    )
-  }
+  /**
+   * 栏目频道分组（校内平台 / 校内其他 / 校外来源共用）。
+   * 新添加、还没抓到的来源：栏目名照显（来自 sites.json），但不显示条目数，另加一句「尚未抓取」。
+   */
 
   /**
    * 栏目频道分组（学院 / 教务处 / 校新闻网共用）。
@@ -338,6 +294,11 @@ export function HomeView(props: {
                   {overview.top.map((it: any) => (
                     <span key={String(it.article_id || it.url)} className="dsh-cau_ovRow" onClick={() => openArt(it, [], 0)}>
                       <em>{it.tag === 'high' ? '高' : <Ic n="target" />}</em>
+                      {groupOfItem(it) === 'external' && (
+                        <span className="dsh-cau_ovTag" title="校外来源（外校，仅供保研等长期关注；与本校通知分开展示）">
+                          校外
+                        </span>
+                      )}
                       <span className="dsh-cau_ovTitleTxt">{it.title}</span>
                       <i>{[it.column, it.source].filter(Boolean).join(' · ')}</i>
                     </span>
@@ -531,7 +492,11 @@ export function HomeView(props: {
             </div>
           )}
 
-          {/* 要闻（一个大框，其他来源；≤8 条，归档自动补位） */}
+          {/*
+            要闻入口（2026-09-14 用户拍板：完整列表移到二级页）。
+            为什么：浙大/北大这类外校来源是为保研关注的，条目一多会把农大自己的通知挤掉；
+            首页只留这一行（带本校/校外条数），点进去才看列表。
+          */}
           <div className="dsh-cau_sec">
             <div className="dsh-cau_secHead">
               <span className="dsh-cau_secMark" />
@@ -540,33 +505,37 @@ export function HomeView(props: {
                 要闻
               </span>
               <span className="dsh-cau_secLine" />
-              {important.length > 0 && (
-                <button
-                  type="button"
-                  className="dsh-cau_textBtn"
-                  onClick={() => {
-                    setReadSet(markAllRead(allImportantIds))
-                    onReadChange?.()
-                  }}
-                >
-                  全部已读
-                </button>
-              )}
             </div>
-            <div className="dsh-cau_card">
-              {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
-              <div className="dsh-cau_newsSubHead">
-                <span>
-                  <Ic n="news" /> 其他来源
+            <button type="button" className="dsh-cau_newsEntry" onClick={onViewNews} title="点开看完整要闻（按来源分三栏）">
+              <span className="dsh-cau_newsEntryIcon">
+                <Ic n="flame" />
+              </span>
+              <span className="dsh-cau_newsEntryBody">
+                <span className="dsh-cau_newsEntryTop">
+                  <span className="dsh-cau_newsEntryTitle">要闻</span>
+                  <span className="dsh-cau_newsEntryCount">{newsTotal} 条 · 点开查看</span>
                 </span>
-                <em>{otherNews.length} 条</em>
-              </div>
-              {summary && otherNews.length === 0 && <div className="dsh-cau_empty">暂无其他来源重要通知</div>}
-              {otherNews.map((it: any, i: number) => newsRow(it, i, otherNews.map((x: any) => ({ id: x.article_id || x.url, title: x.title }))))}
-              {hiddenSiteCount > 0 && (
-                <div className="dsh-cau_newsMuted">已在「设置 → 栏目频道管理」中关闭 {hiddenSiteCount} 个来源</div>
-              )}
-            </div>
+                <span className="dsh-cau_newsEntryMeta">
+                  {mods.portal && (
+                    <span className="dsh-cau_newsChip">
+                      <Ic n="bank" />
+                      校内平台 {newsCounts.portal}
+                    </span>
+                  )}
+                  <span className="dsh-cau_newsChip">
+                    <Ic n="books" />
+                    校内其他 {newsCounts.campus}
+                  </span>
+                  <span className="dsh-cau_newsChip dsh-cau_newsChipExt">
+                    <Ic n="ext" />
+                    校外来源 {newsCounts.external}
+                  </span>
+                </span>
+              </span>
+              <span className="dsh-cau_newsEntryArrow">
+                <Ic n="chevRight" />
+              </span>
+            </button>
           </div>
 
           {/* 关注栏 */}
@@ -612,8 +581,21 @@ export function HomeView(props: {
               </span>
               <span className="dsh-cau_secLine" />
             </div>
-            {portalSite && colGroup(portalSite, true)}
-            {otherSites.map((site: any) => colGroup(site))}
+            {(['portal', 'campus', 'external'] as SiteGroup[]).map((g: SiteGroup) =>
+              sitesByGroup[g].length === 0 ? null : (
+                <div className="dsh-cau_group" key={g}>
+                  <div className="dsh-cau_groupHead">
+                    <span className="dsh-cau_groupIcon">
+                      <Ic n={g === 'portal' ? 'bank' : g === 'campus' ? 'books' : 'ext'} />
+                    </span>
+                    <span className="dsh-cau_groupTitle">{GROUP_LABEL[g]}</span>
+                    <em>{sitesByGroup[g].length} 个来源</em>
+                    <span className="dsh-cau_secLine" />
+                  </div>
+                  {sitesByGroup[g].map((site: any) => colGroup(site))}
+                </div>
+              ),
+            )}
             {channelSites.length === 0 && (
               <Empty
                 icon={<Ic n="books" />}

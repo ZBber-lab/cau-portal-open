@@ -182,7 +182,7 @@ function buildAddPrompt(name: string, url: string): string {
     '',
     '三条硬要求：',
     '· 若探测中发现解析器缺陷（例如条目里混进了站点导航链接），先报告并单独修，**不要带着 bug 写配置**',
-    '· 等我确认后再写进 sites.json；**不要动 data/**；推送顺序永远是**先私有仓 ZBber-lab/cau-portal → 再公有仓 cau-portal-open**',
+    '· 等我确认后再写进 sites.json；**非本校来源要标 `"group": "external"`**（面板会归到「校外来源」，不挤占本校通知）；**不要动 data/**；推送顺序永远是**先私有仓 ZBber-lab/cau-portal → 再公有仓 cau-portal-open**',
     '· 接入后要验证「在 GitHub Actions 环境里也抓得到」—— 本机成功 ≠ 线上成功（跨网失败会写空 feed）',
   ].join('\n')
 }
@@ -479,7 +479,7 @@ export function CauSettings(props: any) {
       if (j && j.ok !== false) {
         setMailLast(
           j.last_sent
-            ? `上次发送：${new Date(j.last_sent).toLocaleString('zh-CN', { hour12: false })}（${j.last_mode === 'test' ? '测试' : '日报'}）${j.last_ok === false ? ' · ❌ ' + (j.last_error || '失败') : ' · ✅ 成功'}`
+            ? `上次发送：${new Date(j.last_sent).toLocaleString('zh-CN', { hour12: false })}（${j.last_mode === 'test' ? '测试' : '日报'}）${j.last_ok === false ? ' · 失败：' + (j.last_error || '未知原因') : ' · 成功'}`
             : '尚未发送过（启用后每天 ' + (j.sendTime || '08:00') + ' 自动发送；测试按钮可先试发）',
         )
         setMailCfg((c) => ({ ...c, rulesCount: j.rulesCount || 0, provider: j.provider || c.provider }))
@@ -507,7 +507,7 @@ export function CauSettings(props: any) {
       const j = await r.json()
       if (j?.ok) {
         setMailState('ok')
-        setMailMsg(enabled ? '✅ 已保存并启用：每天 ' + (j.sendTime || mailCfg.sendTime) + ' 自动发送（错过时间开机自动补发）；建议点「测试发送」确认' : '已保存（未启用）')
+        setMailMsg(enabled ? '已保存并启用：每天 ' + (j.sendTime || mailCfg.sendTime) + ' 自动发送（错过时间开机自动补发）；建议点「测试发送」确认' : '已保存（未启用）')
         setMailCfg((c) => ({ ...c, authCode: '' }))
         void refreshMailInfo()
       } else {
@@ -556,7 +556,7 @@ export function CauSettings(props: any) {
       const j = await r.json()
       if (j?.ok) {
         setMailState('ok')
-        setMailMsg(`✅ 测试邮件已发出：「${j.subject || '农大门户日报'}」→ 请查看收件箱（含垃圾箱）`)
+        setMailMsg(`测试邮件已发出：「${j.subject || '农大门户日报'}」→ 请查看收件箱（含垃圾箱）`)
       } else {
         setMailState('fail')
         setMailMsg('发送失败：' + (j?.error || '未知错误') + '（常见：授权码错误 / 服务商被封 / 收件地址不对）')
@@ -567,7 +567,7 @@ export function CauSettings(props: any) {
       setMailMsg('请求失败：' + String(e?.message || e))
     }
   }
-  // 关注规则变化 → 同步快照给服务端（邮件的 🎯 段用）；静默失败
+  // 关注规则变化 → 同步快照给服务端（邮件的「关注命中」段用）；静默失败
   const syncRulesToEmail = (next: WatchRule[]) => {
     try {
       void fetch('/api/cau/email/rules', {

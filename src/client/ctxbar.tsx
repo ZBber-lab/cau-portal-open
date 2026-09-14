@@ -1,6 +1,6 @@
 /**
  * 阶段6 双向协同 · 阅读上下文附加条（conversation.input.dock，会话级 list 槽）。
- * 面板打开文章时（bus.setAttached）自动在输入框上方显示「📄《标题》· 来源 ×」条，
+ * 面板打开文章时（bus.setAttached）自动在输入框上方显示「《标题》· 来源 ×」条，
  * 并按 autoAttach 设置在输入草稿注入标记行 `〔cau:article:<id>〕《标题》`，
  * 用户正常提问发送即可让 AI 经 mcp__cau__get_article 读全文作答；× 移除标记。
  * 另：本组件是唯一持有 dock `inputActions` 的地方，故也负责消费总线上的「填入聊天框」请求
