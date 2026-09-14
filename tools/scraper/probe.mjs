@@ -19,6 +19,7 @@
 import { fetchText, absUrl } from './fetch.mjs'
 import { parseListPage, parseDataproxy } from './parse-list.mjs'
 import { parseArticle } from './parse-article.mjs'
+import { parseSudyList } from './parse-sudy.mjs'
 import { dataproxyUrl } from './crawl.mjs'
 
 const arg = (name, def) => {
@@ -324,8 +325,16 @@ async function probeGenericColumn(cand, base) {
   if (rest) {
     return { ...cand, id, name: nm, listOk: true, restricted: rest.why, restrictEvidence: rest.evidence, count: 0, samples: [] }
   }
-  const items = listItems(r.text, cand.url)
-  const pager = new Set([...r.text.matchAll(/href=["']([^"']*?list\d+\.(?:htm|psp|html))["']/gi)].map((m) => m[1]))
+  const items0 = listItems(r.text, cand.url)
+  // 苏迪模板必须用 parseSudyList：通用取链会把页头导航里的文章链接（如浙大环资菜单的
+  // 「师资队伍」）也算成条目，导致每个栏目的样例都抽到同一条假条目。
+  const sudy = /wp_articlecontent|id=["']wp_news_w\d+["']|class=["'][^"']*\bnews_list\b/i.test(r.text)
+    ? parseSudyList(r.text, r.finalUrl || cand.url)
+    : null
+  const items = sudy ? sudy.items : items0
+  const pager = sudy
+    ? new Set(sudy.maxPage > 1 ? [...Array(sudy.maxPage - 1)].map((_, i) => `list${i + 2}.htm`) : [])
+    : new Set([...r.text.matchAll(/href=["']([^"']*?list\d+\.(?:htm|psp|html))["']/gi)].map((m) => m[1]))
   return { ...cand, id, name: nm, listOk: true, count: items.length, samples: items.slice(0, 3), pages: pager.size + 1 }
 }
 

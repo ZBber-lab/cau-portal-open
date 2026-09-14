@@ -16,6 +16,14 @@ import { absUrl } from './fetch.mjs'
 /** 苏迪文章链接（新模板 /c<栏目>a<文章>/page.htm；老模板 /YYYY/MMDD/NNNN.htm 兜底） */
 const ART_RE = /\/(?:20\d{2}\/\d{3,4}\/c\d+a\d+\/page|20\d{2}\/\d{4}\/\d+)\.(?:htm|psp|html)$/i
 
+/**
+ * 列表容器：条目统一放在 `<div id="wp_news_w6">` / `<ul class="news_list …">` 里。
+ * 必须限定容器 —— 页面顶部导航菜单也会有指向文章页的链接（实测浙大环资，菜单里的
+ * 「师资队伍」= /2026/0130/c39434a3132102/page.htm），不限定就会**混进每一个栏目**
+ * 变成一条日期靠前的假条目（污染列表与要闻）。找不到容器时退回全页扫描（老模板兜底）。
+ */
+const LIST_CONTAINER = /(?:id=["']wp_news_w\d+["']|class=["'][^"']*\bnews_list\b[^"']*["'])/i
+
 const ymd = (s) => {
   const m = String(s || '').match(/(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})/)
   return m ? `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}` : null
@@ -33,9 +41,12 @@ const dateFromUrl = (u) => {
  * @param {string} pageUrl 该列表页的**最终** URL（相对链接按它解析）
  */
 export function parseSudyList(html, pageUrl) {
+  // 只在列表容器内找条目（见 LIST_CONTAINER 注释：避开导航菜单里的文章链接）
+  const cm = LIST_CONTAINER.exec(html)
+  const seg = cm ? html.slice(cm.index) : html
   const items = []
   const seen = new Set()
-  for (const m of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+  for (const m of seg.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
     const attrs = m[1]
     const href = (attrs.match(/href=["']([^"']+)["']/i) || [])[1]
     if (!href) continue
@@ -48,14 +59,23 @@ export function parseSudyList(html, pageUrl) {
     const title = stripTags(attrTitle || m[2]).replace(/\s+/g, ' ').trim()
     if (!title || title.length < 4) continue
     const dt = (attrs.match(/data-time=["']([^"']+)["']/i) || [])[1]
-    items.push({ url: abs, title: title.slice(0, 200), date: ymd(dt) || dateFromUrl(abs) })
+    // 条目自带的日期（<span class="news_meta">2026-09-11</span>，紧跟锚点）比从 URL 推断更权威
+    const tail = seg.slice(m.index + m[0].length, m.index + m[0].length + 300)
+    const meta = (tail.match(/news_meta["'][^>]*>\s*(20\d{2}[-/.]\d{1,2}[-/.]\d{1,2})/) || [])[1]
+    items.push({ url: abs, title: title.slice(0, 200), date: ymd(dt) || ymd(meta) || dateFromUrl(abs) })
   }
-  // 翻页：找 list2.htm / list3.htm … 取最大页码（找不到就只有一页）
+  // 翻页：找 list2.htm / list3.htm … 取最大页码（找不到就只有一页）。
+  // 只认「与本列表页同栏目」的翻页链接，避免同页出现的其它栏目分页把页数撑大。
+  const colKey = (String(pageUrl).match(/\/([A-Za-z0-9_]+)\/list(?:\d+)?\.(?:htm|psp|html)/i) || [])[1]
   let maxPage = 1
-  for (const m of html.matchAll(/href=["'][^"']*?list(\d+)\.(?:htm|psp|html)["']/gi)) {
-    const n = Number(m[1])
-    if (Number.isFinite(n) && n > maxPage) maxPage = n
+  let fallback = 1
+  for (const m of html.matchAll(/href=["']([^"']*?list(\d+)\.(?:htm|psp|html))["']/gi)) {
+    const n = Number(m[2])
+    if (!Number.isFinite(n) || n <= fallback) continue
+    fallback = n
+    if (!colKey || m[1].includes(`/${colKey}/`)) maxPage = Math.max(maxPage, n)
   }
+  if (maxPage === 1) maxPage = fallback;
   return { items, maxPage }
 }
 
