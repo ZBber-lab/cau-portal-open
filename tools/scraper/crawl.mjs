@@ -12,6 +12,7 @@ import { fetchText, sleep, absUrl } from './fetch.mjs';
 import { parseListPage, parseDataproxy } from './parse-list.mjs';
 import { parseArticle } from './parse-article.mjs';
 import { parseNewsListPage, parseNewsArticle } from './parse-news.mjs';
+import { parseSudyList, parseSudyArticle } from './parse-sudy.mjs';
 import { pruneData } from './prune.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -300,8 +301,111 @@ async function crawlNewsColumn(site, column, opts) {
   return out;
 }
 
+/**
+ * 判断页面是不是「拦截页」，返回原因或 null。必须识别：否则会把拦截页（登录页/无权页）
+ * 当成正文写进 data/。实测苏迪站两类拦截都用同一个标题「提示信息」：
+ *   ① 按来源 IP：您当前ip并非校内地址，该信息仅允许校内地址访问
+ *   ② 按登录：标题「提示信息」+ 用户名/密码/验证码表单（userLogin）
+ */
+function blockedReason(html) {
+  const h = String(html || '');
+  const t = h.replace(/\s+/g, '');
+  if (/仅允许校内|校内地址访问|非校内|仅限校内/.test(t)) return '仅限校内 IP';
+  if (/您没有权限|无权访问|访问被拒绝/.test(t)) return '无权限';
+  if (/访问地址无效|找不到对应的栏目/.test(t)) return '栏目不存在';
+  const ttl = ((h.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').replace(/\s+/g, '');
+  if (ttl === '提示信息' || ttl === '提示') return /用户名/.test(t) && /密码/.test(t) ? '需要登录' : '被拦截（提示信息页）';
+  if (/<input[^>]+type=["']?password/i.test(h)) return '需要登录';
+  return null;
+}
+
+/**
+ * 苏迪 CMS（南京苏迪）栏目爬取：列表 /<栏目号>/list.htm（+ listN.htm 翻页），详情 /<年>/<月日>/c<a>/page.htm。
+ * 实测该站按「栏目 + 文章」分别设权限：整栏或单篇都可能返回拦截页 —— 所以单条失败只记警告、
+ * 不写文章文件（该条目仍进 feed，只有标题+链接，面板会显示「正文未抓取」，与门户条目同款处理）。
+ */
+async function crawlSudyColumn(site, column, opts) {
+  const base = site.baseUrl.replace(/\/+$/, '');
+  const out = { site: site.id, column: column.key, items: 0, articles: 0, errors: [], warns: [] };
+  const all = new Map();
+  const pages = Math.max(1, Number(opts.pages));
+  let maxPage = 1;
+  for (let p = 1; p <= pages; p++) {
+    const pageUrl = p === 1 ? `${base}/${column.id}/list.htm` : `${base}/${column.id}/list${p}.htm`;
+    if (p > 1) await sleep(opts.delay);
+    const r = await fetchText(pageUrl, { referer: `${base}/` });
+    if (!r.ok) {
+      out.errors.push(`列表页 ${p} 失败: ${r.status ?? r.error}`);
+      break;
+    }
+    const br = blockedReason(r.text);
+    if (br) {
+      out.errors.push(`列表页 ${p} 受访问限制（${br}）`);
+      break;
+    }
+    const parsed = parseSudyList(r.text, r.finalUrl || pageUrl);
+    if (p === 1) maxPage = Math.max(1, Math.min(parsed.maxPage || 1, pages));
+    if (!parsed.items.length) {
+      if (p === 1) out.warns.push('列表页未认出条目（可能改版）');
+      break;
+    }
+    for (const it of parsed.items) if (!all.has(it.url)) all.set(it.url, it);
+    if (p >= maxPage) break;
+  }
+  out.items = all.size;
+
+  const articlesDir = `${opts.dataDir}/articles`;
+  const feedPath = `${opts.dataDir}/feed/${site.id}__${column.key}.json`;
+  mkdirSync(`${opts.dataDir}/feed`, { recursive: true });
+  mkdirSync(articlesDir, { recursive: true });
+  const prevItems = loadPrevItems(feedPath);
+  const prevByUrl = new Map(prevItems.map((x) => [x.url, x]));
+  const runTs = now();
+  for (const it of all.values()) {
+    const hash = sha1(it.url);
+    const artFile = `${hash}.json`;
+    const artPath = `${articlesDir}/${artFile}`;
+    let hasArticle = existsSync(artPath);
+    if (!hasArticle && Number(opts.articles) > 0 && out.articles < Number(opts.articles)) {
+      await sleep(opts.delay);
+      const r = await fetchText(it.url, { referer: `${base}/` });
+      if (!r.ok) {
+        out.errors.push(`详情失败: ${it.url} (${r.status ?? r.error})`);
+      } else {
+        const br = blockedReason(r.text);
+        if (br) {
+          out.warns.push(`文章受访问限制（${br}），只留标题: ${it.url}`);
+        } else {
+          const a = parseSudyArticle(r.text, it.url);
+          if (!a.title) out.errors.push(`无标题: ${it.url}`);
+          else {
+            if (!a.body) out.warns.push(`正文为空${a.is_image_only ? '(图片海报)' : '(站点空文)'}: ${it.url}`);
+            if (!a.time) a.time = it.date ?? null; // 详情页没标时间时用列表页日期兜底
+            writeFileSync(artPath, JSON.stringify({ ...a, fetched_at: now(), ai: null }, null, 2));
+            hasArticle = true;
+            out.articles++;
+          }
+        }
+      }
+    }
+    it.article = hasArticle ? artFile : prevByUrl.get(it.url)?.article ?? null;
+  }
+  const merged = mergeFeedItems([...all.values()], prevItems, runTs);
+  out.new_items = merged.newCount;
+  writeFileSync(
+    feedPath,
+    JSON.stringify(
+      { site: site.id, site_name: site.name, column_id: column.id, column_key: column.key, column_name: column.name, fetched_at: runTs, total_page: maxPage, items: merged.items },
+      null,
+      2,
+    ),
+  );
+  return out;
+}
+
 async function crawlColumn(site, column, opts) {
   if (site.cms === 'news-custom') return crawlNewsColumn(site, column, opts);
+  if (site.cms === 'sudy') return crawlSudyColumn(site, column, opts);
   const base = site.baseUrl.replace(/\/+$/, '');
   const colUrl = `${base}/col/col${column.id}/index.html`;
   const out = { site: site.id, column: column.key, items: 0, articles: 0, errors: [], warns: [] };
