@@ -22,14 +22,16 @@ export function NewsRow(props: {
   read: boolean
   followed: boolean
   hit: boolean
+  /** 该来源的主题色（未设置 = undefined，用面板品牌绿） */
+  color?: string
   onOpen: () => void
   onToggleFollow: () => void
   onArchive: () => void
 }) {
-  const { it, read, followed, hit } = props
+  const { it, read, followed, hit, color } = props
   return (
     <div className="dsh-cau_impRow">
-      <span className="dsh-cau_impDot" data-read={read ? '1' : '0'} />
+      <span className="dsh-cau_impDot" data-read={read ? '1' : '0'} style={color ? { background: color } : undefined} />
       <span className="dsh-cau_impMain" onClick={props.onOpen}>
         <span className="dsh-cau_impTop">
           <span className="dsh-cau_impTitle">{it.title}</span>

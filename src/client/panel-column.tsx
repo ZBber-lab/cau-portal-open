@@ -5,7 +5,7 @@
  * 数据：index.json（站点/栏目目录）+ summary.json（ai_map 徽章与筛选）+ feed/<site>__<col>.json。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadReadSet, readFeed, isPruned, loadModules, loadSiteDirectory, siteBaseUrl } from './data'
+import { readCloudJson, loadReadSet, readFeed, isPruned, loadModules, loadSiteDirectory, siteBaseUrl, siteColorOf, siteNameOf } from './data'
 import { Empty } from './empty'
 import { Ic } from './icons'
 
@@ -62,7 +62,7 @@ export function ColumnView(props: {
     setSummary(sum)
     setSitePending(!!siteDir?.pending)
     if (siteDir) {
-      setSiteLabel(siteDir.name || siteName || site)
+      setSiteLabel(siteNameOf(site) || siteDir.name || siteName || site)
       const cn = column ? siteDir.columns?.find((c: any) => c.key === column)?.name || columnName || '' : ''
       setColLabel(cn)
     }
@@ -126,7 +126,7 @@ export function ColumnView(props: {
   }
 
   return (
-    <div className="dsh-cau_view">
+    <div className={'dsh-cau_view' + (siteColorOf(site) ? ' dsh-cau_siteAccent' : '')} style={siteColorOf(site) ? ({ '--cau-site-base': siteColorOf(site) } as any) : undefined}>
       <div className="dsh-cau_bread">
         <button type="button" className="dsh-cau_backBtn" onClick={onBack}>
           <Ic n="chevLeft" />

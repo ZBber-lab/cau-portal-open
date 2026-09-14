@@ -25,6 +25,7 @@ import {
   siteShown,
   siteOfItem,
   groupOfItem,
+  siteColorOf,
   loadSiteDirectory,
   loadRules,
   matchRules,
@@ -197,6 +198,7 @@ export function NewsView(props: { onBack: () => void; onOpenArticle: (id: string
                     read={readSet.includes(id)}
                     followed={follow.some((x: any) => x.id === id)}
                     hit={matchRules(watchRules, it).length > 0}
+                    color={siteColorOf(siteOfItem(it)) || undefined}
                     onOpen={() => openArt(it)}
                     onToggleFollow={() => toggleFollow(it)}
                     onArchive={() => archive(id)}

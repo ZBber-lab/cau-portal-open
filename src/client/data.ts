@@ -358,17 +358,134 @@ export function siteBaseUrl(siteId: string): string {
   return loadSiteDirCache().find((s) => s.id === siteId)?.baseUrl || ''
 }
 
-/** 站点 id → 分组；目录里没有或没写 group 的一律按「校内其他」 */
+/** 站点 id → 分组；**本机覆盖优先**，其次 sites.json 的 group，最后按「校内其他」 */
 export function siteGroupOf(siteId: string): SiteGroup {
+  if (!siteId) return 'campus'
+  const ov = loadSiteGroupOverrides()[siteId]
+  if (ov) return ov
   if (siteId === 'portal') return 'portal'
-  const g = siteId ? loadSiteDirCache().find((s) => s.id === siteId)?.group : undefined
+  const g = loadSiteDirCache().find((s) => s.id === siteId)?.group
   return g === 'external' ? 'external' : g === 'portal' ? 'portal' : 'campus'
+}
+
+// ---- 来源分组：本机覆盖（设置 → 栏目频道管理；键 dsh.cau-portal.sitegroups.v1）----
+// sites.json 里的 group 是「接入时定下的云端口径」；这里存**本机**的调整，优先级更高。
+// 改完刷新即生效：不动数据仓、不需要写权限、也不影响别人（2026-09-14 用户拍板）。
+const SITE_GROUPS_KEY = 'dsh.cau-portal.sitegroups.v1'
+
+export function loadSiteGroupOverrides(): Record<string, SiteGroup> {
+  try {
+    const v = JSON.parse(localStorage.getItem(SITE_GROUPS_KEY) || '{}')
+    if (!v || typeof v !== 'object') return {}
+    const out: Record<string, SiteGroup> = {}
+    for (const [k, g] of Object.entries(v as Record<string, unknown>)) {
+      if (g === 'portal' || g === 'campus' || g === 'external') out[k] = g
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/** 设置某站点的分组；传 null 清除本机覆盖（回到 sites.json 的口径） */
+export function saveSiteGroupOverride(siteId: string, g: SiteGroup | null) {
+  try {
+    const cur = loadSiteGroupOverrides()
+    if (g) cur[siteId] = g
+    else delete cur[siteId]
+    localStorage.setItem(SITE_GROUPS_KEY, JSON.stringify(cur))
+  } catch {
+    /* 静默 */
+  }
+}
+
+// ---- 来源主题色（本机；键 dsh.cau-portal.sitecolors.v1）----
+// 只改「这个来源相关的颜色」：该来源页面里**原本是品牌绿**的部分（AI 摘要条、未读点、选中标签、
+// 按钮…）换成它的颜色；**面板整体的品牌绿与白/灰等中性色不变**（2026-09-14 用户纠正过一次）。
+const SITE_COLORS_KEY = 'dsh.cau-portal.sitecolors.v1'
+
+/** 预设色板：收敛的中性色，浅色/深色下都看得清；value='' 表示「默认绿」（清除覆盖） */
+export const SITE_COLOR_PRESETS: { key: string; name: string; value: string }[] = [
+  { key: 'brand', name: '默认绿', value: '' },
+  { key: 'indigo', name: '靛蓝', value: '#2f5fd0' },
+  { key: 'teal', name: '青', value: '#0f7f7f' },
+  { key: 'brick', name: '赭红', value: '#b0453a' },
+  { key: 'violet', name: '紫', value: '#6d4fd0' },
+  { key: 'slate', name: '石墨', value: '#4b5563' },
+]
+
+export function loadSiteColors(): Record<string, string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(SITE_COLORS_KEY) || '{}')
+    if (!v || typeof v !== 'object') return {}
+    const out: Record<string, string> = {}
+    for (const [k, c] of Object.entries(v as Record<string, unknown>)) {
+      if (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c)) out[k] = c
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/** 设置某来源的主题色；传 null/空 清除覆盖（回到面板品牌绿） */
+export function saveSiteColor(siteId: string, color: string | null) {
+  try {
+    const cur = loadSiteColors()
+    if (color && /^#[0-9a-f]{6}$/i.test(color)) cur[siteId] = color
+    else delete cur[siteId]
+    localStorage.setItem(SITE_COLORS_KEY, JSON.stringify(cur))
+  } catch {
+    /* 静默 */
+  }
+}
+
+/** 某来源的主题色；未设置返回 ''（调用方按默认品牌绿处理） */
+export function siteColorOf(siteId: string): string {
+  return siteId ? loadSiteColors()[siteId] || '' : ''
+}
+
+// ---- 来源显示名：本机覆盖（设置 → 栏目频道管理「编辑」；键 dsh.cau-portal.sitenames.v1）----
+// 只改**本机显示**的名字（首页栏目频道、栏目页标题、管理列表），不动数据仓、不影响别人。
+const SITE_NAMES_KEY = 'dsh.cau-portal.sitenames.v1'
+
+export function loadSiteNames(): Record<string, string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(SITE_NAMES_KEY) || '{}')
+    if (!v || typeof v !== 'object') return {}
+    const out: Record<string, string> = {}
+    for (const [k, n] of Object.entries(v as Record<string, unknown>)) {
+      const s = String(n ?? '').trim()
+      if (s) out[k] = s.slice(0, 40)
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/** 设置某来源的显示名；传 null/空 清除覆盖 */
+export function saveSiteName(siteId: string, name: string | null) {
+  try {
+    const cur = loadSiteNames()
+    const s = String(name ?? '').trim()
+    if (s) cur[siteId] = s.slice(0, 40)
+    else delete cur[siteId]
+    localStorage.setItem(SITE_NAMES_KEY, JSON.stringify(cur))
+  } catch {
+    /* 静默 */
+  }
+}
+
+/** 某来源的本机显示名；未设置返回 ''（调用方回退到目录/配置里的名字） */
+export function siteNameOf(siteId: string): string {
+  return siteId ? loadSiteNames()[siteId] || '' : ''
 }
 
 /** 条目 → 分组（门户条目按 URL 认；其余按站点目录的 group） */
 export function groupOfItem(it: any): SiteGroup {
   const url = String(it?.url || '')
-  if (/tp_up|one\.cau\.edu\.cn/.test(url)) return 'portal'
+  if (/tp_up|one\.cau\.edu\.cn/.test(url)) return siteGroupOf('portal')
   const sid = siteOfItem(it)
   if (sid) return siteGroupOf(sid)
   // 认不出站点（目录缓存还没建立 / 跨站跳转的条目）：农大域名按本校算，其余按「校外来源」——

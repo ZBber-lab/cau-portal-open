@@ -19,6 +19,7 @@ import {
   loadSiteDirectory,
   groupOfItem,
   siteGroupOf,
+  siteNameOf,
   GROUP_LABEL,
   type SiteGroup,
   type DirSite,
@@ -221,7 +222,7 @@ export function HomeView(props: {
           disabled={off}
           onClick={() => !off && onOpenColumn(site.id, null)}
         >
-          {site.name} ›{off && <span className="dsh-cau_disTag">不可用</span>}
+          {siteNameOf(site.id) || site.name} ›{off && <span className="dsh-cau_disTag">不可用</span>}
         </button>
         {!off && (
           <div className="dsh-cau_colChips">

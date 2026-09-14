@@ -49,6 +49,22 @@ body{
   --cau-r-s:8px;--cau-r-m:12px;--cau-r-l:16px;
 }
 body[data-ds-dark-theme]{--cau-brand:#00b856}
+/* ---- 来源主题色（每个来源可选一处；未设置时完全保持原来的品牌绿观感，零变化）----
+   做法：把「品牌绿」在**该来源的子树里整体换掉** —— CSS 变量在声明处替换，所以六个淡色底/描边
+   也要在这里按来源色重算，这样凡是原来用品牌绿的地方（AI 摘要条、小标签、按钮、未读点、分组头…）
+   全部跟着变，而白/灰等中性色一律不动。（2026-09-14 用户纠正：要变的是绿的那部分，不是中性的那部分） */
+.dsh-cau_siteAccent{
+  --cau-site:var(--cau-site-base);
+  --cau-brand:var(--cau-site);
+  --cau-brand-a6:color-mix(in srgb,var(--cau-site) 6%,transparent);
+  --cau-brand-a9:color-mix(in srgb,var(--cau-site) 9%,transparent);
+  --cau-brand-a12:color-mix(in srgb,var(--cau-site) 12%,transparent);
+  --cau-brand-a16:color-mix(in srgb,var(--cau-site) 16%,transparent);
+  --cau-brand-a22:color-mix(in srgb,var(--cau-site) 22%,transparent);
+  --cau-brand-a35:color-mix(in srgb,var(--cau-site) 35%,transparent);
+  --cau-brand-a55:color-mix(in srgb,var(--cau-site) 55%,transparent);
+}
+body[data-ds-dark-theme] .dsh-cau_siteAccent{--cau-site:color-mix(in srgb,var(--cau-site-base) 74%,#fff)}
 .dsh-cau_pillRow{display:flex;align-items:center;box-sizing:border-box;height:42px;padding:0 6px;min-width:0}
 .dsh-cau_pill{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:7px;height:34px;padding:0 12px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.09));border-radius:999px;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.045));color:var(--dsw-alias-label-primary,#e6e8eb);cursor:pointer;transition:background .15s ease,border-color .15s ease;text-align:left}
 .dsh-cau_pill:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.09));border-color:var(--dsw-alias-border-l3,rgba(255,255,255,.18));color:var(--dsw-alias-label-primary,#e6e8eb)}

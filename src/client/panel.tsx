@@ -680,6 +680,25 @@ body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-
 .dsh-cau_groupIcon svg{width:12px;height:12px}
 .dsh-cau_groupTitle{flex:none;font-size:12px;font-weight:600;letter-spacing:.05em;color:var(--cau-ink)}
 .dsh-cau_groupHead em{flex:none;font-style:normal;font-size:11px;color:var(--cau-ink3)}
+/* ---- 栏目频道管理：来源「编辑」卡（名称 / 标签 / 主题色；本机设置，2026-09-14）---- */
+.dsh-cau_srcRowFoot{display:flex;align-items:center;gap:7px;margin-top:5px}
+.dsh-cau_srcTag{font-size:11px;color:var(--cau-ink3)}
+.dsh-cau_srcDotPreview{flex:none;width:10px;height:10px;border-radius:50%}
+.dsh-cau_srcEditor{display:flex;flex-direction:column;gap:9px;margin-top:9px;padding:11px 12px;border:1px solid var(--cau-line-soft);border-radius:var(--cau-r-s);background:color-mix(in srgb,var(--dsw-specific-menu,#fff) 26%,transparent)}
+.dsh-cau_srcField{display:flex;align-items:center;gap:9px}
+.dsh-cau_srcFieldLabel{flex:none;width:30px;font-size:11px;color:var(--cau-ink3)}
+.dsh-cau_segGroup{display:inline-flex;border:1px solid var(--cau-line-soft);border-radius:8px;overflow:hidden}
+.dsh-cau_seg{padding:4px 10px;border:none;border-left:1px solid var(--cau-line-soft);background:transparent;font:inherit;font-size:11.5px;line-height:16px;color:var(--cau-ink2);cursor:pointer}
+.dsh-cau_seg:first-child{border-left:none}
+.dsh-cau_seg:hover{color:var(--cau-brand);background:var(--cau-brand-a6)}
+.dsh-cau_segOn{background:var(--cau-brand-a9);color:var(--cau-brand);font-weight:600}
+.dsh-cau_swatches{display:inline-flex;align-items:center;gap:8px}
+.dsh-cau_swatch{width:18px;height:18px;padding:0;border:1px solid var(--cau-line-soft);border-radius:50%;cursor:pointer}
+.dsh-cau_swatch:hover{transform:scale(1.1)}
+.dsh-cau_swatchOn{outline:2px solid var(--cau-ink2);outline-offset:2px}
+.dsh-cau_srcEditorFoot{display:flex;align-items:center;gap:6px;padding-top:1px}
+.dsh-cau_srcEditorHint{font-size:11px;line-height:16px;color:var(--cau-ink3)}
+.dsh-cau_srcSpacer{flex:1}
 .dsh-cau_newsMuted{display:flex;align-items:center;justify-content:center;gap:2px;padding:7px 8px 3px;margin-top:6px;border-top:1px solid var(--cau-line-soft);font-size:11px;color:var(--cau-ink3)}
 .dsh-cau_colSiteBtn{display:block;width:100%;padding:5px 8px;border:none;border-radius:var(--cau-r-s);background:transparent;text-align:left;font-size:13px;font-weight:500;color:var(--cau-ink);cursor:pointer}
 .dsh-cau_colSiteBtn:hover{background:var(--cau-hover)}

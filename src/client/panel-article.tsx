@@ -21,6 +21,8 @@ import {
   enrichArticle,
   loadSettings,
   loadModules,
+  siteOfItem,
+  siteColorOf,
 } from './data'
 import { addAttached, removeAttached, hasAttached } from './bus'
 import { Ic } from './icons'
@@ -150,8 +152,14 @@ export function ArticleView(props: {
     }
   }
 
+  /** 该来源的主题色：设了就把本页所有「品牌绿」（AI 摘要条、小标签、按钮…）换成它的颜色 */
+  const srcColor = useMemo(() => (art?.url ? siteColorOf(siteOfItem(art)) : ''), [art])
+
   return (
-    <div className="dsh-cau_view">
+    <div
+      className={'dsh-cau_view' + (srcColor ? ' dsh-cau_siteAccent' : '')}
+      style={srcColor ? ({ '--cau-site-base': srcColor } as any) : undefined}
+    >
       <div className="dsh-cau_bread">
         <button type="button" className="dsh-cau_backBtn" onClick={onBack}>
           <Ic n="chevLeft" />

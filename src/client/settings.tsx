@@ -20,6 +20,16 @@ import {
   saveChannels,
   siteShown,
   loadSiteDirectory,
+  siteGroupOf,
+  saveSiteGroupOverride,
+  siteColorOf,
+  saveSiteColor,
+  siteNameOf,
+  saveSiteName,
+  SITE_COLOR_PRESETS,
+  GROUP_ORDER,
+  GROUP_LABEL,
+  type SiteGroup,
   loadTokens,
   saveTokens,
   loadUsageRows,
@@ -294,6 +304,33 @@ export function CauSettings(props: any) {
   const toggleSite = (id: string) =>
     persistChannels({ ...channels, sites: { ...channels.sites, [id]: !siteShown(channels, id) } })
   const resetChannels = () => persistChannels({ version: 1, sites: {}, columns: {} })
+
+  /** 来源「名称 / 标签 / 主题色」是本机设置（localStorage）；这里放编辑器的草稿状态，点「完成」才写入 */
+  const [editId, setEditId] = useState<string | null>(null)
+  const [draft, setDraft] = useState<{ name: string; group: SiteGroup; color: string } | null>(null)
+  const openEditor = (s: any) => {
+    setEditId(s.id)
+    setDraft({ name: siteNameOf(s.id) || s.name || '', group: siteGroupOf(s.id), color: siteColorOf(s.id) })
+  }
+  const closeEditor = () => {
+    setEditId(null)
+    setDraft(null)
+  }
+  /** 保存：名称与「目录里的原名」相同就存空（等于没改）；分组与主题色直接写本机 */
+  const saveSource = (id: string, baseName: string) => {
+    if (!draft) return
+    const n = String(draft.name || '').trim()
+    saveSiteName(id, !n || n === String(baseName || '').trim() ? null : n)
+    saveSiteGroupOverride(id, draft.group)
+    saveSiteColor(id, draft.color || null)
+    closeEditor()
+  }
+  const resetSource = (id: string) => {
+    saveSiteName(id, null)
+    saveSiteGroupOverride(id, null)
+    saveSiteColor(id, null)
+    closeEditor()
+  }
 
   // 「添加栏目」：填名称+网址 → 经总线把请求填进主聊天输入框（只填不发送）；draftAck 回执判断是否真填上了
   const [addName, setAddName] = useState('')
@@ -1163,10 +1200,15 @@ export function CauSettings(props: any) {
                 const items = typeof s.items === 'number' ? s.items : cols.reduce((n: number, c: any) => n + (typeof c.items === 'number' ? c.items : 0), 0)
                 return (
                   <div key={s.id} className="dsh-cau_tok">
-                    <Toggle on={on} onToggle={() => toggleSite(s.id)} label={`切换 ${s.name}`} />
+                    <Toggle on={on} onToggle={() => toggleSite(s.id)} label={`切换 ${siteNameOf(s.id) || s.name}`} />
                     <div className="dsh-cau_tokMain">
                       <span className="dsh-cau_tokName">
-                        {s.name}
+                        {siteNameOf(s.id) || s.name}
+                        {siteNameOf(s.id) && (
+                          <span className="dsh-cau_cardBadge" title="名称是本机改的（可在「编辑」里还原）">
+                            本机名称
+                          </span>
+                        )}
                         {!on && <span className="dsh-cau_cardBadge off">已关闭</span>}
                         {s.pending && (
                           <span className="dsh-cau_cardBadge off" title="配置已就位，等下一轮抓取后出现条目">
@@ -1180,6 +1222,81 @@ export function CauSettings(props: any) {
                           {cols.length} 个栏目 · {s.pending ? '尚未抓取' : `${items} 条`}
                         </span>
                       </span>
+                      {/* 当前配置一览（紧凑只读）+「编辑」入口：名称 / 标签（首页分组）/ 主题色 */}
+                      <div className="dsh-cau_srcRowFoot">
+                        <span className="dsh-cau_srcTag">{GROUP_LABEL[siteGroupOf(s.id)]}</span>
+                        <span className="dsh-cau_srcDotPreview" style={{ background: siteColorOf(s.id) || 'var(--cau-brand)' }} />
+                        <button
+                          type="button"
+                          className="dsh-cau_textBtn"
+                          onClick={() => (editId === s.id ? closeEditor() : openEditor(s))}
+                        >
+                          <Ic n={editId === s.id ? 'close' : 'edit'} />
+                          {editId === s.id ? '收起' : '编辑'}
+                        </button>
+                      </div>
+                      {editId === s.id && draft && (
+                        <div className="dsh-cau_srcEditor">
+                          <label className="dsh-cau_srcField">
+                            <span className="dsh-cau_srcFieldLabel">名称</span>
+                            <input
+                              className="dsh-cau_setInput"
+                              style={{ flex: '1 1 160px' }}
+                              value={draft.name}
+                              placeholder={s.name}
+                              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                            />
+                          </label>
+                          <div className="dsh-cau_srcField">
+                            <span className="dsh-cau_srcFieldLabel">标签</span>
+                            <span className="dsh-cau_segGroup" role="group" aria-label="首页分组">
+                              {GROUP_ORDER.map((g: SiteGroup) => (
+                                <button
+                                  key={g}
+                                  type="button"
+                                  className={'dsh-cau_seg' + (draft.group === g ? ' dsh-cau_segOn' : '')}
+                                  onClick={() => setDraft({ ...draft, group: g })}
+                                >
+                                  {GROUP_LABEL[g]}
+                                </button>
+                              ))}
+                            </span>
+                          </div>
+                          <div className="dsh-cau_srcField">
+                            <span className="dsh-cau_srcFieldLabel">颜色</span>
+                            <span className="dsh-cau_swatches" role="group" aria-label="来源主题色">
+                              {SITE_COLOR_PRESETS.map((p) => (
+                                <button
+                                  key={p.key}
+                                  type="button"
+                                  title={p.name}
+                                  aria-label={p.name}
+                                  className={'dsh-cau_swatch' + ((draft.color || '') === p.value ? ' dsh-cau_swatchOn' : '')}
+                                  style={p.value ? { background: p.value } : { background: 'var(--cau-brand)' }}
+                                  onClick={() => setDraft({ ...draft, color: p.value })}
+                                />
+                              ))}
+                            </span>
+                          </div>
+                          <div className="dsh-cau_srcEditorFoot">
+                            <button type="button" className="dsh-cau_textBtn" onClick={() => resetSource(s.id)}>
+                              <Ic n="undo" />
+                              还原默认
+                            </button>
+                            <span className="dsh-cau_srcSpacer" />
+                            <button type="button" className="dsh-cau_textBtn" onClick={closeEditor}>
+                              取消
+                            </button>
+                            <button type="button" className="dsh-cau_setBtn" onClick={() => saveSource(s.id, s.name)}>
+                              完成
+                            </button>
+                          </div>
+                          <div className="dsh-cau_srcEditorHint">
+                            颜色只替换<b>该来源页面里原本是品牌绿</b>的部分（AI 摘要条、未读点、选中标签、按钮…）；
+                            白色/灰色的文字与描边不跟着变。
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
