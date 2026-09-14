@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // AI 批量加工：对 data/articles/ 中 ai==null 且有正文的文章补 AI 元数据（增量幂等）
 // 用法：node tools/scraper/enrich.mjs --limit 5 [--force] [--backend deepseek-api|local-ollama] [--model deepseek-v4-flash]
+//      [--match <url 子串>]  只加工 URL 含该子串的文章（如 --match zju.edu.cn 回填单个来源）
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolveApiKey, enrichArticle, costOf, logUsage } from './ai.mjs';
@@ -20,6 +21,8 @@ async function main() {
   const backend = arg('backend', 'deepseek-api');
   const model = arg('model', 'deepseek-v4-flash');
   const fileArg = arg('file', null);
+  // 只加工指定来源/网域（回填某个站点时用，避免把预算花在别的站点的积压上）
+  const matchArg = arg('match', null);
   const artsDir = `${dataDir}/articles`;
   if (!existsSync(artsDir)) {
     console.log('无 articles 目录，请先跑 crawl');
@@ -38,7 +41,7 @@ async function main() {
   const candidates = readdirSync(artsDir)
     .filter((f) => f.endsWith('.json'))
     .map((f) => ({ f, a: JSON.parse(readFileSync(`${artsDir}/${f}`, 'utf8')) }))
-    .filter(({ f, a }) => (a.body || isPortal(a)) && (force || a.ai == null) && (!fileArg || f.startsWith(fileArg)))
+    .filter(({ f, a }) => (a.body || isPortal(a)) && (force || a.ai == null) && (!fileArg || f.startsWith(fileArg)) && (!matchArg || String(a.url || '').includes(matchArg)))
     .sort((x, y) => (isPortal(x.a) === isPortal(y.a) ? String(y.a.time || '').localeCompare(String(x.a.time || '')) : isPortal(x.a) ? -1 : 1))
     .slice(0, limit);
   console.log(`[enrich] 候选 ${candidates.length}（backend=${backend} model=${model}${force ? ' force' : ''}）`);

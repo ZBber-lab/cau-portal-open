@@ -31,10 +31,17 @@ export function absUrl(base, href) {
   return b + (h.startsWith('/') ? h : '/' + h);
 }
 
-export async function fetchText(url, { referer = null, timeoutMs = 20000, retries = 2, headers = {} } = {}) {
+/**
+ * 抓一个页面。**跨洋重试**（2026-09-14 实测教训）：GitHub Actions 的 runner 在境外，
+ * 抓国内教育网站点（浙大 gs/cers）时同一次运行里有的列表页成功、有的直接
+ * `TypeError: fetch failed` —— 不是解析器问题，是链路丢包。因此默认放宽到
+ * 5 次尝试（retries=4）+ 30s 超时 + 退避上限 8s；失败型错误通常几百毫秒就返回，
+ * 多试几次成本很低。单次调用仍可用 `{ retries, timeoutMs }` 覆盖。
+ */
+export async function fetchText(url, { referer = null, timeoutMs = 30000, retries = 4, headers = {} } = {}) {
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
-    if (attempt > 0) await sleep(1000 * attempt); // 退避 1s / 2s
+    if (attempt > 0) await sleep(Math.min(8000, 1500 * attempt)); // 退避 1.5s / 3s / 4.5s / 6s（上限 8s）
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
@@ -57,5 +64,9 @@ export async function fetchText(url, { referer = null, timeoutMs = 20000, retrie
       clearTimeout(t);
     }
   }
-  return { ok: false, error: `${lastErr?.name}: ${lastErr?.message}` };
+  // 失败信息带上底层原因（ETIMEDOUT / ECONNRESET / EAI_AGAIN …）与尝试次数 —— 只看
+  // 「TypeError: fetch failed」分不清是超时、被重置还是 DNS 挂了（Actions 日志实测）
+  const cause = lastErr?.cause;
+  const detail = cause?.code || cause?.message || '';
+  return { ok: false, error: `${lastErr?.name}: ${lastErr?.message}${detail ? ` (${detail})` : ''}，已尝试 ${retries + 1} 次` };
 }

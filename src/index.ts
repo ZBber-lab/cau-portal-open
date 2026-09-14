@@ -5,10 +5,12 @@
  *   默认 provider=deepseek-official / model=deepseek-v4-flash / reasoningEffort=off
  *   （请求体可覆盖 provider/model），返回摘要/分类/重要度/deadline + 用量。
  */
+import { readFileSync } from 'node:fs'
+
 export const name = 'cau-portal'
 export const inject = ['webServer', 'llm']
 
-const VERSION = '0.2.0'
+const VERSION = '0.2.2'
 
 const SYSTEM_PROMPT = `你是中国农业大学新闻处理助手。阅读给定文章，输出一个 JSON 对象（只输出 JSON，不要输出任何其他文字）。
 
@@ -36,6 +38,68 @@ async function readBody(req: any): Promise<string> {
   const chunks: any[] = []
   for await (const chunk of req) chunks.push(chunk)
   return Buffer.concat(chunks).toString('utf8')
+}
+
+// ---- 「添加栏目」skill：运行时注册 ----
+// 插件包里的 skills/ 目录**不在** DSH 的技能发现范围内（filesystem provider 只扫
+// <project>/.dsh/skills、<project>/.agents/skills、~/.dsh/skills、~/.agents/skills 与 bundled 目录），
+// 所以必须在 apply() 里用 ctx.skills.register 注册，skill 才能"随插件自动带着走"（2026-09-14 定案）。
+// 元数据（name/description/whenToUse）直接取自 md 的 frontmatter —— 单一事实源，不在代码里重复维护。
+const SKILL_PATH = '../skills/cau-portal-add-column.md'
+
+function loadSkill(): { name: string; description: string; whenToUse?: string; content: string } | null {
+  try {
+    const raw = readFileSync(new URL(SKILL_PATH, import.meta.url), 'utf8')
+    const fm = (raw.match(/^---\r?\n([\s\S]*?)\r?\n---/) || [])[1] || ''
+    const field = (k: string) => ((fm.match(new RegExp(`^${k}:\\s*(.+)$`, 'm')) || [])[1] || '').trim()
+    const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim()
+    const name = field('name')
+    const description = field('description')
+    if (!name || !description || !body) return null
+    return { name, description, ...(field('whenToUse') ? { whenToUse: field('whenToUse') } : {}), content: body }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 取 skills 服务。**不要写进 `inject`**：cordis 里插件若声明了注入而该服务始终没提供，
+ * 插件会一直 pending、`apply()` 根本不执行 —— 面板与路由会一起消失（灾难性）。
+ * 不注入时 `ctx.skills` 仍会沿 fiber store 链解析（cordis `ReflectService.handler.get`
+ * 先查 store、再报 `without inject`），且 `ctx.get(name)` 是"无需 inject"的读法。
+ * 两种都试、都失败就只告警，不影响面板与抓取（2026-09-14 查 cordis 源码后定）。
+ */
+function resolveSkills(ctx: any): any {
+  try {
+    const viaGet = typeof ctx?.get === 'function' ? ctx.get('skills') : null
+    if (viaGet) return viaGet
+  } catch {
+    /* 落到 ctx.skills */
+  }
+  try {
+    return ctx?.skills ?? null
+  } catch {
+    return null
+  }
+}
+
+function registerSkill(ctx: any) {
+  try {
+    const skills = resolveSkills(ctx)
+    if (!skills || typeof skills.register !== 'function') {
+      ctx?.logger?.warn('[cau-portal] 取不到 skills 服务，跳过 skill 注册（不影响面板与抓取）')
+      return
+    }
+    const s = loadSkill()
+    if (!s) {
+      ctx?.logger?.warn(`[cau-portal] 读不到或解析不了 ${SKILL_PATH}，跳过 skill 注册`)
+      return
+    }
+    skills.register({ ...s, source: 'runtime' })
+    ctx?.logger?.info(`[cau-portal] skill registered: ${s.name}（${s.content.length} 字）`)
+  } catch (error: any) {
+    ctx?.logger?.warn(`[cau-portal] skill 注册失败：${String(error?.message ?? error)}`)
+  }
 }
 
 function parseJson(content: string) {
@@ -121,6 +185,8 @@ async function runEnrich(llm: any, input: any) {
 }
 
 export function apply(ctx: any) {
+  registerSkill(ctx)
+
   const webServer = ctx?.webServer
   const llm = ctx?.llm
   if (!webServer) {
