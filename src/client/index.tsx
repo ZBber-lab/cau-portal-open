@@ -1,18 +1,22 @@
 /**
- * cau-portal 客户端（阶段4 第4步：弹层面板）。
- * 侧边栏底部「农大门户」按钮：点击开关弹层面板（panel.tsx）；
+ * cau-portal 客户端入口。
+ * 侧边栏底部「农大门户」按钮：**2026-09-20 起点击打开 DSH 官方右侧栏里的
+ * 「农大门户」tab**（`official.ts` 接线、`tab.tsx` 正文；无会话时置灰提示）；
+ * 旧的弹层抽屉代码保留在 `official.USE_OFFICIAL_SIDEBAR = false` 的回退路径上。
  * 按钮规格（定稿）：42px 行高 / 36px 圆钮，宽栏显示名称，收起态悬停 Tooltip；
  * 未读计数：宽栏行尾 tertiary 计数（无红点），收起态并入 Tooltip；
- * 配色全用 DSH --dsw-* 语义 token（带回退值），校徽 currentColor 跟随主题。
- * 后续步骤在本文件扩展：上下文附加条（第6步）。
+ * 配色全用 DSH --dsw-* 语义 token（带回退值）。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { CauPanel, PANEL_CSS, fetchUnreadCount } from './panel'
 import { SETTINGS_CSS } from './settings'
-import { bindCtx } from './ctx'
+import { bindCtx, getCtx } from './ctx'
 import { CtxBar, CTXBAR_CSS } from './ctxbar'
 import { registerToolViews, TOOLVIEW_CSS } from './toolview'
 import { subscribeBus, getOpenRequest } from './bus'
+import { getTabOpen, getUnread, setUnread, subscribeState } from './state'
+import { USE_OFFICIAL_SIDEBAR, followSessions, registerCauTab, toggleCau } from './official'
+import { createCauTabBody } from './tab'
 import {
   loadSettings,
   loadRules,
@@ -89,18 +93,44 @@ ${CTXBAR_CSS}
 ${TOOLVIEW_CSS}
 `
 
+/** 当前会话 id 的订阅（getCtx 惰性读取；官方右侧栏只在会话界面存在 → 用它给入口置灰） */
+const subSessions = (cb: () => void) => {
+  try {
+    const list = getCtx()?.sessions?.list
+    return list?.subscribe ? list.subscribe(cb) : () => {}
+  } catch {
+    return () => {}
+  }
+}
+const snapCurrentSession = (): string | null => {
+  try {
+    return getCtx()?.sessions?.list?.getSnapshot()?.current ?? null
+  } catch {
+    return null
+  }
+}
+
+/** 官方右侧栏里的「农大门户」tab 正文（面板本体在此注入；组件定义只做一次） */
+const CauTabBody = createCauTabBody({ Panel: CauPanel })
+
 function CauButton(props: any) {
   const wide = !!props?.wide
   const rowRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-  const [count, setCount] = useState(0)
+  // 官方右侧栏模式：开合 / 未读来自共享 store（面板正文在另一棵组件树里，props 传不过去）
+  const tabOpen = useSyncExternalStore(subscribeState, getTabOpen)
+  const count = useSyncExternalStore(subscribeState, getUnread)
+  // 官方右侧栏**只在会话界面存在** → 没有会话时入口置灰并说明
+  const sessionId = useSyncExternalStore(subSessions, snapCurrentSession)
+  const sessionsReady = !!getCtx()?.sessions?.list?.getSnapshot
+  const noSession = USE_OFFICIAL_SIDEBAR && sessionsReady && !sessionId
+  const [open, setOpen] = useState(false) // 仅浮层（回退）模式使用
 
   // 页面加载即取未读计数（令牌缺失/云端无 summary 时静默为 0）
   useEffect(() => {
     let alive = true
     fetchUnreadCount()
       .then((n) => {
-        if (alive) setCount(n)
+        if (alive) setUnread(n)
       })
       .catch(() => {
         /* 静默 */
@@ -110,7 +140,7 @@ function CauButton(props: any) {
     }
   }, [])
 
-  // 面板开合 → body 类（驱动聊天区让位收缩，页面充实饱满、不盖对话）
+  // 浮层兜底：官方右侧栏不可用（或整包缺席）时，抽屉仍然能开 —— 按钮不该是死的
   useEffect(() => {
     document.body.classList.toggle('dsh-cau-drawer-open', open)
     return () => {
@@ -118,12 +148,31 @@ function CauButton(props: any) {
     }
   }, [open])
 
-  // 阶段6：聊天区 toolview 卡片「在面板中打开」→ 展开抽屉（面板挂载后自行跳文章）
+  // 浮层模式：toolview 卡片「在面板中打开」→ 展开抽屉（面板挂载后自行跳文章）
   useEffect(() => {
+    if (USE_OFFICIAL_SIDEBAR) return
     return subscribeBus(() => {
       if (getOpenRequest()) setOpen(true)
     })
   }, [])
+
+  /**
+   * 入口语义：官方栏里没开 → 打开/聚焦；开着 → 折叠栏（保持迁入前的「开关」手感）；
+   * 官方栏读不到 → 回退成老的抽屉开关。
+   */
+  const onClick = () => {
+    if (USE_OFFICIAL_SIDEBAR && toggleCau()) return
+    setOpen((o) => !o)
+  }
+
+  const expanded = USE_OFFICIAL_SIDEBAR ? tabOpen || open : open
+  const title = noSession
+    ? '先进入一个会话'
+    : wide
+      ? undefined
+      : count > 0
+        ? `农大门户 · ${count} 条未读`
+        : '农大门户'
 
   return (
     <>
@@ -132,9 +181,11 @@ function CauButton(props: any) {
           type="button"
           className="dsh-cau_pill"
           aria-label="农大门户"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-          title={wide ? undefined : count > 0 ? `农大门户 · ${count} 条未读` : '农大门户'}
+          aria-expanded={expanded}
+          aria-disabled={noSession || undefined}
+          disabled={noSession}
+          onClick={onClick}
+          title={title}
         >
           <span className="dsh-cau_cauLogo">CAU</span>
           {wide && <span className="dsh-cau_pillName dsh-cau_songtiName">中国农业大学</span>}
@@ -145,7 +196,7 @@ function CauButton(props: any) {
         <CauPanel
           outsideIgnore={rowRef.current}
           onClose={() => setOpen(false)}
-          onUnreadChange={setCount}
+          onUnreadChange={setUnread}
         />
       )}
     </>
@@ -203,6 +254,12 @@ export function apply(ctx: any) {
       ),
     'cau-portal: sidebar button',
   )
+
+  // 官方右侧栏（2026-09-20 迁入）：注册 tab 类型 + 正文；官方右侧栏缺席时静默跳过
+  registerCauTab(ctx, CauTabBody)
+
+  // 跟随会话：面板开着时切会话，在新会话里再开一次（官方 tab 是会话作用域的，不跟随就会「消失」）
+  ctx.effect(() => followSessions(ctx), 'cau-portal: follow sessions')
 
   // 设置页做成面板内的「设置」页签（用户定案：不进全局 Settings）。
   // 这里只绑定 ctx 供面板树/设置页使用；设置页签名见 panel.tsx（settings 视图）。

@@ -1,11 +1,13 @@
 /**
  * 阶段6 双向协同 · 工具结果新闻卡片（tool.call.toolview，键控槽，key=mcp__cau__*）。
  * AI 调用 mcp__cau__* 工具后，结果渲染为新闻卡片（标题/摘要/重要度），
- * 内置「在面板中打开」（bus.requestOpenArticle）+「查看原文」（新标签）按钮，而非裸 JSON。
+ * 内置「在面板中打开」+「查看原文」（新标签）按钮，而非裸 JSON。
+ * 2026-09-20 迁入官方右侧栏后：打开面板走 `official.openArticleInPortal`
+ * （官方导航参数 → 右侧栏 tab；官方栏不可用时自动回退到老的 bus 通道）。
  * 未注册的 key 回落通用行；我们只接管自己的工具名。
  */
 import { useMemo } from 'react'
-import { requestOpenArticle } from './bus'
+import { openArticleInPortal } from './official'
 import { Ic } from './icons'
 
 export const TOOLVIEW_CSS = `
@@ -91,7 +93,7 @@ function Card({ it }: { it: any }) {
   const imp = it.ai?.importance || it.importance || ''
   return (
     <div className="dsh-cau_tvCard">
-      <div className="dsh-cau_tvTitle" onClick={() => id && requestOpenArticle(id)}>
+      <div className="dsh-cau_tvTitle" onClick={() => id && openArticleInPortal(id)}>
         {title}
       </div>
       <div className="dsh-cau_tvMeta">
@@ -101,7 +103,7 @@ function Card({ it }: { it: any }) {
       {sum ? <div className="dsh-cau_tvSum">{sum}</div> : null}
       <div className="dsh-cau_tvActions">
         {id ? (
-          <button type="button" className="dsh-cau_tvBtn dsh-cau_tvBtnPrimary" onClick={() => requestOpenArticle(id)}>
+          <button type="button" className="dsh-cau_tvBtn dsh-cau_tvBtnPrimary" onClick={() => openArticleInPortal(id)}>
             在面板中打开
           </button>
         ) : null}

@@ -252,15 +252,23 @@ export function CauPanel(props: {
   outsideIgnore?: HTMLElement | null
   onClose: () => void
   onUnreadChange?: (n: number) => void
+  /** drawer = 迁入前的自绘浮层（阶段A 回退开关用）；pane = 官方右侧栏正文（默认路径） */
+  mode?: 'drawer' | 'pane'
+  /** pane 模式：正文是否为活跃 tab（非活跃时不播入场动画） */
+  active?: boolean
+  /** 官方右侧栏导航参数带过来的「打开这篇文章」请求；seq（revision）变化即重新跳 */
+  openReq?: { seq: number; id: string } | null
 }) {
-  const { outsideIgnore, onClose, onUnreadChange } = props
+  const { outsideIgnore, onClose, onUnreadChange, openReq } = props
+  const pane = props.mode === 'pane'
   const rootRef = useRef<HTMLDivElement>(null)
   const [stack, setStack] = useState<View[]>([{ name: 'home' }])
   const [metaTime, setMetaTime] = useState('')
   const [unread, setUnread] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
   const [pinned, setPinned] = useState(() => !!loadSettings().panelPinned)
-  const [topInset, setTopInset] = useState(() => measureTopInset())
+  // 浮层模式才需要实测会话头部高度避开它；停靠栏是布局里的一条列，不需要
+  const [topInset, setTopInset] = useState(() => (pane ? 12 : measureTopInset()))
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const view = stack[stack.length - 1]
@@ -351,8 +359,22 @@ export function CauPanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 点击外部（面板与按钮之外）/ Esc 关闭
+  // 官方右侧栏导航参数：工具卡片「在面板中打开」→ 跳该文章（revision 变化 = 又导航一次）
+  const reqSeq = openReq?.seq ?? -1
+  const reqId = openReq?.id || ''
   useEffect(() => {
+    if (!reqId) return
+    try {
+      openArticle(reqId)
+    } catch (e) {
+      console.error('[cau-portal] openReq', e)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reqSeq, reqId])
+
+  // 点击外部（面板与按钮之外）/ Esc 关闭 —— 只对浮层模式成立；官方停靠栏由 tab 关闭按钮/Esc 负责
+  useEffect(() => {
+    if (pane) return
     const onDoc = (e: MouseEvent) => {
       if (pinned) return
       const t = e.target as Node
@@ -370,7 +392,7 @@ export function CauPanel(props: {
       document.removeEventListener('mousedown', onDoc)
       document.removeEventListener('keydown', onKey)
     }
-  }, [outsideIgnore, onClose, pinned])
+  }, [outsideIgnore, onClose, pinned, pane])
 
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s))
   /** 打开即已读：按已加载的 summary 重算未读数（SPEC 口径：打开即读、计数即时减一） */
@@ -400,14 +422,23 @@ export function CauPanel(props: {
     setStack((s) => [...s, column ? { name: 'column', site, column } : { name: 'site', site }])
 
   return (
-    <div ref={rootRef} className="dsh-cau_panel" role="dialog" aria-label="农大门户" style={{ ['--cau-panel-top' as any]: `${topInset}px` }}>
+    <div
+      ref={rootRef}
+      className={'dsh-cau_panel' + (pane ? ' dsh-cau_paneMode' : '')}
+      role={pane ? 'region' : 'dialog'}
+      aria-label="农大门户"
+      data-active={pane && props.active === false ? '0' : '1'}
+      style={pane ? undefined : ({ ['--cau-panel-top' as any]: `${topInset}px` })}
+    >
       <div className="dsh-cau_panelHead">
         <span className="dsh-cau_panelEmblem dsh-cau_cauLogo">CAU</span>
         <span className="dsh-cau_panelName">
           <span className="dsh-cau_panelNameImg dsh-cau_songtiName">中国农业大学</span>
           {showSettings && <span className="dsh-cau_panelTitle">设置</span>}
         </span>
-        <IconBtn n="pinFill" label={pinned ? '取消固定面板' : '固定面板'} title={pinned ? '取消固定（点击外部/Esc 会关闭）' : '固定面板（点击外部/Esc 不关闭）'} on={pinned} onClick={togglePinned} />
+        {!pane && (
+          <IconBtn n="pinFill" label={pinned ? '取消固定面板' : '固定面板'} title={pinned ? '取消固定（点击外部/Esc 会关闭）' : '固定面板（点击外部/Esc 不关闭）'} on={pinned} onClick={togglePinned} />
+        )}
         <IconBtn n="sliders" label="数据管理" title="数据管理（清理旧数据）" onClick={() => setStack((s) => [...s, { name: 'manage' } as any])} />
         <IconBtn n="gear" label="设置" title={showSettings ? '返回首页' : '设置'} on={showSettings} onClick={() => setShowSettings((v) => !v)} />
         <IconBtn n="close" label="关闭" onClick={onClose} />
@@ -469,6 +500,13 @@ body[data-ds-dark-theme] .dsh-cau_panel{background:color-mix(in srgb,var(--dsw-s
 body[data-ds-dark-theme] .dsh-cau_ov{background:var(--cau-brand-a9)}
 body.dsh-cau-drawer-open{--cau-panel-w:max(0px,min(540px,calc(100vw - 640px)))}
 body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-panel-w) + 24px);transition:margin-right var(--ds-transition-duration-slow,.2s) var(--ds-ease-in-out,ease-out)}
+/* ---- pane 模式（官方右侧栏正文，2026-09-20 迁入）：外壳交给官方 pane，这里只把自己摊平 ----
+   pane 是布局里的一条真实列：没有浮动、没有毛玻璃、没有圆角投影，宽度由停靠套件与拖动决定。
+   内容层样式（卡片、列表、徽标、颜色）一行不改。 */
+.dsh-cau_paneMode{position:relative;inset:auto;top:auto;right:auto;bottom:auto;z-index:auto;width:auto;max-width:none;height:100%;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border:none;border-radius:0;box-shadow:none;animation:none}
+body[data-ds-dark-theme] .dsh-cau_paneMode{background:transparent}
+.dsh-cau_paneMode[data-active='0'] .dsh-cau_view>*{animation:none}
+.dsh-cau_paneMode .dsh-cau_panelBody{padding:10px 16px 16px}
 @keyframes dsh-cau-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes dsh-cau-viewin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes dsh-cau-spin{to{transform:rotate(360deg)}}
