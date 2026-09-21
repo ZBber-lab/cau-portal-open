@@ -5,12 +5,30 @@
  *   默认 provider=deepseek-official / model=deepseek-v4-flash / reasoningEffort=off
  *   （请求体可覆盖 provider/model），返回摘要/分类/重要度/deadline + 用量。
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, unlinkSync } from 'node:fs'
+
+// 本项目没有装 @types/node（构建走 tsc JS API 转译、不做类型检查），
+// 这里给用到的 Node 全局一个最小声明，避免 tsc --noEmit 基线被 "Cannot find name 'process'" 污染。
+declare const process: { env: Record<string, string | undefined> }
+
+/** 拼路径。不 import node:path —— 那会多一条 TS2307（缺 @types/node），污染 tsc 基线 */
+function joinPath(...parts: string[]): string {
+  let out = ''
+  for (const part of parts) {
+    if (!part) continue
+    if (!out) {
+      out = part
+      continue
+    }
+    out = out.replace(/[\\/]+$/, '') + '\\' + part.replace(/^[\\/]+/, '')
+  }
+  return out
+}
 
 export const name = 'cau-portal'
 export const inject = ['webServer', 'llm']
 
-const VERSION = '0.3.1'
+const VERSION = '0.4.0'
 
 const SYSTEM_PROMPT = `你是中国农业大学新闻处理助手。阅读给定文章，输出一个 JSON 对象（只输出 JSON，不要输出任何其他文字）。
 
@@ -38,6 +56,63 @@ async function readBody(req: any): Promise<string> {
   const chunks: any[] = []
   for await (const chunk of req) chunks.push(chunk)
   return Buffer.concat(chunks).toString('utf8')
+}
+
+
+// ---- 本机令牌共享存储（单一事实源；2026-09-20 改定）----
+// 面板设置页是唯一入口：它把令牌写到 <profile>\cau-portal-store\token.json，
+// MCP 服务器与 tools/ 下的脚本每次都现读这个文件（所以改完设置无需重启 dsh web）。
+// ⚠️ tools/shared/token-store.mjs 里有一份等价的读取实现，**改格式时两边一起改**。
+const STORE_FILE = 'token.json'
+
+function storeDirs(): string[] {
+  const home = process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\1'
+  const root = joinPath(home, '.dsh', 'profiles')
+  const out: string[] = []
+  const hinted = joinPath(root, 'web', 'cau-portal-store')
+  if (existsSync(hinted)) out.push(hinted)
+  try {
+    for (const name of readdirSync(root)) {
+      if (name === 'node_modules') continue
+      const dir = joinPath(root, name, 'cau-portal-store')
+      if (!out.includes(dir) && existsSync(dir)) out.push(dir)
+    }
+  } catch {
+    /* 没装 DSH 就走不到这里 */
+  }
+  return out
+}
+
+function primaryStoreDir(): string {
+  const dirs = storeDirs()
+  if (dirs.length) return dirs[0]
+  const dir = joinPath(process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\1', '.dsh', 'profiles', 'web', 'cau-portal-store')
+  try {
+    mkdirSync(dir, { recursive: true })
+  } catch {
+    /* 只读环境 */
+  }
+  return dir
+}
+
+function readStoredToken(): { token: string; updatedAt: string; dir: string } | null {
+  for (const dir of storeDirs()) {
+    try {
+      const j = JSON.parse(readFileSync(joinPath(dir, STORE_FILE), 'utf8'))
+      const token = String(j?.githubToken || '').trim()
+      if (token) return { token, updatedAt: String(j?.updatedAt || ''), dir }
+    } catch {
+      /* 换下一个候选 */
+    }
+  }
+  return null
+}
+
+/** 掩码：给面板回状态用，任何时候都不回传明文 */
+function mask(token: string): string {
+  const s = String(token || '')
+  if (!s) return ''
+  return s.slice(0, 18) + '…' + s.slice(-4)
 }
 
 // ---- 「添加栏目」skill：运行时注册 ----
@@ -199,6 +274,54 @@ export function apply(ctx: any) {
     path: '/api/cau/health',
     handler: (_req: any, res: any) => {
       json(res, 200, { plugin: 'cau-portal', version: VERSION, ok: true, llm: !!llm })
+    },
+  })
+
+  // 本机令牌的唯一写入端：面板设置页调用它，MCP 与 tools/ 脚本现读同一个文件
+  webServer.register({
+    kind: 'exact',
+    path: '/api/cau/token',
+    handler: async (req: any, res: any) => {
+      const method = String(req.method || 'GET').toUpperCase()
+      if (method === 'GET') {
+        const cur = readStoredToken()
+        json(res, 200, { ok: true, configured: !!cur, masked: cur ? mask(cur.token) : '', updatedAt: cur?.updatedAt || '', dir: cur?.dir || '' })
+        return
+      }
+      if (method === 'PUT' || method === 'POST') {
+        let input: any = null
+        try {
+          const raw = await readBody(req)
+          input = raw ? JSON.parse(raw) : {}
+        } catch {
+          json(res, 400, { ok: false, error: 'invalid JSON body' })
+          return
+        }
+        const token = String(input?.token ?? '').trim()
+        if (!/^(github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9]{20,})$/.test(token)) {
+          json(res, 400, { ok: false, error: '令牌格式不认识（应为 github_pat_… 或 ghp_…）' })
+          return
+        }
+        try {
+          const dir = primaryStoreDir()
+          writeFileSync(joinPath(dir, STORE_FILE), JSON.stringify({ version: 1, githubToken: token, updatedAt: new Date().toISOString() }, null, 2) + '\n', 'utf8')
+          json(res, 200, { ok: true, configured: true, masked: mask(token), dir })
+        } catch (error: any) {
+          json(res, 500, { ok: false, error: String(error?.message ?? error) })
+        }
+        return
+      }
+      if (method === 'DELETE') {
+        const cur = readStoredToken()
+        try {
+          if (cur) unlinkSync(joinPath(cur.dir, STORE_FILE))
+          json(res, 200, { ok: true, configured: false })
+        } catch (error: any) {
+          json(res, 500, { ok: false, error: String(error?.message ?? error) })
+        }
+        return
+      }
+      json(res, 405, { ok: false, error: 'GET / PUT / DELETE only' })
     },
   })
 

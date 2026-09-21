@@ -291,9 +291,60 @@ export function CauSettings(props: any) {
     setMods(next)
     saveModules(next)
   }
+  /** 令牌同步状态：面板设置是「唯一入口」，保存后写进本机共享存储，MCP 与工具脚本现读它 */
+  const [tokenSync, setTokenSync] = useState<{ ok: boolean; text: string } | null>(null)
+
+  /**
+   * 把令牌同步到本机共享存储（`<profile>\cau-portal-store\token.json`）。
+   * 走插件服务端路由 `/api/cau/token`——浏览器不能写本地文件，服务端可以。
+   * 取「第一条启用的、有值的」登记为准；都没有则清除本机那份。
+   */
+  const syncTokenToServer = async (list: TokenRecord[]) => {
+    const active = list.find((t) => t.enabled && String(t.value || '').trim())
+    try {
+      const res = await fetch('/api/cau/token', {
+        method: active ? 'PUT' : 'DELETE',
+        headers: active ? { 'content-type': 'application/json' } : undefined,
+        body: active ? JSON.stringify({ token: String(active.value).trim() }) : undefined,
+      })
+      const j: any = await res.json().catch(() => null)
+      if (j?.ok) {
+        setTokenSync({ ok: true, text: active ? `已同步到本机（${j.masked || ''}）· MCP 与脚本立即可用` : '已清除本机令牌' })
+      } else {
+        setTokenSync({ ok: false, text: `同步失败：${j?.error || res.status}` })
+      }
+    } catch (e: any) {
+      setTokenSync({ ok: false, text: `同步失败：${String(e?.message || e)}` })
+    }
+  }
+
+  // 首次进入设置页：若本机存储里还没有令牌、而浏览器里已有 → 自动补一次迁移（老用户无感）
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/cau/token')
+        const j: any = await res.json().catch(() => null)
+        if (!j?.ok) {
+          setTokenSync({ ok: false, text: '本机令牌路由不可用（需重启 dsh web 让插件服务端加载新路由）' })
+          return
+        }
+        if (!j.configured) {
+          const local = loadTokens().find((t) => t.enabled && String(t.value || '').trim())
+          if (local) await syncTokenToServer(loadTokens())
+        } else {
+          setTokenSync({ ok: true, text: `本机已配置（${j.masked}）` })
+        }
+      } catch {
+        /* 静默：面板自身用浏览器里的令牌，不受影响 */
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const persistTokens = (next: TokenRecord[]) => {
     setTokens(next)
     saveTokens(next)
+    void syncTokenToServer(next)
   }
 
   const persistChannels = (next: ChannelConfig) => {
@@ -930,6 +981,13 @@ export function CauSettings(props: any) {
           <div className="dsh-cau_setBlock">
             <div className="dsh-cau_setTitle">令牌登记</div>
             <div className="dsh-cau_setDesc">每枚令牌可选启用/禁用；「值」仅存本机浏览器；过期日期用于到期提醒；「管理」跳转 GitHub 令牌管理页。停用全部令牌 = 面板无数据（顶部红条提醒）。</div>
+            <div className="dsh-cau_setDesc">
+              保存后会自动同步到 <b>本机共享存储</b>（<code>cau-portal-store\token.json</code>）—— MCP 工具、每日邮件报告都读它，
+              <b>改这里即全链路生效，不用再改配置文件、也不用重启 dsh web</b>。
+            </div>
+            {tokenSync && (
+              <div className={'dsh-cau_setHint' + (tokenSync.ok ? '' : ' dsh-cau_hintErr')}>{tokenSync.ok ? '✓ ' : '✕ '}{tokenSync.text}</div>
+            )}
             <div className="dsh-cau_tokList">
               {tokens.length === 0 && <div className="dsh-cau_setHint">暂未登记令牌。请添加 GitHub 数据令牌（细粒度 PAT，Contents: Read，私有数据仓）。</div>}
               {tokens.map((t) => {

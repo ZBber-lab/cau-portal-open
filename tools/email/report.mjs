@@ -4,24 +4,13 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { resolveGithubToken } from '../shared/token-store.mjs';
 
 const OWNER = 'ZBber-lab';
 const REPO = 'cau-portal';
 
 export function tokenFromEnvOrYml() {
-  if (process.env.CAU_GITHUB_TOKEN) return process.env.CAU_GITHUB_TOKEN;
-  const home = process.env.USERPROFILE || 'C:\\Users\\1';
-  const candidates = [
-    join(home, '.dsh', 'profiles', 'web', 'cordis.patch.yml'),
-    'C:\\Users\\1\\.dsh\\profiles\\web\\cordis.patch.yml',
-  ];
-  for (const p of candidates) {
-    try {
-      const m = readFileSync(p, 'utf8').match(/CAU_GITHUB_TOKEN:\s*(\S+)/);
-      if (m && m[1]) return m[1];
-    } catch { /* 继续 */ }
-  }
-  return null;
+  return resolveGithubToken();
 }
 
 async function fetchJson(path) {

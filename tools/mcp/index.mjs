@@ -10,17 +10,26 @@ import { z } from 'zod'
 import { readFile, readdir, appendFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveGithubToken, maskToken } from '../shared/token-store.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = process.env.CAU_DATA_DIR || path.resolve(HERE, '..', '..', 'data')
 const FEED_DIR = path.join(DATA_DIR, 'feed')
 const ART_DIR = path.join(DATA_DIR, 'articles')
 
-// ---- GitHub 云端数据源（阶段4 第3步）：CAU_GITHUB_TOKEN 存在即切换 ----
-const GH_TOKEN = process.env.CAU_GITHUB_TOKEN || ''
+// ---- GitHub 云端数据源（阶段4 第3步）：令牌存在即切换 ----
+// 令牌来源：环境变量 → 本机共享存储（<profile>\cau-portal-store\token.json，面板设置页写的）
+// **每次调用现读（5 秒缓存）**：这样在面板里换令牌立刻生效，不需要重启 dsh web。
+let _tokCache = { at: 0, val: '' }
+function ghToken() {
+  const now = Date.now()
+  if (now - _tokCache.at < 5000) return _tokCache.val
+  _tokCache = { at: now, val: resolveGithubToken() || '' }
+  return _tokCache.val
+}
+const ghMode = () => !!ghToken()
 const GH_REPO = process.env.CAU_GITHUB_REPO || 'ZBber-lab/cau-portal'
 const GH_BRANCH = process.env.CAU_GITHUB_BRANCH || 'main'
-const GH_MODE = !!GH_TOKEN
 const ghCache = new Map() // rel -> { t, text }
 const ghListCache = new Map() // rel -> { t, list }
 const CACHE_TTL_MS = 30_000
@@ -31,7 +40,7 @@ async function ghFetch(rel) {
   const url = `https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`
   const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${GH_TOKEN}`,
+      Authorization: `Bearer ${ghToken()}`,
       Accept: 'application/vnd.github.raw',
       'User-Agent': 'cau-portal-mcp',
     },
@@ -43,7 +52,7 @@ async function ghFetch(rel) {
 async function ghList(rel) {
   const url = `https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${GH_TOKEN}`, 'User-Agent': 'cau-portal-mcp' },
+    headers: { Authorization: `Bearer ${ghToken()}`, 'User-Agent': 'cau-portal-mcp' },
   })
   if (!res.ok) throw new Error(`GitHub ${res.status} listing ${rel}`)
   const list = await res.json()
@@ -62,7 +71,7 @@ const server = new McpServer({ name: 'cau-portal', version: '0.2.0' })
 // ---------- 数据读取（统一源：GH 模式读 GitHub，否则本地 data/） ----------
 /** 读取 data/ 下的相对子路径文本；GH 模式带进程内缓存 */
 async function readSource(rel) {
-  if (GH_MODE) {
+  if (ghMode()) {
     const hit = ghCache.get(rel)
     if (hit && Date.now() - hit.t < (rel.startsWith('articles/') ? CACHE_TTL_ARTICLE_MS : CACHE_TTL_MS)) return hit.text
     const text = await ghFetch(`data/${rel}`)
@@ -87,7 +96,7 @@ async function readJson(rel) {
 }
 
 async function listDir(rel) {
-  if (GH_MODE) {
+  if (ghMode()) {
     const hit = ghListCache.get(rel)
     if (hit && Date.now() - hit.t < CACHE_TTL_LIST_MS) return hit.list
     const list = await ghList(`data/${rel}`)
@@ -451,7 +460,7 @@ server.registerTool('get_usage', {
 const transport = new StdioServerTransport()
 await server.connect(transport)
 // stdio 打开即保持进程存活；日志一律走 stderr，避免污染协议流
-console.error(`[cau-portal-mcp] ready, data dir: ${DATA_DIR}${GH_MODE ? ` (github: ${GH_REPO}@${GH_BRANCH})` : ' (local)'}`)
+console.error(`[cau-portal-mcp] ready, data dir: ${DATA_DIR}${ghMode() ? ` (github: ${GH_REPO}@${GH_BRANCH}, token ${maskToken(ghToken())})` : ' (local)'}`)
 // 协议审计（本地日志，验证 DSH 客户端握手与工具调用用）
 const auditLog = (line) => appendFile(path.join(DATA_DIR, 'mcp-audit.log'), `${new Date().toISOString()} ${line}\n`, 'utf8').catch(() => {})
 {
