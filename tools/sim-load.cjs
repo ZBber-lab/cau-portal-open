@@ -100,7 +100,7 @@ ok(a.tabTypes.length === 1, 'tab 类型未注册（期望 1 个，实际 ' + a.t
 ok(a.tabTypes[0].id === 'cau-portal' && a.tabTypes[0].kind === 'cau-portal', 'tab 类型 id/kind 错误')
 ok(a.tabTypes[0].title() === '农大门户', 'tab 标题错误: ' + a.tabTypes[0].title())
 ok(Array.isArray(a.tabTypes[0].guide) && a.tabTypes[0].guide.length === 1, 'guide 入口缺失')
-ok(a.effects.some((l) => /follow sessions/.test(String(l))), '跟随会话 effect 未注册')
+ok(!a.effects.some((l) => /follow sessions/.test(String(l))), '跟随会话应已移除（2026-09-20 收尾）')
 
 // ---- 场景2：官方右侧栏缺席（服务没有 / 槽位不存在）→ 不能抛错，其余功能照常 ----
 const b = makeCtx(false)

@@ -1,8 +1,9 @@
 /**
- * cau-portal 面板（阶段4 第4步 批②/③：全套浏览）。
- * 圆角毛玻璃卡片浮层（右缘留边距、垂直居中 540px/74vh）+ 导航栈：
- * L0 首页（panel-home）→ L1 栏目页（panel-column，站点/栏目）→ L2 文章阅读（panel-article）+ 归档/关注 视图。
- * 头部有「固定」开关（固定后点外部/Esc 不关闭，仅 ✕ 关）。
+ * cau-portal 面板正文（**停靠在 DSH 官方右侧栏**里的一个 tab，2026-09-20 迁入）。
+ * 外壳交给官方 pane（全高整列、宽度可拖、可分屏/浮动/全屏），这里只管内容：
+ * L0 首页（panel-home）→ L1 栏目页（panel-column，站点/栏目）→ L2 文章阅读（panel-article）
+ * + 归档/关注/要闻/数据管理/设置。
+ * 视图栈**按 tab（≈会话）各记一份**（state.ts 的 panels 桶），切走再回来还停在这一页。
  * 未读口径：AI 重要（高/中）+近 7 天；打开即读（计数即时减一）；tertiary 计数无红点。
  */
 import { Component, useEffect, useRef, useState } from 'react'
@@ -15,9 +16,8 @@ import { ManageView } from './panel-manage'
 import { DeadlinesView } from './panel-deadlines'
 import { CauSettings } from './settings'
 import { Empty } from './empty'
+import { getPanelState, setPanelState } from './state'
 import {
-  loadSettings,
-  saveSettings,
   readCloudText,
   loadReadSet,
   markRead,
@@ -31,7 +31,6 @@ import {
   siteOfItem,
   loadSiteDirectory,
 } from './data'
-import { getOpenRequest, clearOpenRequest, subscribeBus } from './bus'
 
 /** 设置页错误边界：出错了显示错误文字（便于定位），不再静默白屏 */
 class CauSettingsBoundary extends Component<any, { err: any }> {
@@ -120,38 +119,6 @@ function shortTime(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) return ''
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
-
-/**
- * 测量「上方栏」（会话头部：标题行 + 对话/轨迹标签）高度，让面板从它下方开始。
- * 优先实测会话头部组件（.wSkVaW_header，DSH 随版本可能换 hash，故保留结构兜底）；
- * 失败退回 56px（会话头部常见高度）+ 默认 12px。
- */
-function measureTopInset(): number {
-  try {
-    const header = document.querySelector('.wSkVaW_header') as HTMLElement | null
-    if (header) {
-      const r = header.getBoundingClientRect()
-      if (r.height > 0 && r.height < 400) return Math.ceil(r.top + r.height) + 8
-    }
-    const frame = document.querySelector('.pI_x6G_frame') as HTMLElement | null
-    if (frame) {
-      const r = frame.getBoundingClientRect()
-      if (r.top > 0) return Math.ceil(r.top) + 8
-    }
-    const col = document.querySelector('.pI_x6G_centerCol') as HTMLElement | null
-    if (col) {
-      const first = col.firstElementChild as HTMLElement | null
-      if (first) {
-        const fr = first.getBoundingClientRect()
-        const colH = col.getBoundingClientRect().height || window.innerHeight
-        if (fr.height > 0 && fr.height < colH * 0.5) return Math.ceil(fr.height) + 8
-      }
-    }
-  } catch {
-    /* noop */
-  }
-  return 56
 }
 
 /** 头部 28px 幽灵图标钮（UI 批②：替代原文字小页签与 ✕） */
@@ -249,36 +216,35 @@ function FollowView(props: { onBack: () => void; onOpenArticle: (id: string) => 
 }
 
 export function CauPanel(props: {
-  outsideIgnore?: HTMLElement | null
   onClose: () => void
   onUnreadChange?: (n: number) => void
-  /** drawer = 迁入前的自绘浮层（阶段A 回退开关用）；pane = 官方右侧栏正文（默认路径） */
-  mode?: 'drawer' | 'pane'
-  /** pane 模式：正文是否为活跃 tab（非活跃时不播入场动画） */
+  /** 视图记忆的桶键（= 官方 tab id ≈ 会话）；同一 tab 切走再回来还停在这一页 */
+  storeKey?: string
+  /** 正文是否为活跃 tab（非活跃时不播入场动画） */
   active?: boolean
   /** 官方右侧栏导航参数带过来的「打开这篇文章」请求；seq（revision）变化即重新跳 */
   openReq?: { seq: number; id: string } | null
 }) {
-  const { outsideIgnore, onClose, onUnreadChange, openReq } = props
-  const pane = props.mode === 'pane'
+  const { onClose, onUnreadChange, openReq } = props
+  const storeKey = String(props.storeKey || '')
   const rootRef = useRef<HTMLDivElement>(null)
-  const [stack, setStack] = useState<View[]>([{ name: 'home' }])
+  // 视图栈按 tab 记忆（tab 被关掉时由 tab.tsx 清掉；没有记忆就从首页开始）
+  const [stack, setStack] = useState<View[]>(() => {
+    const saved = getPanelState(storeKey)?.stack
+    return Array.isArray(saved) && saved.length ? (saved as View[]) : [{ name: 'home' }]
+  })
   const [metaTime, setMetaTime] = useState('')
   const [unread, setUnread] = useState(0)
-  const [showSettings, setShowSettings] = useState(false)
-  const [pinned, setPinned] = useState(() => !!loadSettings().panelPinned)
-  // 浮层模式才需要实测会话头部高度避开它；停靠栏是布局里的一条列，不需要
-  const [topInset, setTopInset] = useState(() => (pane ? 12 : measureTopInset()))
+  const [showSettings, setShowSettings] = useState<boolean>(() => !!getPanelState(storeKey)?.settings)
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const view = stack[stack.length - 1]
 
-  const togglePinned = () =>
-    setPinned((p) => {
-      const next = !p
-      saveSettings({ ...loadSettings(), panelPinned: next })
-      return next
-    })
+  // 记忆本 tab 的视图状态（不发通知：只影响面板自身）
+  useEffect(() => {
+    if (!storeKey) return
+    setPanelState(storeKey, { stack, settings: showSettings })
+  }, [storeKey, stack, showSettings])
 
   // 底部状态栏数据：云端更新时间 + 未读数（挂载时与手动刷新都会走这里）
   const loadHead = async () => {
@@ -328,37 +294,6 @@ export function CauPanel(props: {
     onUnreadChange?.(unread)
   }, [unread, onUnreadChange])
 
-  // 阶段6：聊天区 toolview 卡片「在面板中打开」→ 跳转到文章
-  useEffect(() => {
-    return subscribeBus(() => {
-      try {
-        const req = getOpenRequest()
-        if (req && req.id) {
-          if (!(view?.name === 'article' && view.id === req.id)) openArticle(req.id)
-          clearOpenRequest()
-        }
-      } catch (e) {
-        console.error('[cau-portal] open', e)
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view?.name, view?.id])
-
-  // 阶段6：面板挂载时，若有尚未消费的「在面板中打开」请求，先跳到对应文章
-  //（面板关闭时点击卡片 → 展开抽屉发生在发信号之后，订阅回调收不到已过信号，故此处补一次）
-  useEffect(() => {
-    try {
-      const req = getOpenRequest()
-      if (req && req.id) {
-        openArticle(req.id)
-        clearOpenRequest()
-      }
-    } catch (e) {
-      console.error('[cau-portal] open-on-mount', e)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   // 官方右侧栏导航参数：工具卡片「在面板中打开」→ 跳该文章（revision 变化 = 又导航一次）
   const reqSeq = openReq?.seq ?? -1
   const reqId = openReq?.id || ''
@@ -371,28 +306,6 @@ export function CauPanel(props: {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reqSeq, reqId])
-
-  // 点击外部（面板与按钮之外）/ Esc 关闭 —— 只对浮层模式成立；官方停靠栏由 tab 关闭按钮/Esc 负责
-  useEffect(() => {
-    if (pane) return
-    const onDoc = (e: MouseEvent) => {
-      if (pinned) return
-      const t = e.target as Node
-      if (rootRef.current?.contains(t)) return
-      if (outsideIgnore?.contains(t)) return
-      onClose()
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (pinned) return
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [outsideIgnore, onClose, pinned, pane])
 
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s))
   /** 打开即已读：按已加载的 summary 重算未读数（SPEC 口径：打开即读、计数即时减一） */
@@ -424,11 +337,10 @@ export function CauPanel(props: {
   return (
     <div
       ref={rootRef}
-      className={'dsh-cau_panel' + (pane ? ' dsh-cau_paneMode' : '')}
-      role={pane ? 'region' : 'dialog'}
+      className="dsh-cau_panel"
+      role="region"
       aria-label="农大门户"
-      data-active={pane && props.active === false ? '0' : '1'}
-      style={pane ? undefined : ({ ['--cau-panel-top' as any]: `${topInset}px` })}
+      data-active={props.active === false ? '0' : '1'}
     >
       <div className="dsh-cau_panelHead">
         <span className="dsh-cau_panelEmblem dsh-cau_cauLogo">CAU</span>
@@ -436,9 +348,6 @@ export function CauPanel(props: {
           <span className="dsh-cau_panelNameImg dsh-cau_songtiName">中国农业大学</span>
           {showSettings && <span className="dsh-cau_panelTitle">设置</span>}
         </span>
-        {!pane && (
-          <IconBtn n="pinFill" label={pinned ? '取消固定面板' : '固定面板'} title={pinned ? '取消固定（点击外部/Esc 会关闭）' : '固定面板（点击外部/Esc 不关闭）'} on={pinned} onClick={togglePinned} />
-        )}
         <IconBtn n="sliders" label="数据管理" title="数据管理（清理旧数据）" onClick={() => setStack((s) => [...s, { name: 'manage' } as any])} />
         <IconBtn n="gear" label="设置" title={showSettings ? '返回首页' : '设置'} on={showSettings} onClick={() => setShowSettings((v) => !v)} />
         <IconBtn n="close" label="关闭" onClick={onClose} />
@@ -495,19 +404,25 @@ export function CauPanel(props: {
 }
 
 export const PANEL_CSS = `
-.dsh-cau_panel{position:fixed;top:var(--cau-panel-top,12px);right:12px;bottom:12px;z-index:30;display:flex;flex-direction:column;width:var(--cau-panel-w,540px);max-width:calc(100vw - 48px);background:color-mix(in srgb,var(--dsw-specific-menu,#fff) 86%,transparent);backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);border:1px solid var(--cau-line);border-radius:var(--cau-r-l);box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(8,12,18,.16)),inset 0 1px 0 rgba(255,255,255,.06);overflow:hidden;animation:dsh-cau-rise .18s ease-out}
-body[data-ds-dark-theme] .dsh-cau_panel{background:color-mix(in srgb,var(--dsw-specific-menu,#14161a) 93%,transparent)}
+/* ---- 面板正文：停靠在 DSH 官方右侧栏里（2026-09-20 迁入）----
+   外壳由官方 pane 提供（全高整列、宽度可拖、可分屏/浮动/全屏），所以这里**不画**浮动层：
+   没有定位、毛玻璃、圆角与投影，只把自己摊平填满这一列；内容层样式一行不改。 */
+.dsh-cau_panel{position:relative;box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;background:transparent;border:none;overflow:hidden;container-type:inline-size}
 body[data-ds-dark-theme] .dsh-cau_ov{background:var(--cau-brand-a9)}
-body.dsh-cau-drawer-open{--cau-panel-w:max(0px,min(540px,calc(100vw - 640px)))}
-body.dsh-cau-drawer-open [data-conversation-scroll]{margin-right:calc(var(--cau-panel-w) + 24px);transition:margin-right var(--ds-transition-duration-slow,.2s) var(--ds-ease-in-out,ease-out)}
-/* ---- pane 模式（官方右侧栏正文，2026-09-20 迁入）：外壳交给官方 pane，这里只把自己摊平 ----
-   pane 是布局里的一条真实列：没有浮动、没有毛玻璃、没有圆角投影，宽度由停靠套件与拖动决定。
-   内容层样式（卡片、列表、徽标、颜色）一行不改。 */
-.dsh-cau_paneMode{position:relative;inset:auto;top:auto;right:auto;bottom:auto;z-index:auto;width:auto;max-width:none;height:100%;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border:none;border-radius:0;box-shadow:none;animation:none}
-body[data-ds-dark-theme] .dsh-cau_paneMode{background:transparent}
-.dsh-cau_paneMode[data-active='0'] .dsh-cau_view>*{animation:none}
-.dsh-cau_paneMode .dsh-cau_panelBody{padding:10px 16px 16px}
-@keyframes dsh-cau-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.dsh-cau_panel[data-active='0'] .dsh-cau_view>*{animation:none}
+/* ---- 自适应：pane 宽度由停靠套件与拖动决定（还能分屏、全屏），从很窄到很宽都要能用 ---- */
+@container (max-width:400px){
+.dsh-cau_panelHead{padding:0 4px 0 10px;gap:1px}
+.dsh-cau_panelBody{padding:8px 10px 12px}
+.dsh-cau_tab{padding:7px 6px 9px}
+.dsh-cau_tabLabel{font-size:12px}
+.dsh-cau_quick{grid-template-columns:1fr}
+.dsh-cau_ov{padding:9px 10px}
+}
+@container (min-width:860px){
+.dsh-cau_view{width:100%;max-width:880px;margin:0 auto}
+.dsh-cau_panelBody{padding:12px 24px 20px}
+}
 @keyframes dsh-cau-viewin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes dsh-cau-spin{to{transform:rotate(360deg)}}
 .dsh-cau_panelHead{flex:none;display:flex;align-items:center;height:48px;padding:0 8px 0 14px;gap:3px;border-bottom:1px solid var(--cau-line-soft)}
@@ -523,7 +438,7 @@ body[data-ds-dark-theme] .dsh-cau_paneMode{background:transparent}
 .dsh-cau_iconBtn:hover{background:var(--cau-hover);color:var(--cau-ink)}
 .dsh-cau_iconBtn[data-on='true']{color:var(--cau-brand);background:var(--cau-brand-a9)}
 .dsh-cau_iconBtn svg{display:block;width:16px;height:16px}
-.dsh-cau_panelBody{flex:1;min-height:0;overflow-y:auto;padding:6px 14px 14px;scrollbar-width:thin;scrollbar-color:var(--dsw-alias-scrollbar-bg-l2,rgba(0,0,0,.2)) transparent}
+.dsh-cau_panelBody{flex:1;min-height:0;overflow-y:auto;padding:10px 16px 16px;scrollbar-width:thin;scrollbar-color:var(--dsw-alias-scrollbar-bg-l2,rgba(0,0,0,.2)) transparent}
 .dsh-cau_panelBody::-webkit-scrollbar{width:8px}
 .dsh-cau_panelBody::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2,rgba(0,0,0,.2));border-radius:4px}
 .dsh-cau_panelBody::-webkit-scrollbar-thumb:hover{background:var(--dsw-alias-scrollbar-hover-l2,rgba(0,0,0,.3))}
@@ -586,7 +501,7 @@ body[data-ds-dark-theme] .dsh-cau_paneMode{background:transparent}
 .dsh-cau_mgArch{flex:none;display:flex;color:var(--cau-warn)}
 .dsh-cau_mgArch svg{width:12px;height:12px}
 /* ---- 我的事项大卡 + 全部待办入口 ---- */
-.dsh-cau_mineGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;margin-bottom:10px}
+.dsh-cau_mineGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(215px,100%),1fr));gap:10px;margin-bottom:10px}
 .dsh-cau_mineCard{position:relative;display:flex;flex-direction:column;gap:4px;padding:12px 13px 12px 16px;border:1px solid var(--cau-line-soft);border-radius:var(--cau-r-m);background:color-mix(in srgb,var(--dsw-specific-menu,#fff) 30%,transparent);box-shadow:0 1px 2px rgba(10,15,22,.03);cursor:pointer;overflow:hidden}
 .dsh-cau_mineCard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--cau-brand),var(--cau-brand-a35))}
 .dsh-cau_mineCard:hover{border-color:var(--cau-brand-a35)}
@@ -749,7 +664,7 @@ body[data-ds-dark-theme] .dsh-cau_paneMode{background:transparent}
 .dsh-cau_chipBtn{cursor:pointer}
 .dsh-cau_chipBtn:hover{border-color:var(--cau-brand-a35);color:var(--cau-brand);background:var(--cau-brand-a6)}
 .dsh-cau_chipCount{font-style:normal;font-size:10px;color:var(--cau-ink3)}
-.dsh-cau_quick{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.dsh-cau_quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:6px}
 .dsh-cau_quickLink{display:flex;align-items:center;justify-content:center;gap:5px;padding:8px;border:1px solid var(--cau-line-soft);border-radius:10px;font-size:12px;color:var(--cau-ink2);text-decoration:none;background:color-mix(in srgb,var(--dsw-specific-menu,#fff) 26%,transparent)}
 .dsh-cau_quickLink:hover{color:var(--cau-brand);border-color:var(--cau-brand-a35);background:var(--cau-brand-a6)}
 .dsh-cau_quickLink svg{width:11px;height:11px;opacity:.75}

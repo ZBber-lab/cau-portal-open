@@ -1,5 +1,5 @@
 /**
- * 官方右侧栏适配层（迁入 DSH 官方右侧栏 · 阶段A）。
+ * 官方右侧栏适配层。
  *
  * 我们是一个 **page 类型 tab**：不带地址 glob，按 kind 打开（`openTab('cau-portal')`）。
  * 接线走官方公开的两段式注册（与随包的 ui-sidebar-files / -documentpreview 同一条路）：
@@ -7,17 +7,14 @@
  *   ② `ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name, key: id }, Body))`
  * 正文那边由框架**以 prop 注入** `useTabInfo()`，所以运行时不 import 那个包。
  *
- * 两个刻意为之的选择：
+ * 两条刻意为之的约定：
  *   - **不把 `sidebarRightTabs` 写进客户端 `inject`**：插件声明注入而服务缺席会让插件永久
  *     pending（`'skills'` 那次事故），这里一律用 `ctx.get()` 读 + 缺席降级。
- *   - **`USE_OFFICIAL_SIDEBAR = false` 即回到自绘抽屉**：阶段A 的一行回退开关。
+ *   - **面板只存在于官方右侧栏**（2026-09-20 收尾）：自绘抽屉与 `USE_OFFICIAL_SIDEBAR`
+ *     回退开关已删除，不再保留双形态代码；官方右侧栏要求 DSH ≥ 0.1.5-rc.2。
  */
 import { getCtx } from './ctx'
-import { getWantOpen, setTabOpen, setWantOpen } from './state'
-import { requestOpenArticle } from './bus'
-
-/** 一行回退：false = 用回自绘抽屉（阶段A 的保险开关，阶段C 清理时删除） */
-export const USE_OFFICIAL_SIDEBAR = true
+import { setTabOpen } from './state'
 
 export const CAU_TAB_KIND = 'cau-portal'
 export const CAU_TAB_ID = 'cau-portal'
@@ -86,14 +83,14 @@ export function cauTabShowing(): boolean {
 }
 
 /**
- * 打开（或聚焦）农大门户 tab。返回是否成功。
- * 没有挂载的 seat（无会话 / 非会话界面）时控制器会「响亮失败」——这里吞掉并下一帧重试一次，
- * 让调用方可以走降级路径（入口置灰 / 抽屉兜底）。
+ * 打开（或聚焦）农大门户 tab。
+ *
+ * 没有挂载的 seat（无会话 / 非会话界面）时控制器会「响亮失败」——这里吞掉并下一帧重试一次。
+ * 返回是否调用成功，便于调用方决定是否提示。
  */
 export function openCauTab(params?: Record<string, any>, retry = 1): boolean {
   const right = sidebarRight()
   if (!right || typeof right.openTab !== 'function') return false
-  setWantOpen(true)
   try {
     right.openTab(CAU_TAB_KIND, params ? { params } : undefined)
     return true
@@ -109,68 +106,39 @@ export function openCauTab(params?: Record<string, any>, retry = 1): boolean {
   }
 }
 
+let warnedMissing = false
+
 /**
- * 入口按钮语义：没开 → 开；开着 → 折叠栏（保持迁入前的「开关」手感）。
- * 返回是否已由官方右侧栏处理；false 表示官方栏不可用，调用方应回退到抽屉。
+ * 入口按钮语义：官方栏里没开 → 打开/聚焦；开着 → 折叠栏（保持「开关」手感）。
+ * 官方右侧栏不可用时只提醒一次（面板没有别的出口了，用户需要知道为什么点不动）。
  */
-export function toggleCau(): boolean {
+export function toggleCau(): void {
   const right = sidebarRight()
-  if (!right) return false
+  if (!right) {
+    if (!warnedMissing) {
+      warnedMissing = true
+      console.warn('[cau-portal] 没有可用的官方右侧栏（需要 DSH ≥ 0.1.5-rc.2）')
+    }
+    return
+  }
   if (cauTabShowing()) {
     try {
       right.toggleExpanded()
     } catch {
       /* noop */
     }
-    return true
+    return
   }
   openCauTab()
-  return true
 }
 
-/** 工具卡片「在面板中打开」：走官方导航参数；官方栏不可用时回退到老的 bus 通道（抽屉路径） */
+/** 工具卡片「在面板中打开」：走官方导航参数（tab 已开着则聚焦并重新导航） */
 export function openArticleInPortal(id: string): boolean {
-  if (!USE_OFFICIAL_SIDEBAR) {
-    requestOpenArticle(id)
-    return false
-  }
-  const ok = openCauTab({ articleId: id })
-  if (!ok) requestOpenArticle(id)
-  return ok
-}
-
-/**
- * 跟随会话：当前会话变化时，若用户希望面板开着，就在新会话里再开一次
- * （官方 tab 是会话作用域的，不这么做的话一切会话面板就「消失」了 —— 迁入前它一直是开着的）。
- * 返回取消订阅函数。
- */
-export function followSessions(ctx: any): () => void {
-  if (!USE_OFFICIAL_SIDEBAR) return () => {}
-  try {
-    const list = ctx?.sessions?.list
-    if (!list?.subscribe || !list?.getSnapshot) return () => {}
-    let last: any = list.getSnapshot()?.current
-    return list.subscribe(() => {
-      let cur: any
-      try {
-        cur = list.getSnapshot()?.current
-      } catch {
-        return
-      }
-      if (cur === last) return
-      last = cur
-      if (!cur || !getWantOpen()) return
-      openCauTab()
-    })
-  } catch {
-    return () => {}
-  }
+  return openCauTab({ articleId: id })
 }
 
 /** 把 tab 类型与正文注册进官方右侧栏（官方右侧栏缺席时静默跳过） */
 export function registerCauTab(ctx: any, Body: any): void {
-  if (!USE_OFFICIAL_SIDEBAR) return
-
   const tabs = sidebarRightTabs(ctx)
   if (tabs && typeof tabs.register === 'function') {
     ctx.effect(

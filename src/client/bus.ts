@@ -1,27 +1,28 @@
 /**
  * 跨组件树命令/上下文总线（阶段6 双向协同）。
- * 面板树（CauPanel）↔ 聊天区槽（对话输入 dock / 工具结果 toolview）之间共享两件事：
+ * 面板正文 ↔ 聊天区槽（对话输入 dock / 工具结果 toolview）之间共享两件事：
  *  1) 阅读上下文引用：面板文章页「引用到对话」追加一篇文章 → 聊天输入框上方显示多个引用 chip。
- *  2) 「在面板中打开」：toolview 卡片点按钮 → 面板跳到对应文章。
- *  3) 「填入主聊天输入框」：设置页（面板抽屉内）发起 → dock 的 CtxBar 调 inputActions.setDraft
+ *  2) 「填入主聊天输入框」：设置页（面板内）发起 → dock 的 CtxBar 调 inputActions.setDraft
  *     （只填不发送；dock 槽位在无会话时不渲染，此时请求挂起，等有会话挂载后自动填入）。
  * 支持一次引用多篇（数组）。注意：build.mjs 内联器不做模块去重，状态+订户集合必须挂 window
  *（跨所有内联副本共享），否则面板发信号、dock 组件（不同副本）收不到。
+ *
+ * 2026-09-20：原「在面板中打开」的 bus 通道已删除 —— 迁入官方右侧栏后，工具卡片改走
+ * 官方导航参数（`official.openArticleInPortal` → `openTab(kind, { params })`），不再需要总线转发。
  */
 
 export type AttachedItem = { id: string; title: string; source?: string }
 export type AttachedContext = AttachedItem[]
-export type OpenRequest = { seq: number; id: string } | null
-/** 「填入主聊天输入框」请求（只填不发送）：设置页在抽屉里，拿不到 dock 的 inputActions，故经总线桥到 CtxBar */
+/** 「填入主聊天输入框」请求（只填不发送）：设置页在面板里，拿不到 dock 的 inputActions，故经总线桥到 CtxBar */
 export type DraftRequest = { seq: number; text: string } | null
 
-type Ref = { attached: AttachedItem[]; open: OpenRequest; draft: DraftRequest; draftAck: number; subs: Set<() => void> }
+type Ref = { attached: AttachedItem[]; draft: DraftRequest; draftAck: number; subs: Set<() => void> }
 
 function ref(): Ref {
   let r = (window as any).__CAU_CTXBAR__ as Ref | undefined
   // 兼容旧版/热更新残留的过期状态形状（attached 曾为 null），读到怀疑形状就重置为新数组结构
-  if (!r || !Array.isArray(r.attached) || typeof r.open !== 'object' || !(r.subs instanceof Set)) {
-    r = { attached: [] as AttachedItem[], open: null as OpenRequest, draft: null, draftAck: 0, subs: new Set() }
+  if (!r || !Array.isArray(r.attached) || !(r.subs instanceof Set)) {
+    r = { attached: [] as AttachedItem[], draft: null, draftAck: 0, subs: new Set() }
     ;(window as any).__CAU_CTXBAR__ = r
   }
   // 旧形状补字段（就地补，不重置，避免热更新时把用户已引用的文章清掉）
@@ -81,18 +82,6 @@ export function subscribeAttached(fn: () => void): () => void {
   return () => ref().subs.delete(fn)
 }
 
-export function getOpenRequest(): OpenRequest {
-  return ref().open
-}
-export function requestOpenArticle(id: string) {
-  const r = ref()
-  r.open = { seq: (r.open?.seq ?? 0) + 1, id }
-  emit()
-}
-export function clearOpenRequest() {
-  ref().open = null
-  emit()
-}
 export function subscribeBus(fn: () => void): () => void {
   ref().subs.add(fn)
   return () => ref().subs.delete(fn)

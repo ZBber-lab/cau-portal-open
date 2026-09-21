@@ -44,7 +44,7 @@
 
 ### 前置要求
 
-- DeepSeek Harness（DSH）web 环境
+- DeepSeek Harness（DSH）web 环境，**版本 ≥ 0.1.5-rc.2**（面板停靠在 DSH 官方右侧栏里，旧版本没有这个栏）
 - Node.js 18+
 - 一个 GitHub 账号与一个**私有仓库**（存放你的数据；见下）
 - DeepSeek API Key（管道 AI 加工用；`deepseek-v4-flash` 等）
