@@ -233,7 +233,10 @@ export function CauPanel(props: {
     const saved = getPanelState(storeKey)?.stack
     return Array.isArray(saved) && saved.length ? (saved as View[]) : [{ name: 'home' }]
   })
-  const [metaTime, setMetaTime] = useState('')
+  /** 云端数据最后更新时间（原始 ISO，渲染时才换算新鲜度） */
+  const [metaIso, setMetaIso] = useState('')
+  /** 每分钟自增：面板可能开很久，新鲜度要跟着时间走 */
+  const [nowTs, setNowTs] = useState(() => Date.now())
   const [unread, setUnread] = useState(0)
   const [showSettings, setShowSettings] = useState<boolean>(() => !!getPanelState(storeKey)?.settings)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -250,18 +253,24 @@ export function CauPanel(props: {
   const loadHead = async () => {
     const token = activeTokenValues()[0]
     if (!token) {
-      setMetaTime('')
+      setMetaIso('')
       setUnread(0)
       return
     }
     const b = await loadBundle(token)
-    setMetaTime(b.summary?.last_updated || b.index?.last_updated ? shortTime(b.summary?.last_updated || b.index?.last_updated) : '')
+    setMetaIso(b.summary?.last_updated || b.index?.last_updated || '')
     const readSet = loadReadSet()
     setUnread(unreadCandidates(b.summary).filter((it: any) => !readSet.includes(it.article_id || it.url)).length)
   }
   useEffect(() => {
     void loadHead()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 新鲜度计时器（1 分钟一跳；面板开着时「已 N 小时」会自己往前走）
+  useEffect(() => {
+    const t = setInterval(() => setNowTs(Date.now()), 60000)
+    return () => clearInterval(t)
   }, [])
 
   /** 从设置页返回首页时重算未读：设置里的「栏目频道管理」可能改了「要闻」的过滤口径，
@@ -334,6 +343,23 @@ export function CauPanel(props: {
   const openColumn = (site: string, column: string | null) =>
     setStack((s) => [...s, column ? { name: 'column', site, column } : { name: 'site', site }])
 
+  /** 数据新鲜度（2026-09-21）：Actions 会「整轮静默失败」（workflow 把全失败当成"无变化"跳过提交、
+   *  不报错也不通知），所以底栏除了绝对时间还要给出「已过多久 + 颜色」，一眼看出数据是不是卡住了。
+   *  阈值：>4h 黄、>24h 红（正常每 2h 一轮）。 */
+  const metaTime = shortTime(metaIso)
+  const ageH = (() => {
+    if (!metaIso) return null
+    const t = new Date(metaIso).getTime()
+    if (Number.isNaN(t)) return null
+    return Math.max(0, (nowTs - t) / 3600000)
+  })()
+  const stale = ageH == null ? '' : ageH > 24 ? 'bad' : ageH > 4 ? 'warn' : ''
+  const ageText = ageH == null || ageH < 1 ? '' : ageH < 48 ? ` · 已 ${Math.floor(ageH)} 小时` : ` · 已 ${Math.floor(ageH / 24)} 天`
+  const footTitle = !metaIso
+    ? '尚未获取到云端数据'
+    : `云端数据最后更新：${metaIso}` +
+      (stale ? `（已超过 ${stale === 'bad' ? '24 小时' : '4 小时'}，可能上一轮抓取失败或定时任务没触发）` : '')
+
   return (
     <div
       ref={rootRef}
@@ -387,8 +413,10 @@ export function CauPanel(props: {
         )}
       </div>
       <div className="dsh-cau_panelFoot">
-        <span className="dsh-cau_footDot" data-on={metaTime ? '1' : '0'} />
-        <span className="dsh-cau_footText">云端更新于 {metaTime || '—'} · 未读 {unread}</span>
+        <span className="dsh-cau_footDot" data-on={metaIso ? '1' : '0'} data-stale={stale || undefined} />
+        <span className="dsh-cau_footText" data-stale={stale || undefined} title={footTitle}>
+          云端更新于 {metaTime || '—'}{ageText} · 未读 {unread}
+        </span>
         <button
           type="button"
           className={'dsh-cau_footBtn' + (refreshing ? ' spin' : '')}
@@ -446,6 +474,11 @@ body[data-ds-dark-theme] .dsh-cau_ov{background:var(--cau-brand-a9)}
 .dsh-cau_footDot{flex:none;width:5px;height:5px;border-radius:50%;background:var(--cau-ink3)}
 .dsh-cau_footDot[data-on='1']{background:var(--cau-ok)}
 .dsh-cau_footText{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 数据新鲜度：>4h 黄、>24h 红（Actions 整轮静默失败时靠这个一眼看出来；必须排在 data-on 之后才盖得住绿色） */
+.dsh-cau_footDot[data-stale='warn']{background:var(--cau-warn)}
+.dsh-cau_footDot[data-stale='bad']{background:var(--cau-err)}
+.dsh-cau_footText[data-stale='warn']{color:var(--cau-warn)}
+.dsh-cau_footText[data-stale='bad']{color:var(--cau-err)}
 .dsh-cau_footBtn{flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:none;border-radius:6px;background:transparent;color:var(--cau-ink3);cursor:pointer}
 .dsh-cau_footBtn:hover{background:var(--cau-hover);color:var(--cau-ink)}
 .dsh-cau_footBtn svg{display:block;width:13px;height:13px}
