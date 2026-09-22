@@ -307,7 +307,15 @@ async function probeColumn(base, col, siteName, siteTitle, { articleCheck }) {
     const ar = await fetchText(abs, { referer: url })
     if (ar.ok) {
       const a = parseArticle(ar.text, abs)
-      res.article = { url: abs, title: a.title, time: a.time, body_chars: (a.body || '').length, is_image_only: a.is_image_only }
+      res.article = {
+        url: abs,
+        title: a.title,
+        time: a.time,
+        body_chars: (a.body || '').length,
+        is_image_only: a.is_image_only,
+        is_attachment_only: a.is_attachment_only,
+        attachment: a.attachment ?? null,
+      }
     } else {
       res.article = { url: abs, error: `详情页失败 ${ar.status ?? ar.error}` }
     }
@@ -556,7 +564,10 @@ function report(out) {
       const n = c.listOk ? `${c.count ?? '?'} 条${typeof c.static_items === 'number' ? `（列表页 ${c.static_items}）` : ''}${c.pages ? `，约 ${c.pages} 页` : ''}` : '—'
       L.push(`  · ${c.name}${c.id ? `  id=${c.id}` : ''}${c.kind ? `  [${c.kind}]` : ''}${c.home_items ? `  首页条目 ${c.home_items}` : ''}  ${n}`)
       if (c.samples?.length) L.push(`      样例：${c.samples[0].date || '无日期'} ${String(c.samples[0].title || '').slice(0, 44)}`)
-      if (c.article && c.article.body_chars !== undefined) L.push(`      正文：${c.article.error ? c.article.error : `${c.article.body_chars} 字${c.article.is_image_only ? '（图片海报）' : ''}`}`)
+      if (c.article && c.article.body_chars !== undefined)
+        L.push(
+          `      正文：${c.article.error ? c.article.error : `${c.article.body_chars} 字${c.article.is_image_only ? '（图片海报）' : ''}${c.article.is_attachment_only ? `（正文即附件：${c.article.attachment?.name || c.article.attachment?.kind || '附件'}）` : ''}`}`,
+        )
       if (c.restricted) L.push(`      ! 受访问限制：${c.restricted}${c.restrictEvidence ? ` —— 「${c.restrictEvidence}」` : ''}`)
       else if (!c.listOk) L.push(`      ! ${c.error}`)
       else if (!c.count) L.push(`      ! 列表无条目（可能需登录或栏目为空）`)

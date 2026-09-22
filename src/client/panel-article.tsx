@@ -32,6 +32,12 @@ const idOf = (it: { article_id?: string; url?: string }) => it.article_id || it.
 /** 统一门户（tp_up）→ 专属界面（不标注「正文未抓取」） */
 const isPortal = (u?: string) => /tp_up/.test(String(u || ''))
 
+/**
+ * 「正文即附件」页（苏迪 wp_pdf_player 等）：正文位置没有一个字，只有一个附件播放器。
+ * 2026-09-21 起这类页不再谎报「正文未抓取」，而是如实说明正文是哪个附件（不抽附件内文字）。
+ */
+const attLabel = (kind?: string) => (kind === 'pdf' ? 'PDF 附件' : kind === 'doc' ? '文档附件' : kind === 'video' ? '视频附件' : '附件')
+
 function fmt(iso: string | null | undefined): string {
   if (!iso) return ''
   return String(iso)
@@ -202,6 +208,7 @@ export function ArticleView(props: {
             {art.source && <span>{art.source}</span>}
             {art.time && <span>{fmt(art.time)}</span>}
             {art.is_image_only && <span className="dsh-cau_aimgTag">纯图公告</span>}
+            {art.is_attachment_only && <span className="dsh-cau_aimgTag">{attLabel(art.attachment?.kind)}</span>}
             {fromCache && <span className="dsh-cau_acacheTag">本地缓存</span>}
           </div>
 
@@ -278,7 +285,18 @@ export function ArticleView(props: {
                 </div>
               </div>
             ) : (
-              art.body || <span className="dsh-cau_empty">正文未抓取。请点「查看原文」。</span>
+              art.body || (
+                <span className="dsh-cau_empty">
+                  {art.is_attachment_only ? (
+                    <>
+                      本文正文为{attLabel(art.attachment?.kind)}
+                      {art.attachment?.name ? `：${art.attachment.name}` : ''}，本插件不抽取附件内的文字。请点「查看原文」查看。
+                    </>
+                  ) : (
+                    '正文未抓取。请点「查看原文」。'
+                  )}
+                </span>
+              )
             )}
           </div>
 

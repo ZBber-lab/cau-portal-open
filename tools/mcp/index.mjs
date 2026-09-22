@@ -183,7 +183,7 @@ async function withAi(item) {
   if (!item.article) return { ...item }
   const art = await readJson('articles/' + item.article)
   if (!art) return { ...item }
-  const { title, time, source, url, body, is_image_only, ai, ai_model } = art
+  const { title, time, source, url, body, is_image_only, is_attachment_only, attachment, ai, ai_model } = art
   return {
     ...item,
     article_id: String(item.article).replace(/\.json$/, ''),
@@ -191,6 +191,9 @@ async function withAi(item) {
     source_name: source ?? item.site_name,
     article_url: url ?? item.url,
     is_image_only: !!is_image_only,
+    // 正文即附件（苏迪 wp_pdf_player 等）：body 为空是**正常**的，不是抓取失败
+    is_attachment_only: !!is_attachment_only,
+    attachment: attachment ?? null,
     body: typeof body === 'string' ? body.slice(0, 600) : '',
     ai: ai ?? null,
     ai_model: ai_model ?? null,

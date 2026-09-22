@@ -83,7 +83,34 @@ export function parseSudyList(html, pageUrl) {
 const BODY_END = [/<div[^>]*class=["'][^"']*(?:footer|copyright|share|article-foot)/i, /<!--\s*分享/i, /class=["']wp_footer/i, /id=["']wp_footer/i]
 
 /**
- * 详情页 → { title, time, source, body, is_image_only, url }
+ * 苏迪「正文即附件」播放器（2026-09-21 实测浙大环资推免名单）：
+ *   <div pdfsrc="/_upload/article/files/…/x.pdf" swsrc="…x.swf" class="wp_pdf_player"
+ *        sudyfile-attr="{'title':'环境与资源学院关于公布…名单的通知.pdf'}" sudyplayer="wp_pdf_player"></div>
+ * 这种页面**正文位置没有任何 HTML 文字**，浏览器用 pdf.js 把附件渲染在页内 —— 解析器只能拿到空正文。
+ * 我们**不抽附件内的文字**（只修「正文未抓取」这句误报），只记录附件名/地址，
+ * 让面板如实说明「正文是 PDF 附件」，而不是谎报抓取失败。
+ */
+const PLAYER_RE = /<div\b[^>]*\bclass=["'][^"']*\bwp_([a-z]+)_player\b[^"']*["'][^>]*>/i
+const PLAYER_SRC_ATTRS = ['pdfsrc', 'docsrc', 'filesrc', 'mediasrc', 'src']
+
+/** 从正文片段里找附件播放器 → { kind, name, url }（找不到返回 null） */
+function findPlayerAttachment(seg) {
+  const m = PLAYER_RE.exec(seg || '')
+  if (!m) return null
+  const attrs = m[0]
+  let src = null
+  for (const a of PLAYER_SRC_ATTRS) {
+    const v = (attrs.match(new RegExp(`\\b${a}=["']([^"']+)["']`, 'i')) || [])[1]
+    if (v) { src = v; break }
+  }
+  const name = (attrs.match(/sudyfile-attr=["']\{[^"']*?'title'\s*:\s*'([^']*)'/i) || [])[1] || null
+  const raw = (m[1] || 'file').toLowerCase()
+  return { kind: ['pdf', 'doc', 'video'].includes(raw) ? raw : 'file', name: name || null, url: src || null }
+}
+
+/**
+ * 详情页 → { title, time, source, body, is_image_only, is_attachment_only, attachment, url }
+ * is_attachment_only：正文位置只有附件播放器（当前只见苏迪 wp_pdf_player）、没有一个字
  * @param {string} html 详情页 HTML
  * @param {string} pageUrl 详情页 URL
  */
@@ -111,6 +138,7 @@ export function parseSudyArticle(html, pageUrl) {
   }
   let body = ''
   let isImageOnly = false
+  let attachment = null
   if (start >= 0) {
     let seg = html.slice(start)
     let end = seg.length
@@ -126,7 +154,24 @@ export function parseSudyArticle(html, pageUrl) {
       .filter(Boolean)
       .join('\n\n')
       .trim()
-    if (!body && hasImg) isImageOnly = true
+    if (!body) {
+      // 正文一个字都没有时，看是不是「正文即附件」的播放器页（见 PLAYER_RE 注释）。
+      // 附件优先于「纯图」判定：正文区常混着一个 1×1 的埋点 <img src="/_visitcount…">，
+      // 老逻辑会把它当成图片海报 —— 实测浙大环资推免名单页正是这种情况。
+      const att = findPlayerAttachment(seg)
+      if (att) attachment = { ...att, url: att.url ? absUrl(pageUrl, att.url) : null }
+      else if (hasImg) isImageOnly = true
+    }
   }
-  return { title, time, source, body, is_image_only: isImageOnly, url: pageUrl, _open: open ? open.slice(0, 60) : null }
+  return {
+    title,
+    time,
+    source,
+    body,
+    is_image_only: isImageOnly,
+    is_attachment_only: !!attachment,
+    attachment: attachment || null,
+    url: pageUrl,
+    _open: open ? open.slice(0, 60) : null,
+  }
 }

@@ -98,6 +98,7 @@ export function writeIndex(dataDir) {
   let stored = 0;
   let withAi = 0;
   let imageOnly = 0;
+  let attachmentOnly = 0;
   let upcoming = 0;
   const today = Date.now();
   if (existsSync(artsDir)) {
@@ -107,6 +108,7 @@ export function writeIndex(dataDir) {
       try { a = JSON.parse(readFileSync(`${artsDir}/${f}`, 'utf8')); } catch { continue; }
       stored++;
       if (a.is_image_only) imageOnly++;
+      if (a.is_attachment_only) attachmentOnly++;
       if (a.ai) {
         withAi++;
         const d = a.ai.deadline?.date;
@@ -123,6 +125,7 @@ export function writeIndex(dataDir) {
       articles_with_ai: withAi,
       upcoming_deadlines: upcoming,
       image_only_articles: imageOnly,
+      attachment_only_articles: attachmentOnly,
     },
     sites: [...sites.values()].map((s) => ({ ...s, columns: s.columns.sort((a, b) => a.name.localeCompare(b.name)) })),
   };
@@ -379,7 +382,11 @@ async function crawlSudyColumn(site, column, opts) {
           const a = parseSudyArticle(r.text, it.url);
           if (!a.title) out.errors.push(`无标题: ${it.url}`);
           else {
-            if (!a.body) out.warns.push(`正文为空${a.is_image_only ? '(图片海报)' : '(站点空文)'}: ${it.url}`);
+            if (!a.body) {
+              out.warns.push(
+                `正文为空${a.is_image_only ? '(图片海报)' : a.is_attachment_only ? `(正文即附件: ${a.attachment?.name || a.attachment?.kind || '附件'})` : '(站点空文)'}: ${it.url}`,
+              )
+            }
             if (!a.time) a.time = it.date ?? null; // 详情页没标时间时用列表页日期兜底
             writeFileSync(artPath, JSON.stringify({ ...a, fetched_at: now(), ai: null }, null, 2));
             hasArticle = true;
