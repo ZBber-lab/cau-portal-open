@@ -100,6 +100,12 @@ export function NewsView(props: { onBack: () => void; onOpenArticle: (id: string
   const groups = useMemo(() => {
     const out: Record<SiteGroup, any[]> = { portal: [], campus: [], external: [] }
     for (const it of important) out[groupOfItem(it)].push(it)
+    // 临期条目置顶（2026-09-22）：这类条目是靠「未过期截止」豁免留在要闻的（发布可能已超 7 天），
+    // 若仍按发布时间排序会沉到列表底部 —— 那就等于没修。
+    const rank = (x: any) => (x.due_soon ? 0 : 1)
+    for (const g of Object.keys(out) as SiteGroup[]) {
+      out[g].sort((a, b) => rank(a) - rank(b) || String(b.time ?? '').localeCompare(String(a.time ?? '')))
+    }
     return out
   }, [important, dir])
 
@@ -208,7 +214,7 @@ export function NewsView(props: { onBack: () => void; onOpenArticle: (id: string
           </div>
 
           <div className="dsh-cau_newsMuted">
-            条目按 AI 判定的重要度（高/中）+ 近 7 天自动汇集，可点星标关注或归档
+            条目按 AI 判定的重要度（高/中）+ 近 7 天自动汇集；<Ic n="hourglass" /> 标记的是「发布已超 7 天但截止日期还没到」的临期通知（不因变旧而消失）
             {hiddenSiteCount > 0 ? ` · 已关闭 ${hiddenSiteCount} 个来源（设置 → 栏目频道管理）` : ''}
           </div>
 

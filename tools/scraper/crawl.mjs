@@ -173,6 +173,8 @@ export function writeSummary(dataDir) {
   dayStart.setHours(0, 0, 0, 0);
   const today = dayStart.getTime();
   const WEEK = 7 * 86400000;
+  /** 临期豁免窗口（见下方 dueSoon）：截止日期在这天内、尚未过期 → 即使发布超 7 天也留在要闻 */
+  const DUE_SOON = 14 * 86400000;
   if (existsSync(artsDir)) {
     for (const f of readdirSync(artsDir)) {
       if (!f.endsWith('.json')) continue;
@@ -206,7 +208,12 @@ export function writeSummary(dataDir) {
       const t = Date.parse(String(a.time ?? ''));
       const isImportant = importance === '高' || importance === '中';
       const recent = Number.isFinite(t) ? today - t <= WEEK : true;
-      if (isImportant && recent) {
+      // 临期豁免（2026-09-22）：高/中重要 **且截止日期还没过**（14 天内）的条目，
+      // 不因「发布超 7 天」退出要闻 —— 否则「还来得及办」的重要通知会在截止前反而消失
+      // （实测：四六级报名通知 09-14 发布、09-28 截止，09-22 就掉出了要闻）。
+      const dlTs = deadline?.date ? Date.parse(deadline.date) : NaN;
+      const dueSoon = Number.isFinite(dlTs) && dlTs >= today && dlTs - today <= DUE_SOON;
+      if (isImportant && (recent || dueSoon)) {
         important.push({
           title: a.title ?? '',
           article_id: id,
@@ -218,18 +225,32 @@ export function writeSummary(dataDir) {
           category: category ?? '其他',
           importance,
           deadline: deadline ?? null,
+          due_soon: dueSoon,
         });
       }
     }
   }
   deadlines.sort((x, y) => x.date.localeCompare(y.date));
   important.sort((x, y) => String(y.time ?? '').localeCompare(String(x.time ?? '')));
+  // 门户同步新鲜度（2026-09-22 加）：统一门户数据由**本机**定时同步（Actions 抓不到它），
+  // 断档时 index.json 的 last_updated 照旧在走，所以必须单独把这一路的 fetched_at 报出来。
+  let portal = null;
+  try {
+    const pFeed = `${dataDir}/feed/portal__notices.json`;
+    if (existsSync(pFeed)) {
+      const pj = JSON.parse(readFileSync(pFeed, 'utf8'));
+      portal = { fetched_at: pj.fetched_at ?? null, items: (pj.items ?? []).length };
+    }
+  } catch {
+    /* 读不到就当没有（面板会显示「—」） */
+  }
   const summary = {
     version: 1,
     last_updated: now(),
     deadlines,
     important,
     ai_map: aiMap,
+    portal,
   };
   mkdirSync(dataDir, { recursive: true });
   writeFileSync(`${dataDir}/summary.json`, JSON.stringify(summary, null, 2));

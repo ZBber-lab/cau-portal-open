@@ -235,6 +235,8 @@ export function CauPanel(props: {
   })
   /** 云端数据最后更新时间（原始 ISO，渲染时才换算新鲜度） */
   const [metaIso, setMetaIso] = useState('')
+  /** 门户（统一门户）同步时间：这条线由**本机**每 6h 抓，跟 Actions 无关，必须单独看（2026-09-22 加） */
+  const [portalIso, setPortalIso] = useState('')
   /** 每分钟自增：面板可能开很久，新鲜度要跟着时间走 */
   const [nowTs, setNowTs] = useState(() => Date.now())
   const [unread, setUnread] = useState(0)
@@ -254,11 +256,13 @@ export function CauPanel(props: {
     const token = activeTokenValues()[0]
     if (!token) {
       setMetaIso('')
+      setPortalIso('')
       setUnread(0)
       return
     }
     const b = await loadBundle(token)
     setMetaIso(b.summary?.last_updated || b.index?.last_updated || '')
+    setPortalIso(b.summary?.portal?.fetched_at || '')
     const readSet = loadReadSet()
     setUnread(unreadCandidates(b.summary).filter((it: any) => !readSet.includes(it.article_id || it.url)).length)
   }
@@ -360,6 +364,23 @@ export function CauPanel(props: {
     : `云端数据最后更新：${metaIso}` +
       (stale ? `（已超过 ${stale === 'bad' ? '24 小时' : '4 小时'}，可能上一轮抓取失败或定时任务没触发）` : '')
 
+  /** 门户同步新鲜度（2026-09-22）：统一门户数据由本机每 6h 抓一次；>12h 黄、>24h 红。
+   *  为什么单独看它：Actions 侧照旧在更新 index.json，门户断档时面板完全看不出来，
+   *  结果「09-14 发布的通知 09-20 才进库」这种事只能靠事后翻提交历史才发现。 */
+  const portalTime = shortTime(portalIso)
+  const portalAgeH = (() => {
+    if (!portalIso) return null
+    const t = new Date(portalIso).getTime()
+    return Number.isNaN(t) ? null : Math.max(0, (nowTs - t) / 3600000)
+  })()
+  const portalStale = portalAgeH == null ? '' : portalAgeH > 24 ? 'bad' : portalAgeH > 12 ? 'warn' : ''
+  const portalTitle = !portalIso
+    ? '还没有门户同步记录（统一门户数据由本机每 6 小时同步一次）'
+    : `统一门户同步于 ${portalIso}` +
+      (portalStale
+        ? `（已 ${Math.floor(portalAgeH! / 24) >= 1 ? `${Math.floor(portalAgeH! / 24)} 天` : `${Math.floor(portalAgeH!)} 小时`}没同步：门户靠本机定时抓，本机没在跑时它不会更新，而 Actions 侧照旧）`
+        : '（本机每 6 小时一次，正常）')
+
   return (
     <div
       ref={rootRef}
@@ -416,6 +437,9 @@ export function CauPanel(props: {
         <span className="dsh-cau_footDot" data-on={metaIso ? '1' : '0'} data-stale={stale || undefined} />
         <span className="dsh-cau_footText" data-stale={stale || undefined} title={footTitle}>
           云端更新于 {metaTime || '—'}{ageText} · 未读 {unread}
+        </span>
+        <span className="dsh-cau_footPortal" data-stale={portalStale || undefined} title={portalTitle}>
+          门户 {portalTime || '—'}
         </span>
         <button
           type="button"
@@ -479,6 +503,10 @@ body[data-ds-dark-theme] .dsh-cau_ov{background:var(--cau-brand-a9)}
 .dsh-cau_footDot[data-stale='bad']{background:var(--cau-err)}
 .dsh-cau_footText[data-stale='warn']{color:var(--cau-warn)}
 .dsh-cau_footText[data-stale='bad']{color:var(--cau-err)}
+/* 门户同步新鲜度（本机每 6h 抓一次统一门户）：>12h 黄、>24h 红（与云端那路分开显示，别互相掩盖） */
+.dsh-cau_footPortal{flex:none;white-space:nowrap;color:var(--cau-ink3);padding-left:7px;border-left:1px solid var(--cau-line-soft)}
+.dsh-cau_footPortal[data-stale='warn']{color:var(--cau-warn)}
+.dsh-cau_footPortal[data-stale='bad']{color:var(--cau-err)}
 .dsh-cau_footBtn{flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:none;border-radius:6px;background:transparent;color:var(--cau-ink3);cursor:pointer}
 .dsh-cau_footBtn:hover{background:var(--cau-hover);color:var(--cau-ink)}
 .dsh-cau_footBtn svg{display:block;width:13px;height:13px}
@@ -561,6 +589,9 @@ body[data-ds-dark-theme] .dsh-cau_ov{background:var(--cau-brand-a9)}
 .dsh-cau_ovRow .dsh-cau_ovTitleTxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--cau-ink)}
 .dsh-cau_ovRow i{flex:none;font-style:normal;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--cau-ink3)}
 .dsh-cau_impHit{flex:none;display:flex;color:var(--cau-brand)}
+/* 临期豁免标记（发布超 7 天但截止还没到，故仍在要闻）：沙漏 + 截止日，用 warn 色以示"该办了" */
+.dsh-cau_impDue{flex:none;display:inline-flex;align-items:center;gap:3px;font-size:10px;line-height:1;padding:2px 6px;border-radius:999px;white-space:nowrap;color:var(--cau-warn);background:color-mix(in srgb,var(--cau-warn) 12%,transparent)}
+.dsh-cau_impDue svg{width:10px;height:10px}
 .dsh-cau_impHit svg{width:12px;height:12px}
 .dsh-cau_mineDate{display:flex;align-items:baseline;gap:6px}
 .dsh-cau_mineDay{font-size:30px;font-weight:700;line-height:1;color:var(--cau-brand)}

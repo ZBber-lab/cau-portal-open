@@ -36,6 +36,15 @@ export function NewsRow(props: {
         <span className="dsh-cau_impTop">
           <span className="dsh-cau_impTitle">{it.title}</span>
           <ImpBadge level={it.importance} />
+          {it.due_soon && (
+            <span
+              className="dsh-cau_impDue"
+              title={`截止 ${it.deadline?.date || ''}${it.deadline?.item ? ` · ${it.deadline.item}` : ''}（尚未过期，故保留在要闻）`}
+            >
+              <Ic n="hourglass" />
+              {it.deadline?.date ? `${fmtCn(it.deadline.date)}截止` : '未过期'}
+            </span>
+          )}
           {hit && (
             <span className="dsh-cau_impHit" title="命中关注规则">
               <Ic n="target" />
