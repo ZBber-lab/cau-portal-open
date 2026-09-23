@@ -13,11 +13,50 @@
  *   - **面板只存在于官方右侧栏**（2026-09-20 收尾）：自绘抽屉与 `USE_OFFICIAL_SIDEBAR`
  *     回退开关已删除，不再保留双形态代码；官方右侧栏要求 DSH ≥ 0.1.5-rc.2。
  */
+import * as React from 'react'
 import { getCtx } from './ctx'
 import { setTabOpen } from './state'
 
 export const CAU_TAB_KIND = 'cau-portal'
 export const CAU_TAB_ID = 'cau-portal'
+
+/**
+ * 官方右侧栏「引导胶囊」前面的 **CAU 字标**（2026-09-23 用户要求）。
+ *
+ * 为什么之前是个方盒子：tab 类型注册里的 `guide[].icon` 是可选的，**不传时框架会画它自带的
+ * 立方体占位**（`dsh-client-ui-sidebar-right` 的 `CubeGlyph`）。这里补上本仓同款的中性 CAU 徽标
+ * ——粗体无衬线「CAU」+ `currentColor`（与 `.dsh-cau_cauLogo` 的 font-family/weight 一致），
+ * 颜色跟随胶囊容器自带的 `--dsw-alias-label-secondary`。
+ *
+ * 两个刻意为之的写法：
+ *   - **用 `<text>` 而不是手绘路径**：它是**字标**而不是线性图标，C/A/U 三个字母在 26px 里手描必然走形；
+ *   - **用 `React.createElement` 而不是 JSX、也不放进 `icons.tsx`**：本文件是 `.ts`（无 JSX），
+ *     而 build.mjs 的内联器**不做模块去重** —— 一旦为了三个字母 import `icons.tsx`，
+ *     那 8KB 图标集会被多内联一份（实测 bundle 1.30MB → 1.36MB）。react 本身是宿主提供的外部模块，
+ *     走 createElement 零成本。
+ */
+export function CauWordmarkGlyph(props: { size?: number; className?: string }) {
+  const s = props.size || 26
+  return React.createElement(
+    'svg',
+    { className: props.className, width: s, height: s, viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+    React.createElement(
+      'text',
+      {
+        x: 12,
+        y: 12,
+        textAnchor: 'middle',
+        dominantBaseline: 'central',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontWeight: '800',
+        fontSize: '9.5',
+        letterSpacing: '0.2',
+        fill: 'currentColor',
+      },
+      'CAU',
+    ),
+  )
+}
 
 /**
  * 右侧栏导航控制器（没有官方右侧栏时为 undefined）。
@@ -153,6 +192,8 @@ export function registerCauTab(ctx: any, Body: any): void {
               order: 40,
               title: () => '农大门户',
               description: () => '校内通知公告聚合与 AI 摘要',
+              // 引导胶囊前面的图标：不给的话框架画它自带的立方体占位（用户 2026-09-23 要求换成 CAU 字标）
+              icon: CauWordmarkGlyph,
             },
           ],
         }),
