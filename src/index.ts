@@ -28,7 +28,7 @@ function joinPath(...parts: string[]): string {
 export const name = 'cau-portal'
 export const inject = ['webServer', 'llm']
 
-const VERSION = '0.4.3'
+const VERSION = '0.4.4'
 
 const SYSTEM_PROMPT = `你是中国农业大学新闻处理助手。阅读给定文章，输出一个 JSON 对象（只输出 JSON，不要输出任何其他文字）。
 
@@ -219,7 +219,9 @@ function validateAiResult(raw: any, article: { title: string; time: string; body
 
 async function runEnrich(llm: any, input: any) {
   const title = String(input.title ?? '').slice(0, 200)
-  const body = String(input.content ?? '').replace(/\s+/g, ' ').slice(0, 3000)
+  // 长正文取「头 2000 + 尾 1500」：截止日期几乎都写在通知末尾（见 tools/scraper/ai.mjs 的 clipBody 说明）
+  const rawBody = String(input.content ?? '').replace(/\s+/g, ' ')
+  const body = rawBody.length <= 3600 ? rawBody : rawBody.slice(0, 2000) + '\n…（中间省略）…\n' + rawBody.slice(-1500)
   const source = String(input.source ?? '')
   const time = String(input.time ?? '')
   const provider = String(input.provider || 'deepseek-official')

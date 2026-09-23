@@ -62,8 +62,22 @@ JSON 格式示例：
 3. importance：与学业、评奖评优、考试、报名、缴费、学位授予、选课等切身利益相关的为"高"；一般事务性通知为"中"；常规新闻动态、宣传报道为"低"；
 4. deadline：若文中存在明确的截止时间（如"X月X日前""截止至X月X日""于X月X日之前"），给出事项名 item、绝对日期 date（YYYY-MM-DD）和原文表述 evidence（从正文原样摘录包含该时间的那句话片段，20字以内）。item 写法：主体+动作+类型，必须能看出"是谁在办什么事"（如「土地学院2027推免生报名」「研究生奖学金申请」「新生选课确认」，禁止只写「报名」「通知」这类无主体字样），控制在20字内。相对表述（如"下周五""两周内"）需按文章发布时间换算成绝对日期；若年份未写明，使用文章发布时间所在年份；多个截止时间只取最早的一个。若无任何明确截止时间，deadline 输出 null。`;
 
+/**
+ * 长正文截取（2026-09-22）：原来是 `slice(0, 3000)` 只接头 3000 字 —— 但通知的截止日期几乎都写在
+ * **最后**（「请于X月X日前报送」「公示期至X月X日」）。实测长通知全长 2000–6000 字，
+ * 只接头就会把 deadline 切掉（门户「学校出资类奖学金」通知全文 2761 字，截止日期在末尾）。
+ * 现在：≤3600 字全送；更长就送「头 2000 + 尾 1500」，保证末尾的截止信息进得了 prompt。
+ */
+export const BODY_HEAD = 2000;
+export const BODY_TAIL = 1500;
+export function clipBody(body) {
+  const s = String(body || '');
+  if (s.length <= BODY_HEAD + BODY_TAIL + 100) return s;
+  return s.slice(0, BODY_HEAD) + '\n…（中间省略）…\n' + s.slice(-BODY_TAIL);
+}
+
 export function buildUserPrompt(article) {
-  const body = (article.body || '').replace(/\s+/g, ' ').slice(0, 3000);
+  const body = clipBody((article.body || '').replace(/\s+/g, ' '));
   return `标题：${article.title || ''}\n发布时间：${article.time || ''}\n来源：${article.source || ''}\n正文：\n${body}`;
 }
 
