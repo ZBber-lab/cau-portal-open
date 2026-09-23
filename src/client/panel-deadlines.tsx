@@ -1,10 +1,13 @@
 /**
  * cau-portal 待办中心（下半部分「全部待办」点进来的视图）：
  * 展示全部未过期截止事项（summary.deadlines 全量，不再限 7 天）；
- * 顶部时间跨度筛选（剩余天数 7/30/90/全部）；每条可点进文章、可加/移「⭐ 我的事项」。
+ * 顶部时间跨度筛选（剩余天数 7/30/90/全部）+ **关键词搜索**（2026-09-22 用户要加）；
+ * 每条可点进文章、可加/移「⭐ 我的事项」。
+ * 搜索口径（用户 2026-09-22 选「严格」）：**只在当前时间范围内**匹配，不自动忽略时间筛选。
+ * 匹配字段：AI 事项名 / 文章标题 / 来源 / 栏目 / AI 摘要（都在已加载的 summary.json 里，零额外请求）。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, loadMine, addMine, removeMine, isMine, mineDeadlineOf, loadDeadlineOps, setDeadlineOp, daysLeft } from './data'
+import { readCloudJson, loadMine, addMine, removeMine, isMine, mineDeadlineOf, loadDeadlineOps, setDeadlineOp, daysLeft, matchQuery } from './data'
 import { Empty } from './empty'
 import { Ic } from './icons'
 
@@ -12,6 +15,7 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
   const { onBack, onOpenArticle } = props
   const [summary, setSummary] = useState<any>(null)
   const [range, setRange] = useState<number | 'all'>(30)
+  const [q, setQ] = useState('')
   const [mine, setMine] = useState<Record<string, any>>(() => loadMine())
   const [ops, setOps] = useState<Record<string, any>>(() => loadDeadlineOps())
   const [busy, setBusy] = useState('')
@@ -26,14 +30,26 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
     }
   }, [])
 
-  const rows = useMemo(() => {
+  /** 未归档的全部待办（带剩余天数） */
+  const active = useMemo(() => {
     const all = (summary?.deadlines || []) as any[]
     // 归档 = 从当前待办列表移除（找回/取消归档走首页「归档」入口）
-    const active = all.filter((d) => ops[d.article_id || d.url] !== 'archive')
-    const list = active.map((d) => ({ d, n: daysLeft(d.date) }))
-    if (range !== 'all') return list.filter((x) => Number.isFinite(x.n) && x.n >= 0 && x.n <= range)
-    return list
-  }, [summary, range, ops])
+    return all.filter((d) => ops[d.article_id || d.url] !== 'archive').map((d) => ({ d, n: daysLeft(d.date) }))
+  }, [summary, ops])
+
+  /** 当前时间范围内的条目（搜索只在这批里进行 —— 用户选「严格」口径） */
+  const inRange = useMemo(
+    () => (range === 'all' ? active : active.filter((x) => Number.isFinite(x.n) && x.n >= 0 && x.n <= range)),
+    [active, range],
+  )
+
+  /** 搜索：事项名 / 标题 / 来源 / 栏目 / AI 摘要，空格分隔多关键词全部命中 */
+  const rows = useMemo(() => {
+    if (!q.trim()) return inRange
+    return inRange.filter((x) =>
+      matchQuery([x.d.item, x.d.title, x.d.source, x.d.column, summary?.ai_map?.[x.d.article_id]?.summary].filter(Boolean).join(' '), q),
+    )
+  }, [inRange, q, summary])
 
   const archivedCount = useMemo(
     () => (summary?.deadlines || []).filter((d: any) => ops[d.article_id || d.url] === 'archive').length,
@@ -69,6 +85,14 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
         所有含截止日期的事项（未过期，按截止日升序）。「我的事项」可精选到首页大卡面板；「归档」后从本列表消失，可在首页「归档」入口找回或取消归档。
         {archivedCount > 0 && <span className="dsh-cau_dlArch">已归档 {archivedCount} 条</span>}
       </div>
+      <input
+        className="dsh-cau_mgSearch dsh-cau_dlSearch"
+        type="search"
+        placeholder="搜索待办：事项名 / 标题 / 来源 / 栏目 / AI 摘要（只在当前时间范围内）…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        spellCheck={false}
+      />
       <div className="dsh-cau_chips" style={{ marginBottom: 8 }}>
         {([7, 30, 90, 'all'] as const).map((k) => (
           <button key={k} type="button" className={'dsh-cau_dlChip' + (range === k ? ' on' : '')} onClick={() => setRange(k)}>
@@ -76,6 +100,12 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
           </button>
         ))}
       </div>
+      {q.trim() && (
+        <div className="dsh-cau_dlHit">
+          搜索「{q.trim()}」命中 <b>{rows.length}</b> 条 · 当前范围（{range === 'all' ? '全部未过期' : `剩余 ${range} 天内`}）共 {inRange.length} 条
+          {rows.length === 0 && inRange.length > 0 && range !== 'all' ? ' —— 可把范围调成「全部」再试' : ''}
+        </div>
+      )}
 
       {!summary ? (
         <div className="dsh-cau_loading">
@@ -83,7 +113,15 @@ export function DeadlinesView(props: { onBack: () => void; onOpenArticle: (id: s
           <span>加载中…</span>
         </div>
       ) : sorted.length === 0 ? (
-        <Empty icon={<Ic n="clipboard" />} main="当前筛选下暂无截止事项" sub={`全部未过期截止共 ${(summary?.deadlines || []).length} 条`} />
+        q.trim() ? (
+          <Empty
+            icon={<Ic n="search" />}
+            main={`没有匹配「${q.trim()}」的待办`}
+            sub={`当前范围（${range === 'all' ? '全部未过期' : `剩余 ${range} 天内`}）共 ${inRange.length} 条，都不含这个关键词；可换词或把时间范围调宽（全部未过期共 ${active.length} 条）`}
+          />
+        ) : (
+          <Empty icon={<Ic n="clipboard" />} main="当前筛选下暂无截止事项" sub={`全部未过期截止共 ${(summary?.deadlines || []).length} 条`} />
+        )
       ) : (
         <div className="dsh-cau_dlList">
           {sorted.map(({ d, n }: any) => {

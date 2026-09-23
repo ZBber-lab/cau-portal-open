@@ -29,6 +29,7 @@ import {
   loadSiteDirectory,
   loadRules,
   matchRules,
+  matchQuery,
   GROUP_ORDER,
   GROUP_LABEL,
   type DirSite,
@@ -65,6 +66,8 @@ export function NewsView(props: { onBack: () => void; onOpenArticle: (id: string
   const [follow, setFollow] = useState<any[]>(() => loadFollow())
   const [ops, setOps] = useState<Record<string, any>>(() => loadDeadlineOps())
   const [tab, setTab] = useState<SiteGroup>(() => loadTab())
+  /** 关键词搜索（2026-09-22 用户要加）：标题 / 来源 / 栏目 / AI 摘要，三组一起过滤；不影响未读计数 */
+  const [q, setQ] = useState('')
   const mods = useMemo(() => loadModules(), [])
   const channels = useMemo(() => loadChannels(), [])
   const watchRules = useMemo(() => loadRules().filter((r: any) => r.enabled), [])
@@ -97,9 +100,18 @@ export function NewsView(props: { onBack: () => void; onOpenArticle: (id: string
     [summary, ops, channels, dir, mods.portal],
   )
 
+  /** 关键词过滤（标题 / 来源 / 栏目 / AI 摘要；空格分隔多词全部命中） */
+  const searched = useMemo(
+    () =>
+      q.trim()
+        ? important.filter((it: any) => matchQuery([it.title, it.source, it.column, it.summary].filter(Boolean).join(' '), q))
+        : important,
+    [important, q],
+  )
+
   const groups = useMemo(() => {
     const out: Record<SiteGroup, any[]> = { portal: [], campus: [], external: [] }
-    for (const it of important) out[groupOfItem(it)].push(it)
+    for (const it of searched) out[groupOfItem(it)].push(it)
     // 临期条目置顶（2026-09-22）：这类条目是靠「未过期截止」豁免留在要闻的（发布可能已超 7 天），
     // 若仍按发布时间排序会沉到列表底部 —— 那就等于没修。
     const rank = (x: any) => (x.due_soon ? 0 : 1)
@@ -107,7 +119,7 @@ export function NewsView(props: { onBack: () => void; onOpenArticle: (id: string
       out[g].sort((a, b) => rank(a) - rank(b) || String(b.time ?? '').localeCompare(String(a.time ?? '')))
     }
     return out
-  }, [important, dir])
+  }, [searched, dir])
 
   const allIds = useMemo(() => important.map((it: any) => it.article_id || it.url), [important])
   const hiddenSiteCount = useMemo(() => {
@@ -144,7 +156,7 @@ export function NewsView(props: { onBack: () => void; onOpenArticle: (id: string
         <button type="button" className="dsh-cau_backBtn" onClick={props.onBack}>
           <Ic n="chevLeft" />返回
         </button>
-        <span className="dsh-cau_breadPath">要闻（{important.length}）</span>
+        <span className="dsh-cau_breadPath">要闻（{searched.length}{q.trim() ? ` / ${important.length}` : ''}）</span>
         {important.length > 0 && (
           <button
             type="button"
@@ -169,6 +181,19 @@ export function NewsView(props: { onBack: () => void; onOpenArticle: (id: string
 
       {phase === 'ready' && (
         <>
+          <input
+            className="dsh-cau_mgSearch dsh-cau_dlSearch"
+            type="search"
+            placeholder="搜索要闻：标题 / 来源 / 栏目 / AI 摘要（三组一起搜）…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            spellCheck={false}
+          />
+          {q.trim() && (
+            <div className="dsh-cau_dlHit">
+              搜索「{q.trim()}」命中 <b>{searched.length}</b> 条（共 {important.length} 条要闻）
+            </div>
+          )}
           {/* 三栏切换（点哪个显示哪个）：只用下划线 + 字重/深浅表示选中，不做胶囊、不加图标 */}
           <div className="dsh-cau_tabs" role="tablist" aria-label="要闻来源分组">
             {GROUP_ORDER.map((g: SiteGroup) => {
@@ -193,7 +218,9 @@ export function NewsView(props: { onBack: () => void; onOpenArticle: (id: string
 
           <div className="dsh-cau_card" id="dsh-cau-news-panel" role="tabpanel">
             {!summary && <div className="dsh-cau_empty">聚合数据暂不可用</div>}
-            {summary && groups[tab].length === 0 && <div className="dsh-cau_empty">暂无{GROUP_LABEL[tab]}重要通知</div>}
+            {summary && groups[tab].length === 0 && (
+              <div className="dsh-cau_empty">{q.trim() ? `「${q.trim()}」在${GROUP_LABEL[tab]}里没有命中（可切到别的分组看看）` : `暂无${GROUP_LABEL[tab]}重要通知`}</div>
+            )}
             {summary &&
               groups[tab].map((it: any) => {
                 const id = it.article_id || it.url

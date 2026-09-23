@@ -1194,6 +1194,19 @@ export function matchRules(
   })
 }
 
+// ---- 面板内搜索（2026-09-22 用户要「待办里加搜索」）----
+/**
+ * 匹配规则：空格分隔多关键词、**全部命中**才算（与 MCP `search_news` 同口径），大小写不敏感。
+ * 放在 data.ts 而不是新开模块：`panel-deadlines.tsx` 与 `panel-news.tsx` 都已 import 这里，
+ * 而 build.mjs 的内联器**不做模块去重**（新模块会被两个页面各复制一份，白涨 bundle）。
+ */
+export function matchQuery(text: string, query: string): boolean {
+  const q = String(query || '').trim().toLowerCase()
+  if (!q) return true
+  const hay = String(text || '').toLowerCase()
+  return q.split(/\s+/).every((k) => hay.includes(k))
+}
+
 // ---- 通知去重水位（键 dsh.cau-portal.notifyseen.v1：已通知过的条目 id）----
 const NOTIFY_SEEN_KEY = 'dsh.cau-portal.notifyseen.v1'
 export function loadNotifySeen(): Set<string> {

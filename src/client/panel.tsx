@@ -612,6 +612,10 @@ body[data-ds-dark-theme] .dsh-cau_ov{background:var(--cau-brand-a9)}
 .dsh-cau_deadlineEntryArrow{margin-left:auto;color:var(--cau-ink3)}
 /* ---- 待办中心（全部待办视图） ---- */
 .dsh-cau_dlHint{font-size:12px;line-height:17px;color:var(--cau-ink3);margin:4px 0 8px}
+/* 待办/要闻的关键词搜索（2026-09-22 加）：输入框复用数据管理页的 .dsh-cau_mgSearch 样式，只补间距 */
+.dsh-cau_dlSearch{margin-bottom:8px}
+.dsh-cau_dlHit{font-size:11px;line-height:16px;color:var(--cau-ink3);margin:-4px 0 8px}
+.dsh-cau_dlHit b{color:var(--cau-ink2);font-weight:600}
 .dsh-cau_dlChip{height:24px;padding:0 11px;border:1px solid var(--cau-line);border-radius:999px;background:transparent;color:var(--cau-ink2);font-size:11px;cursor:pointer}
 .dsh-cau_dlChip:hover{background:var(--cau-hover)}
 .dsh-cau_dlChip.on{background:var(--cau-brand-a12);border-color:var(--cau-brand);color:var(--cau-brand)}
