@@ -28,7 +28,7 @@ function joinPath(...parts: string[]): string {
 export const name = 'cau-portal'
 export const inject = ['webServer', 'llm']
 
-const VERSION = '0.4.6'
+const VERSION = '0.5.2'
 
 const SYSTEM_PROMPT = `你是中国农业大学新闻处理助手。阅读给定文章，输出一个 JSON 对象（只输出 JSON，不要输出任何其他文字）。
 
@@ -65,12 +65,20 @@ async function readBody(req: any): Promise<string> {
 // ⚠️ tools/shared/token-store.mjs 里有一份等价的读取实现，**改格式时两边一起改**。
 const STORE_FILE = 'token.json'
 
+/** DSH 主目录：优先 `DSH_HOME`（数据目录可整体搬走；不认它会导致搬完后凭据"失踪"），否则 `~/.dsh` */
+function dshHome(): string {
+  const h = String(process.env.DSH_HOME || '').trim()
+  return h || joinPath(process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\1', '.dsh')
+}
+
 function storeDirs(): string[] {
-  const home = process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\1'
-  const root = joinPath(home, '.dsh', 'profiles')
+  // DSH 主目录：优先 DSH_HOME（数据目录可搬走），否则 ~/.dsh；profile 顺序 desktop → web
+  const root = joinPath(dshHome(), 'profiles')
   const out: string[] = []
-  const hinted = joinPath(root, 'web', 'cau-portal-store')
-  if (existsSync(hinted)) out.push(hinted)
+  for (const hint of ['desktop', 'web']) {
+    const dir = joinPath(root, hint, 'cau-portal-store')
+    if (existsSync(dir)) out.push(dir)
+  }
   try {
     for (const name of readdirSync(root)) {
       if (name === 'node_modules') continue
@@ -86,7 +94,9 @@ function storeDirs(): string[] {
 function primaryStoreDir(): string {
   const dirs = storeDirs()
   if (dirs.length) return dirs[0]
-  const dir = joinPath(process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\1', '.dsh', 'profiles', 'web', 'cau-portal-store')
+  const root = joinPath(dshHome(), 'profiles')
+  const profile = existsSync(joinPath(root, 'desktop')) ? 'desktop' : 'web'
+  const dir = joinPath(root, profile, 'cau-portal-store')
   try {
     mkdirSync(dir, { recursive: true })
   } catch {

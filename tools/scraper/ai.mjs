@@ -20,7 +20,9 @@ export function resolveApiKey() {
     const m = readFileSync(envPath, 'utf8').match(/DEEPSEEK_API_KEY\s*=\s*["']?(sk-[A-Za-z0-9_-]+)["']?/);
     if (m) return m[1];
   }
-  const credPath = join(homedir(), '.dsh', '.credentials.yaml');
+  // DSH 主目录优先取 DSH_HOME（数据目录搬到别的盘后仍能找到凭据），否则回落 ~/.dsh
+  const dshHome = String(process.env.DSH_HOME || '').trim() || join(homedir(), '.dsh');
+  const credPath = join(dshHome, '.credentials.yaml');
   if (existsSync(credPath)) {
     const m = readFileSync(credPath, 'utf8').match(/DEEPSEEK_API_KEY:\s*(sk-[A-Za-z0-9_-]+)/);
     if (m) return m[1];

@@ -20,19 +20,48 @@
 import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const PROFILE_HINT = 'web'
+/**
+ * profile 优先级：desktop 优先、web 次之（桌面版与 CLI 各自独占一个 profile，凭据在谁那儿就用谁；
+ * 只装了其中一个时行为不变）。
+ */
+const PROFILE_ORDER = ['desktop', 'web']
 
 function home() {
   return process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\1'
 }
 
-/** 候选的存储目录（环境变量优先，其次所有 profile 下的 cau-portal-store） */
+/**
+ * DSH 主目录：**优先 `DSH_HOME`**（数据目录可以整体搬到别的盘；不认它的话，搬完之后
+ * 令牌与门户会话会静默"失踪"），未设置时回落 `~/.dsh`。
+ */
+export function dshHome() {
+  const h = String(process.env.DSH_HOME || '').trim()
+  return h || join(home(), '.dsh')
+}
+
+/** 所有 profile 的根目录 */
+export function profilesRoot() {
+  return join(dshHome(), 'profiles')
+}
+
+/** 首选 profile 名（desktop 优先，其次 web） */
+export function preferredProfile() {
+  const root = profilesRoot()
+  for (const name of PROFILE_ORDER) {
+    if (existsSync(join(root, name))) return name
+  }
+  return PROFILE_ORDER[0]
+}
+
+/** 候选的存储目录（环境变量优先，其次按 profile 优先级找 cau-portal-store） */
 export function storeDirs() {
   const out = []
   if (process.env.CAU_PORTAL_STORE) out.push(process.env.CAU_PORTAL_STORE)
-  const root = join(home(), '.dsh', 'profiles')
-  const hinted = join(root, PROFILE_HINT, 'cau-portal-store')
-  if (existsSync(hinted)) out.push(hinted)
+  const root = profilesRoot()
+  for (const hint of PROFILE_ORDER) {
+    const dir = join(root, hint, 'cau-portal-store')
+    if (existsSync(dir)) out.push(dir)
+  }
   try {
     for (const name of readdirSync(root)) {
       if (name === 'node_modules') continue
@@ -49,7 +78,7 @@ export function storeDirs() {
 export function primaryStoreDir() {
   const dirs = storeDirs()
   if (dirs.length) return dirs[0]
-  const dir = join(home(), '.dsh', 'profiles', PROFILE_HINT, 'cau-portal-store')
+  const dir = join(profilesRoot(), preferredProfile(), 'cau-portal-store')
   try {
     mkdirSync(dir, { recursive: true })
   } catch {
@@ -75,8 +104,8 @@ export function readStoreToken() {
 
 /** 旧位置：profile 补丁层里的 CAU_GITHUB_TOKEN（兼容期用，之后删除本函数） */
 export function readLegacyYmlToken() {
-  const root = join(home(), '.dsh', 'profiles')
-  const candidates = [join(root, PROFILE_HINT, 'cordis.patch.yml')]
+  const root = profilesRoot()
+  const candidates = [join(root, preferredProfile(), 'cordis.patch.yml')]
   try {
     for (const name of readdirSync(root)) {
       const p = join(root, name, 'cordis.patch.yml')
