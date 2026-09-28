@@ -28,7 +28,7 @@ function joinPath(...parts: string[]): string {
 export const name = 'cau-portal'
 export const inject = ['webServer', 'llm']
 
-const VERSION = '0.5.2'
+const VERSION = '0.5.3'
 
 const SYSTEM_PROMPT = `你是中国农业大学新闻处理助手。阅读给定文章，输出一个 JSON 对象（只输出 JSON，不要输出任何其他文字）。
 
@@ -68,7 +68,12 @@ const STORE_FILE = 'token.json'
 /** DSH 主目录：优先 `DSH_HOME`（数据目录可整体搬走；不认它会导致搬完后凭据"失踪"），否则 `~/.dsh` */
 function dshHome(): string {
   const h = String(process.env.DSH_HOME || '').trim()
-  return h || joinPath(process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\1', '.dsh')
+  if (h) return h
+  // 不 import node:os 的 homedir（会多一条 TS2307）；用 HOMEDRIVE+HOMEPATH 兜底，
+  // 不再写死 'C:\Users\1'（2026-09-28：写死会让子进程环境缺变量时静默指向已不存在的旧路径）。
+  const profile = process.env.USERPROFILE || process.env.HOME
+    || ((process.env.HOMEDRIVE || '') + (process.env.HOMEPATH || ''))
+  return joinPath(profile || '.', '.dsh')
 }
 
 function storeDirs(): string[] {

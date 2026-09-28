@@ -2,12 +2,13 @@
 // 安全：授权码只存本机 cau-email/config.json（仓库外），不进仓库/日志/AI 对话；日志只记成功/失败状态。
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { sendMail, inferProvider } from './smtp.mjs';
 import { buildDailyReport } from './report.mjs';
 
 const _dir = dirname(fileURLToPath(import.meta.url));
-const home = process.env.USERPROFILE || 'C:\\Users\\1';
+const home = process.env.USERPROFILE || homedir();
 const DIR = process.env.CAU_EMAIL_DIR || join(home, '.dsh', 'profiles', 'web', 'cau-email');
 const CONF = join(DIR, 'config.json');
 

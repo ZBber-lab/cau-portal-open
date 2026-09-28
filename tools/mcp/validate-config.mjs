@@ -11,7 +11,11 @@ const Config = mcp.Config
 console.log('mcp-client exports:', Object.keys(mcp).join(', '))
 
 let patchRaw
-try { patchRaw = readFileSync('C:/Users/1/.dsh/profiles/web/cordis.patch.yml', 'utf8') } catch (e) { console.log('PATCH READ FAIL:', e.message); process.exit(1) }
+// 2026-09-28：不再写死 C:/Users/1/.dsh → DSH_HOME 优先、desktop 优先（旧写法在数据目录搬家后必失效）
+const _dshHome = String(process.env.DSH_HOME || '').trim() || ((process.env.USERPROFILE || '') + '\\.dsh')
+const _patchCandidates = [_dshHome + '\\profiles\\desktop\\cordis.patch.yml', _dshHome + '\\profiles\\web\\cordis.patch.yml']
+for (const _p of _patchCandidates) { try { patchRaw = readFileSync(_p, 'utf8'); break } catch { /* 试下一个 */ } }
+if (!patchRaw) { console.log('PATCH READ FAIL: 试过 ' + _patchCandidates.join(' , ')); process.exit(1) }
 
 let yaml = null
 try { yaml = req('yaml') } catch { /* 无 yaml 库则跳过解析 */ }

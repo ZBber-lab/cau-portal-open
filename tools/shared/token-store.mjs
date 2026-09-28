@@ -19,6 +19,7 @@
  */
 import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 
 /**
  * profile 优先级：desktop 优先、web 次之（桌面版与 CLI 各自独占一个 profile，凭据在谁那儿就用谁；
@@ -27,7 +28,9 @@ import { join } from 'node:path'
 const PROFILE_ORDER = ['desktop', 'web']
 
 function home() {
-  return process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\1'
+  // 2026-09-28：不再写死 'C:\Users\1' —— 该回落一旦命中（环境变量缺失，例如 MCP 子进程环境被
+  // env 块替换）就会指向一个可能已不存在的路径，且失败是**静默**的（表现为"数据陈旧"而非报错）。
+  return process.env.USERPROFILE || process.env.HOME || homedir()
 }
 
 /**

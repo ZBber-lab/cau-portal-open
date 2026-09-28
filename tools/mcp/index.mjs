@@ -219,7 +219,7 @@ server.registerTool('list_sites', {
   try {
     const index = await loadIndex()
     if (!index) return okJson({ error: 'index.json 不存在（尚未运行爬虫）', sites: [] })
-    return okJson(index)
+    return okJson({ ...index, data_source: ghMode() ? `github:${GH_REPO}@${GH_BRANCH}` : `local:${DATA_DIR}` })
   } catch (e) { return failJson(e) }
 })
 
@@ -480,5 +480,5 @@ const auditLog = (line) => appendFile(path.join(DATA_DIR, 'mcp-audit.log'), `${n
 }
 // 启动心跳文件（供外部检测 DSH 是否已 spawn 本服务器）
 try {
-  await appendFile(path.join(DATA_DIR, 'mcp-start.log'), `${new Date().toISOString()} started pid=${process.pid} argv=${process.argv.slice(1).join(' ')}\n`, 'utf8')
+  await appendFile(path.join(DATA_DIR, 'mcp-start.log'), `${new Date().toISOString()} started pid=${process.pid} mode=${ghMode() ? `github:${GH_REPO}@${GH_BRANCH}` : 'local'}${ghMode() ? '' : '  <<< 未进入云端模式：令牌没解析到，读的是本地 data/（可能过期）'} argv=${process.argv.slice(1).join(' ')}\n`, 'utf8')
 } catch { /* 检测辅助，失败不影响服务 */ }
