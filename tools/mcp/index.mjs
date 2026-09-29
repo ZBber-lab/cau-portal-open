@@ -36,6 +36,23 @@ const CACHE_TTL_MS = 30_000
 const CACHE_TTL_LIST_MS = 30_000
 const CACHE_TTL_ARTICLE_MS = 300_000
 
+/**
+ * GitHub 侧错误的「人话化」。**404 在数据仓这一层几乎总是"仓库没配对"，而不是文件真的不存在**：
+ * 数据仓库名只有**一个**来源 —— 环境变量 `CAU_GITHUB_REPO`（缺省 `ZBber-lab/cau-portal`）；
+ * 面板「设置 → 数据源」里填的那一份归**面板自己**用，MCP 不会自动继承（两处要各写一次）。
+ */
+function ghError(kind, rel, res) {
+  let hint = ''
+  if (res.status === 404) {
+    hint =
+      `。当前用的是 ${GH_REPO}@${GH_BRANCH} —— 若不是你的数据仓：在 profile 的 cordis.patch.yml 里` +
+      `给 mcp-cau 的 env 加一行 CAU_GITHUB_REPO: <你的 owner/repo>（原有 env 块请连同 DSH_HOME 一起保留），重启 DSH 后生效。`
+  } else if (res.status === 401 || res.status === 403) {
+    hint = `。令牌无效或权限不足：确认它被授权访问 ${GH_REPO}（Contents: Read），且没有写错仓。`
+  }
+  return new Error(`GitHub ${res.status} ${kind} ${rel}（仓库 ${GH_REPO}@${GH_BRANCH}）${hint}`)
+}
+
 async function ghFetch(rel) {
   const url = `https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`
   const res = await fetch(url, {
@@ -45,7 +62,7 @@ async function ghFetch(rel) {
       'User-Agent': 'cau-portal-mcp',
     },
   })
-  if (!res.ok) throw new Error(`GitHub ${res.status} for ${rel}`)
+  if (!res.ok) throw ghError('读取', rel, res)
   return res.text()
 }
 
@@ -54,7 +71,7 @@ async function ghList(rel) {
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${ghToken()}`, 'User-Agent': 'cau-portal-mcp' },
   })
-  if (!res.ok) throw new Error(`GitHub ${res.status} listing ${rel}`)
+  if (!res.ok) throw ghError('列目录', rel, res)
   const list = await res.json()
   return Array.isArray(list) ? list.map((e) => e.name) : []
 }

@@ -125,12 +125,17 @@ cd ../<数据仓> && git add data && git commit -m "data: first crawl" && git pu
      command: <Node 可执行路径>
      args: [<本仓库路径>\tools\mcp\index.mjs]
      cwd: <本仓库路径>\tools\mcp
+     env:
+       CAU_GITHUB_REPO: <用户的数据仓，owner/repo>
+       # 用户设了 DSH_HOME（数据目录不在 ~/.dsh）时必须带上这一行，否则令牌解析不到：
+       # DSH_HOME: <用户的 DSH 主目录>
    ```
+   ⚠️ **`CAU_GITHUB_REPO` 不能省** —— MCP 读数据仓**只认这个环境变量**（缺省值是作者的 `ZBber-lab/cau-portal`）。用户在面板「设置 → 数据源」填的那一份**只给面板用，MCP 不会继承**；漏了它，MCP 的 6 个工具会**全部报 404**（报错里会写出它当前在用哪个仓）。这是当前版本的已知限制，正式打通（面板配置自动同步给 MCP）待后续版本。
    ⚠️ **不要把令牌写进这里** —— MCP 会自动读面板设置页写下的那一份（`<profile>\cau-portal-store\token.json`），这也是「令牌只存一处」的设计。
-   若确实要在此处写 `env:`，**必须同时带上 `DSH_HOME`**：该 `env:` 块对子进程是**替换**而不是合并环境，漏了它令牌就解析不到，MCP 会**静默退回本地 `data/`**（读到可能是严重过期的数据）。另外 `env` 的改动不会热重载，改完必须重启 DSH。
+   ⚠️ 若确实要在此处写 `env:`，**必须同时带上 `DSH_HOME`**：该 `env:` 块对子进程是**替换**而不是合并环境，漏了它令牌就解析不到，MCP 会**静默退回本地 `data/`**（读到可能是严重过期的数据）。另外 `env` 的改动不会热重载，改完必须重启 DSH。
 3. 重启 DSH 生效（桌面版：完全退出应用再打开；web/CLI：重启 `dsh web`）。
 
-- **验证点**：对话里问"最近有什么通知"，AI 能调用 `mcp__cau__list_latest` 返回结果。
+- **验证点**：① 对话里问"最近有什么通知"，AI 能调用 `mcp__cau__list_latest` 返回结果；② 再调一次 `mcp__cau__list_sites`，返回的 `data_source` 必须是 `github:<用户的数据仓>@main` —— 显示成别的仓，就是 `CAU_GITHUB_REPO` 没配对。
 
 ### 步骤 F：功能与体验验证（逐项过一遍，别只看一眼）
 

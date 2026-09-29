@@ -35,7 +35,7 @@ DSH 浏览器面板 / 对话 MCP ──▶ GitHub Contents API ──▶ 用户�
 3. **配置插件**（DSH 侧边栏→设置）：数据源填 owner/repo；令牌管理登记令牌；AI 加工·模型选择加工模型
 4. **跑管道攒数据**：`node tools/scraper/crawl.mjs` + `DEEPSEEK_API_KEY=... node tools/scraper/enrich.mjs`（Windows 用 `$env:DEEPSEEK_API_KEY='...'`）
 5. **定时抓取（可选）**：把 `.github/workflows/crawl.yml` 复制到用户**自己的数据仓** + 配置 Secret `DEEPSEEK_API_KEY`；用 cron-job.org 桥（POST dispatch）实现定时（免费私有仓的 `schedule` 不生效）
-6. **对话查询 MCP（可选）**：`cd tools/mcp && pnpm install`；在 DSH profile `cordis.patch.yml` 里加 mcp client（stdio，指向本仓 `tools/mcp/index.mjs`，**不必写令牌**——它读面板设置页写下的那一份）；重启 DSH 后可用 `mcp__cau__*`（6 个工具）—— 桌面版＝完全退出应用再打开，web/CLI＝重启 `dsh web`
+6. **对话查询 MCP（可选）**：`cd tools/mcp && pnpm install`；在 DSH profile `cordis.patch.yml` 里加 mcp client（stdio，指向本仓 `tools/mcp/index.mjs`，**不必写令牌**——它读面板设置页写下的那一份）；重启 DSH 后可用 `mcp__cau__*`（6 个工具）—— 桌面版＝完全退出应用再打开，web/CLI＝重启 `dsh web`。⚠️ **但数据仓名必须在 `env:` 里显式给**：`CAU_GITHUB_REPO: <owner/repo>` —— 面板「设置 → 数据源」填的那份**只给面板用、MCP 不继承**，漏了会 6 个工具全报 404；自查 `list_sites` 的 `data_source` 是否为 `github:<该仓>@main`
 
 > 安全提示：调度令牌只授 `Actions: Read & write` 最小权限、只填 cron-job.org、不入仓；DeepSeek API Key / 邮箱授权码等只在本机。
 

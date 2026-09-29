@@ -160,7 +160,14 @@ cd ../<数据仓> && git add data && git commit -m "data: first crawl" && git pu
      command: <Node 可执行文件路径，如 D:\nodejs1\node.exe>
      args: [<本仓库路径>\tools\mcp\index.mjs]
      cwd: <本仓库路径>\tools\mcp
+     env:
+       CAU_GITHUB_REPO: <你的数据仓，owner/repo>
+       # 若你设了 DSH_HOME（数据目录不在 ~/.dsh），这行必须带上，否则 MCP 找不到令牌：
+       # DSH_HOME: <你的 DSH 主目录>
    ```
+   ⚠️ **`CAU_GITHUB_REPO` 不能省**：MCP 读数据仓只认这个环境变量（缺省值是作者自己的 `ZBber-lab/cau-portal`）。
+   面板「设置 → 数据源」里填的那份**只给面板用，MCP 不会继承** —— 漏了它 MCP 的 6 个工具会全部报 404。
+   （这是当前版本的已知限制，见下方说明。）
    **不需要在配置里写令牌** —— MCP 服务器会自动读面板设置页写下的那份（见下）。
    （如果你确实想用环境变量覆盖，加 `env: { CAU_GITHUB_TOKEN: <令牌> }` 即可，它的优先级最高。）
 3. **把令牌填进面板**：DSH 侧边栏 →「农大门户」→ 设置 → **令牌管理** → 粘贴你的数据仓令牌 → 保存。
@@ -168,7 +175,9 @@ cd ../<数据仓> && git add data && git commit -m "data: first crawl" && git pu
    **以后换令牌只改这里，不用再动配置文件、也不用重启 DSH**。
 4. **重启 DSH**（桌面版：完全退出应用再打开；web/CLI：重启 `dsh web`），对话里即可使用 `mcp__cau__*` 工具（共 6 个：最新通知 / 检索 / 截止事项 / 站点目录 / 用量统计 / 文章详情）。
 
-> 说明：MCP 服务器与面板读同一个数据仓库，令牌也共用同一份（面板设置页是唯一入口）。
+> 说明：**令牌**是共用的 —— 面板设置页是唯一入口，MCP 与工具脚本都读那一份。
+> **数据仓库名目前要在两处各写一次**：面板「设置 → 数据源」那份给**面板**用，`cordis.patch.yml` 里的 `CAU_GITHUB_REPO` 给 **MCP** 用（当前版本的已知限制）。
+> 自查办法：对话里调一次 `mcp__cau__list_sites`，返回的 `data_source` 应显示 `github:<你的数据仓>@main`；若显示成别的仓、或报 404，就是这一行没配对 —— MCP 的报错里会直接写出它**当前正在用哪个仓**。
 > 找不到令牌时 MCP 会退回本地 `data/` 目录，不会静默失败：启动日志里会写明当前用的是 GitHub 还是本地。
 
 ### 第 7 步：每日邮件报告（可选）
