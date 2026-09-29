@@ -63,15 +63,23 @@
 
 ### 第 1 步：安装插件
 
-```bash
-# 官方桌面版（2026-09-29 起正式发布）
-dsh plugin --profile desktop add "github:ZBber-lab/cau-portal-open"
+**桌面版（官方已发布，推荐这条）**：在 DSH 侧边栏点「**插件**」→「**添加插件**」，把下面这段填进去：
 
-# 老的 web / CLI 环境（用 dsh web 跑的那种）
-dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"
+```
+github:ZBber-lab/cau-portal-open
 ```
 
-> ⚠️ **profile 别填错**：桌面版读的是 `profiles/desktop`，web/CLI 读的是 `profiles/web`。装错 profile 的症状是「显示安装成功，但界面上什么都不出现」。拿不准就先看现有插件装在哪个 profile —— `~/.dsh/profiles/<名字>/node_modules/` 下有 `cau-portal` 的那个就是（设了 `DSH_HOME` 的话把 `~/.dsh` 换成它）。
+装完**一定要点「立即启用」** —— 直接关掉对话框＝已安装但**未启用**，侧边栏不会出现「农大门户」入口。
+
+**有 `dsh` 命令的环境**（web / CLI；桌面版安装目录默认**不**提供这个命令，它打包在应用内部但没加进 PATH）：
+
+```bash
+dsh plugin --profile desktop add "github:ZBber-lab/cau-portal-open"   # 桌面版的 profile 是 desktop
+dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"       # 老的 web / CLI 环境
+```
+
+> ⚠️ **profile 别填错**：桌面版读 `profiles/desktop`，web/CLI 读 `profiles/web`。装错 profile 的症状是「显示安装成功，但界面上什么都不出现」。拿不准就先看现有插件装在哪个 profile —— `~/.dsh/profiles/<名字>/node_modules/` 下有 `cau-portal` 的那个就是（设了 `DSH_HOME` 的话把 `~/.dsh` 换成它）。
+> ⚠️ **第三方插件暂不支持自动更新**：升级要**先在「插件」页卸载、再安装新版**（直接再装一次不会覆盖旧版）。
 
 （这是官方仓库；若你 fork 了自己的一份，把地址换成你自己的 `github:你的用户名/仓库名`。安装后侧边栏出现「农大门户」入口。）
 
@@ -229,7 +237,7 @@ cd ../<数据仓> && git add data && git commit -m "data: first crawl" && git pu
 │   ├── mcp/              # MCP 服务器（6 个查询工具；需 pnpm install + cordis 注册，见快速开始第 6 步）
 │   ├── email/            # 每日邮件报告（SMTP；授权码只存本机，见第 7 步）
 │   └── shared/           # 本机令牌共享存储的读取
-├── assets/               # 开发期素材/脚本（不含官方校徽、校名素材）
+├── assets/preview.html   # 面板 UI 的开发预览页（仓库不含官方校徽、校名素材）
 ├── sites.json            # 站点/栏目配置（数据驱动，可自行增改）
 ├── docs/AI-SETUP-GUIDE.md# 给 AI agent 的配置指南（见下）
 └── .github/workflows/    # Actions 定时抓取模板

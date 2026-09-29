@@ -24,15 +24,19 @@
 
 ### 步骤 A：安装插件
 
-```bash
-# 官方桌面版（2026-09-29 起正式发布）
-dsh plugin --profile desktop add "github:ZBber-lab/cau-portal-open"
+**桌面版（推荐）**：让用户在 DSH 侧边栏点「**插件**」→「**添加插件**」，填入 `github:ZBber-lab/cau-portal-open`，安装完成时**点「立即启用」**。
+（该页面的输入框接受的正是 `dsh plugin add` 后面那一段；也支持压缩包与本地绝对路径。）
 
-# 老的 web / CLI 环境（用 dsh web 跑的那种）
-dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"
+**有 `dsh` 命令的环境**（web / CLI）：注意**桌面版安装目录默认不提供 `dsh` 命令** —— 它打包在应用内部但没有加进 PATH，所以桌面版用户走上面的界面路径。
+
+```bash
+dsh plugin --profile desktop add "github:ZBber-lab/cau-portal-open"   # 桌面版的 profile 是 desktop
+dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"       # 老的 web / CLI 环境
 ```
 
 > ⚠️ **先确认用哪个 profile**：桌面版读 `profiles/desktop`，web/CLI 读 `profiles/web`；**装错 profile 的表现是「安装成功但界面什么都不出现」**。判断办法：看 `~/.dsh/profiles/<名字>/node_modules/` 下有 `cau-portal` 的是哪个（设了 `DSH_HOME` 就把 `~/.dsh` 换成它）。
+> ⚠️ **第三方插件暂不支持自动更新**：升级要**先在「插件」页卸载、再安装新版**（直接再装一次不会覆盖旧版）—— 排查"用户说改了却看不到效果"时先问这一条。
+> ⚠️ **安装 ≠ 启用**：安装完成后要点「立即启用」；直接关掉对话框会让它保持"已安装但关闭"，界面上不会出现入口。
 
 - 若用户 fork 了自己的一份，用他自己的 `github:用户名/仓库名`。
 - **验证点**：侧边栏出现「农大门户」入口；点击能打开面板（此时无数据属正常，面板会提示未配置）。
@@ -177,6 +181,7 @@ cd ../<数据仓> && git add data && git commit -m "data: first crawl" && git pu
 | 待办里搜不到某条 | 搜索是**严格口径**（只在当前时间范围内匹配） | 把时间范围切成「全部」再搜 |
 | 面板显示「统一门户 · 不可用」 | **开源版不提供统一门户抓取**（需登录校园门户） | 正常现象，不是故障 |
 | 面板某来源不见了 | 「栏目频道管理」里把它关了（黑名单语义） | 设置 → 智能与数据 → 栏目频道管理，重新打开；数据一直都在 |
+| 界面/功能没出现（像没装上） | ① **安装 ≠ 启用**；② 第三方插件**不支持自动更新**，直接再装一次不会覆盖旧版 | 到侧边栏「插件」页确认该组合包已**启用**；要升级就先**卸载再安装**新版 |
 
 ## 4. 安全提醒（对用户讲一遍）
 

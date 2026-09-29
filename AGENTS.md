@@ -30,7 +30,7 @@ DSH 浏览器面板 / 对话 MCP ──▶ GitHub Contents API ──▶ 用户�
 
 按 `README.md` / `docs/AI-SETUP-GUIDE.md` 引导，六步：
 
-1. **装插件**：`dsh plugin --profile desktop add "github:ZBber-lab/cau-portal-open"`（官方**桌面版**的 profile 是 `desktop`；老的 web / CLI 环境改用 `--profile web`；两者装的是同一个包）
+1. **装插件**：**桌面版走界面** —— DSH 侧边栏 →「插件」→「添加插件」填 `github:ZBber-lab/cau-portal-open`，装完**点「立即启用」**（否则只是"已安装未启用"）。**有 `dsh` 命令的环境**（web/CLI；桌面版安装目录默认不带该命令）用 `dsh plugin --profile desktop add "github:ZBber-lab/cau-portal-open"`（老环境 `--profile web`）。⚠️ 第三方插件**暂不支持自动更新**：升级要先卸载再装新版
 2. **准备数据仓**：新建（建议私有）GitHub 仓 + 细粒度令牌（仅选该仓，Contents: Read；如需面板「删除」再加 Write）
 3. **配置插件**（DSH 侧边栏→设置）：数据源填 owner/repo；令牌管理登记令牌；AI 加工·模型选择加工模型
 4. **跑管道攒数据**：`node tools/scraper/crawl.mjs` + `DEEPSEEK_API_KEY=... node tools/scraper/enrich.mjs`（Windows 用 `$env:DEEPSEEK_API_KEY='...'`）
@@ -53,7 +53,7 @@ DSH 浏览器面板 / 对话 MCP ──▶ GitHub Contents API ──▶ 用户�
 - `src/index.ts` 服务端路由；`src/client/*` 客户端面板；`build.mjs` → `lib/`（构建产物，随仓提交）
 - `tools/scraper/` 爬虫 + AI 加工；`tools/mcp/` MCP 服务器（6 个查询工具）；`tools/email/` 每日邮件报告；`tools/shared/` 本机令牌共享存储读取
 - `sites.json` 站点/栏目配置；`docs/AI-SETUP-GUIDE.md` 给 AI 的详细配置指南；`.github/workflows/crawl.yml` 定时抓取模板
-- `README.md` 人读指南；`LICENSE`（MIT）；`assets/` 开发期素材（不含官方校徽/校名）
+- `README.md` 人读指南；`LICENSE`（MIT）；`assets/preview.html` 面板 UI 的开发预览页（仓库不含官方校徽/校名素材）
 - `package.json` / `dsh.plugin.json` / `cordis.patch.yml` 插件元数据与 MCP 注册
 
 ## 七、合规
