@@ -1,5 +1,5 @@
-# cau-portal 服务端补丁层（bundle patch）：
-# 阶段4第1步只注册插件本体（服务端插件为占位，第2步加 webServer+llm 路由）。
+# cau-portal 服务端补丁层（bundle patch）：注册插件本体（服务端路由 + 客户端面板）。
+# 对话里的 MCP 查询工具**不在**这里注册，需另外接入 @deepseek-ai/dsh-mcp-client —— 见 README「快速开始」第 6 步。
 - insert:
     - id: cau-portal
       name: cau-portal

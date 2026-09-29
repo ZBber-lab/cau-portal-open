@@ -30,12 +30,12 @@ DSH 浏览器面板 / 对话 MCP ──▶ GitHub Contents API ──▶ 用户�
 
 按 `README.md` / `docs/AI-SETUP-GUIDE.md` 引导，六步：
 
-1. **装插件**：`dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"`
+1. **装插件**：`dsh plugin --profile desktop add "github:ZBber-lab/cau-portal-open"`（官方**桌面版**的 profile 是 `desktop`；老的 web / CLI 环境改用 `--profile web`；两者装的是同一个包）
 2. **准备数据仓**：新建（建议私有）GitHub 仓 + 细粒度令牌（仅选该仓，Contents: Read；如需面板「删除」再加 Write）
 3. **配置插件**（DSH 侧边栏→设置）：数据源填 owner/repo；令牌管理登记令牌；AI 加工·模型选择加工模型
 4. **跑管道攒数据**：`node tools/scraper/crawl.mjs` + `DEEPSEEK_API_KEY=... node tools/scraper/enrich.mjs`（Windows 用 `$env:DEEPSEEK_API_KEY='...'`）
 5. **定时抓取（可选）**：把 `.github/workflows/crawl.yml` 复制到用户**自己的数据仓** + 配置 Secret `DEEPSEEK_API_KEY`；用 cron-job.org 桥（POST dispatch）实现定时（免费私有仓的 `schedule` 不生效）
-6. **对话查询 MCP（可选）**：`cd tools/mcp && pnpm install`；在 DSH profile `cordis.patch.yml` 里加 mcp client（stdio，指向本仓 `tools/mcp/index.mjs`，**不必写令牌**——它读面板设置页写下的那一份）；重启 dsh web 后可用 `mcp__cau__*`（6 个工具）
+6. **对话查询 MCP（可选）**：`cd tools/mcp && pnpm install`；在 DSH profile `cordis.patch.yml` 里加 mcp client（stdio，指向本仓 `tools/mcp/index.mjs`，**不必写令牌**——它读面板设置页写下的那一份）；重启 DSH 后可用 `mcp__cau__*`（6 个工具）—— 桌面版＝完全退出应用再打开，web/CLI＝重启 `dsh web`
 
 > 安全提示：调度令牌只授 `Actions: Read & write` 最小权限、只填 cron-job.org、不入仓；DeepSeek API Key / 邮箱授权码等只在本机。
 
@@ -44,7 +44,7 @@ DSH 浏览器面板 / 对话 MCP ──▶ GitHub Contents API ──▶ 用户�
 - **构建**：`node build.mjs`（tsc JS API 转译；文件本身是纯 JS，不要写 TS 类型注解）
 - **校验**：`node --check lib/index.js`、`node --check lib/client.js`；客户端加载模拟 `node tools/sim-load.cjs`
 - **数据源**：`sites.json` 数据驱动（站点/栏目），改它即可适配其他院校/栏目
-- **改动生效**：客户端改 `src/client/*` → 重建 `lib/client.js` → 浏览器刷新即生效；服务端改 `src/index.ts` → 重启 dsh web
+- **改动生效**：客户端改 `src/client/*` → 重建 `lib/client.js` → 浏览器刷新即生效；服务端改 `src/index.ts` → 重启 DSH（桌面版退出应用重开，web/CLI 重启 `dsh web`）
 - **令牌只存一处**：面板「设置 → 令牌管理」是唯一入口；保存时经服务端路由 `PUT /api/cau/token` 写进 `<profile>\cau-portal-store\token.json`，MCP 与 `tools/` 脚本（`tools/shared/token-store.mjs`）每次现读它 —— 换令牌不需要改配置文件、也不需要重启 DSH。环境变量 `CAU_GITHUB_TOKEN` 仍可用作覆盖。
 - **协作**：涉及设计/风险的分歧先与用户确认（`ask`）；构建产物 `lib/` 随仓提交。
 

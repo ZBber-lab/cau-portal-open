@@ -1,3 +1,18 @@
+# 定时抓取模板 —— 复制到你【自己的数据仓】的 .github/workflows/ 下即可（文件名保持 crawl.yml，
+# 因为 README 里 cron-job.org 的 dispatch 地址指向这个文件名）。
+#
+# 设计：**数据仓里只放数据**。工具代码不复制进你的仓，而是每次运行由第二个 checkout
+# 从公开的工具仓临时取出到 .cau-tools/（永远是最新版，也不会随时间过期），
+# 再用 --data-dir ./data 把产物写回你的数据仓。
+#
+# 需要在你的数据仓配置 Secret：DEEPSEEK_API_KEY（AI 加工用；不配则抓取照常、AI 加工跳过）。
+#
+# 自定义站点/栏目：把你的 sites.json 放在数据仓根，并在下面两条命令里各加 `--sites ./sites.json`；
+# 不加则使用工具仓里的默认 sites.json。
+# 若你用的是工具仓的【私有】fork：把 repository 改成你的，并给该 checkout 配一个可读令牌。
+#
+# 你自己那份数据仓无需任何其它文件 —— data/ 目录由爬虫自动创建。
+
 name: crawl
 
 on:
@@ -15,21 +30,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # ① 你的数据仓（工作目录 = 数据仓根）
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      # ② 工具仓（公开）→ .cau-tools/，同样只取一层，秒级完成
+      - uses: actions/checkout@v4
+        with:
+          repository: ZBber-lab/cau-portal-open
+          path: .cau-tools
+          fetch-depth: 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
       - name: Crawl
-        run: node tools/scraper/crawl.mjs --pages 2 --articles 8
+        run: node .cau-tools/tools/scraper/crawl.mjs --data-dir ./data --pages 2 --articles 8
+
       - name: Enrich (AI, needs DEEPSEEK_API_KEY secret)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: node tools/scraper/enrich.mjs --limit 20
+        run: node .cau-tools/tools/scraper/enrich.mjs --data-dir ./data --limit 20
         continue-on-error: true
+
       - name: Commit data
         run: |
+          rm -rf .cau-tools
           git config user.name 'cau-portal-bot'
           git config user.email 'cau-portal-bot@users.noreply.github.com'
           git add data/

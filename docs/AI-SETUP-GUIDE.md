@@ -17,15 +17,22 @@
 1. DSH 是否在运行、版本（`dsh --version`）；
 2. 插件是否已安装（侧边栏有无「农大门户」按钮 / 设置页有无「农大门户」入口）；
 3. 是否有 GitHub 账号与一个私有仓库（数据仓）；
-4. 是否有 DeepSeek API Key（管道加工用；没有可先用服务端默认模型，但跑管道必须）。
+4. 是否有 DeepSeek API Key（管道加工用；没有可先用服务端默认模型，但跑管道必须）；
+5. 用的是**官方桌面版**还是老的 **web / CLI**（决定 profile 名与 `cordis.patch.yml` 路径，见步骤 A 与 E2）。
 
 ## 2. 完整配置流程
 
 ### 步骤 A：安装插件
 
 ```bash
+# 官方桌面版（2026-09-29 起正式发布）
+dsh plugin --profile desktop add "github:ZBber-lab/cau-portal-open"
+
+# 老的 web / CLI 环境（用 dsh web 跑的那种）
 dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"
 ```
+
+> ⚠️ **先确认用哪个 profile**：桌面版读 `profiles/desktop`，web/CLI 读 `profiles/web`；**装错 profile 的表现是「安装成功但界面什么都不出现」**。判断办法：看 `~/.dsh/profiles/<名字>/node_modules/` 下有 `cau-portal` 的是哪个（设了 `DSH_HOME` 就把 `~/.dsh` 换成它）。
 
 - 若用户 fork 了自己的一份，用他自己的 `github:用户名/仓库名`。
 - **验证点**：侧边栏出现「农大门户」入口；点击能打开面板（此时无数据属正常，面板会提示未配置）。
@@ -54,30 +61,39 @@ dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"
 
 ### 步骤 D：运行管道攒数据
 
-管道在插件源码仓库里（`tools/scraper/`）。让用户在**本机**运行（或按其偏好部署到 Actions）：
+管道代码在**工具仓**里，产物要写进**用户的数据仓** —— 让用户把两个仓都克隆到本地（工具仓只用来跑，数据仓才是提交的地方），再用 `--data-dir` 指定产物位置：
 
 ```bash
-# 1) 抓取（可选限制页数/条数，先小批量试跑）
-node tools/scraper/crawl.mjs --pages 2 --articles 8
+git clone https://github.com/ZBber-lab/cau-portal-open   # 工具（只读用）
+git clone https://github.com/<用户>/<数据仓>               # 用户的数据仓
+cd cau-portal-open
 
-# 2) AI 加工（需要 DeepSeek API Key，从 platform.deepseek.com 的 API Keys 处获取）。macOS/Linux：`DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8`
-#    Windows PowerShell：`$env:DEEPSEEK_API_KEY='sk-...'; node tools/scraper/enrich.mjs --limit 8`
-DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --limit 8
+# 1) 抓取（先小批量试跑）
+node tools/scraper/crawl.mjs --data-dir ../<数据仓>/data --pages 2 --articles 8
+
+# 2) AI 加工（需要 DeepSeek API Key，从 platform.deepseek.com 的 API Keys 处获取）
+#    macOS/Linux：DEEPSEEK_API_KEY=sk-... node tools/scraper/enrich.mjs --data-dir ../<数据仓>/data --limit 8
+#    Windows PowerShell：$env:DEEPSEEK_API_KEY='sk-...'; node tools/scraper/enrich.mjs --data-dir ..\<数据仓>\data --limit 8
 ```
 
-产物在 `data/`：`index.json`（目录与统计）、`feed/<site>__<column>.json`（栏目列表）、`articles/<sha1>.json`（全文 + AI 元数据）、`usage.jsonl`（用量账本）。
+> **为什么要 `--data-dir`**：不加就会写进工具仓目录。指定后爬虫**只写用户自己的数据仓**（工具仓保持干净，也不会误把数据提交到工具仓）。
+> 想省掉本机这一步也可以：直接跳到步骤 E，让 Actions 去跑。
 
-提交推送：
+产物在 `<数据仓>/data/`：`index.json`（目录与统计）、`feed/<site>__<column>.json`（栏目列表）、`articles/<sha1>.json`（全文 + AI 元数据）、`usage.jsonl`（用量账本）。然后**在数据仓里**提交推送：
 
 ```bash
-git add data && git commit -m "data: first crawl" && git push
+cd ../<数据仓> && git add data && git commit -m "data: first crawl" && git push
 ```
 
 - **验证点**：数据仓里能看到 `data/index.json` 等文件；面板「连通性检查」显示条目数 > 0；侧边栏面板出现今日要览/栏目/待办。
 
 ### 步骤 E：定时自动抓取（可选）
 
-把 `.github/workflows/crawl.yml` 复制到用户**数据仓**，配 Secret `DEEPSEEK_API_KEY`。
+只把 `.github/workflows/crawl.yml` **一个文件**复制到用户**数据仓**，再配 Secret `DEEPSEEK_API_KEY`。
+
+> 该模板自己会临时检出公开的工具仓到 `.cau-tools/`，并用 `--data-dir ./data` 把产物写回数据仓 —— 所以**不需要**把 `tools/` 或 `sites.json` 复制进数据仓：数据仓里只有 `data/`，工具也永远是最新版。
+> 用户若要自定义站点/栏目：把 `sites.json` 放数据仓根，并给 workflow 里两条命令各加 `--sites ./sites.json`。
+> 注意：**不要**让用户 fork 本仓来当数据仓 —— 公开仓的 fork 也是**公开**的，用户抓下来的数据就公开了；数据必须待在用户**自己新建的（建议私有）仓**里。
 
 免费私有仓的 `schedule` 触发器不生效，需外部触发（常用 cron-job.org）：
 
@@ -96,7 +112,7 @@ git add data && git commit -m "data: first crawl" && git push
 让 AI 能在对话里直接查询数据，需注册 MCP：
 
 1. 装 MCP 依赖：`cd tools/mcp && pnpm install`；
-2. 在 DSH profile `cordis.patch.yml`（Windows：`C:\Users\<你>\.dsh\profiles\web\cordis.patch.yml`；macOS/Linux：`~/.dsh/profiles/web/cordis.patch.yml`）加 mcp client（`@deepseek-ai/dsh-mcp-client`）：
+2. 在 DSH profile `cordis.patch.yml` 里加 mcp client（`@deepseek-ai/dsh-mcp-client`）。**路径按用户那套选**——桌面版：`C:\Users\<你>\.dsh\profiles\desktop\cordis.patch.yml`（macOS/Linux `~/.dsh/profiles/desktop/cordis.patch.yml`）；web/CLI：`…\.dsh\profiles\web\cordis.patch.yml`；设了 `DSH_HOME` 的话主目录就是它而不是 `~/.dsh`：
    ```yaml
    - id: mcp-cau
      name: '@deepseek-ai/dsh-mcp-client'
@@ -105,20 +121,44 @@ git add data && git commit -m "data: first crawl" && git push
      command: <Node 可执行路径>
      args: [<本仓库路径>\tools\mcp\index.mjs]
      cwd: <本仓库路径>\tools\mcp
-     env:
-       CAU_GITHUB_TOKEN: <数据仓只读令牌>
    ```
-3. 重启 dsh web 生效。
+   ⚠️ **不要把令牌写进这里** —— MCP 会自动读面板设置页写下的那一份（`<profile>\cau-portal-store\token.json`），这也是「令牌只存一处」的设计。
+   若确实要在此处写 `env:`，**必须同时带上 `DSH_HOME`**：该 `env:` 块对子进程是**替换**而不是合并环境，漏了它令牌就解析不到，MCP 会**静默退回本地 `data/`**（读到可能是严重过期的数据）。另外 `env` 的改动不会热重载，改完必须重启 DSH。
+3. 重启 DSH 生效（桌面版：完全退出应用再打开；web/CLI：重启 `dsh web`）。
 
 - **验证点**：对话里问"最近有什么通知"，AI 能调用 `mcp__cau__list_latest` 返回结果。
 
-### 步骤 F：体验验证
+### 步骤 F：功能与体验验证（逐项过一遍，别只看一眼）
 
 让用户确认以下"与作者一致"的体验：
 
-1. 面板：今日要览 / 我的事项（截止提醒）/ 栏目频道可浏览；
-2. 对话：`搜索最新通知`、`查一下推免报名截止` 能出结果（MCP 工具生效）；
-3. 文章页：AI 摘要、引用到对话、加入关注可用。
+1. **今日要览**：打开面板第一眼有「高重要新进 · 3 天内截止 · 命中关注 N」，下方是「我的事项」大卡与「栏目频道」入口；
+2. **要闻**：分三栏（校内平台 / 校内其他 / 校外来源）；顶部搜索的多关键词需**全部命中**；带**沙漏**的是「发布已超 7 天但截止还没到」的临期通知，会**置顶**；
+3. **全部待办**：未过期截止按日期升序，可切「剩余 7 / 30 / 90 天 / 全部」；**搜索只在你选的时间范围内**（严格口径 —— 搜不到就把范围切成「全部」）；
+4. **文章页**：AI 摘要、deadline 高亮、「引用到对话」、「加入关注」、「我的事项」；
+5. **数据管理**：日期区间筛选 + 搜索 + 批量删除 —— **需要令牌有 Contents: Read and write**；提交后**本地立即隐藏、云端 ≤2 小时内真正删除且不可恢复**；
+6. **对话**：`搜索最新通知`、`查一下推免报名截止` 能出结果（MCP 工具生效）。
+
+用户按需再配这两项（不要就跳过）：
+
+7. **关注规则 + 系统通知**：设置 → **待办提醒 · 关注**。关键词必填（如 推免 / 选课 / 奖学金），可加来源与重要度下限；**系统通知**是**页面开着**时每 10 分钟检查一次，首次要先点「请求通知授权」；
+8. **每日邮件报告**：见步骤 G；
+9. **底栏新鲜度 + 来源编辑**：面板**底栏**显示云端数据新鲜度（>4 小时黄 / >24 小时红，悬停看原因）；「设置 → 智能与数据 → 栏目频道管理」里每个来源可「**编辑**」本机名称 / 标签 / 主题色 —— 三项只存本机，立即生效，不动数据仓，也不需要写权限。
+
+### 步骤 G：每日邮件报告（可选）
+
+设置 → **通知与关注** → **每日邮件报告**：
+
+1. 让用户在界面里填 **发件邮箱** + **邮箱授权码**。强调：是**授权码，不是邮箱登录密码** ——
+   QQ 邮箱：网页版 → 设置 → 账户 → 开启「SMTP 服务」→ 按提示发短信后生成 16 位授权码；163：设置 → POP3/SMTP/IMAP → 客户端授权密码。常见服务商会被**自动识别，SMTP 参数不用手填**；
+2. **收件邮箱**可留空（＝发件邮箱，自己发给自己）；
+3. 可选改 **发送时间**（本机时间，默认 08:00）；
+4. **先点「测试发送」**，让用户确认收件箱（**含垃圾箱**）真的收到，再打开「启用每日邮件报告」——
+   未填发件邮箱与授权码时**启用会被拒**（界面会提示「启用前请先填写发件邮箱与授权码」）。
+
+- **验证点**：界面显示「上次发送：… （测试 / 日报）· 成功」；用户邮箱收到过测试邮件。
+- 发送内容：**今日高重要通知 + 3 天内截止 + 命中关注规则 + 昨日回顾**；**发送时间已过才开机会自动补发**。
+- 授权码只存本机（仓库外），**不要让用户把它贴进对话**。
 
 ## 3. 故障排查
 
@@ -130,7 +170,13 @@ git add data && git commit -m "data: first crawl" && git push
 | 管道抓取报错 | 网络/反爬/站点结构变化 | 检查目标站可达性；`sites.json` 栏目是否仍有效；降低 `--pages` 数量 |
 | 加工跳过（无 AI 元数据） | `DEEPSEEK_API_KEY` 缺失或配额 | 确认环境变量；检查 `usage.jsonl` 是否有记录 |
 | 面板数据不更新 | 60 秒缓存 | 面板底部 ⟳ 强制刷新 |
-| 邮件功能报错 | 相关凭据未配置 | 邮件子页有独立说明；授权码仅本机 |
+| 邮件功能报错 / 测试发送失败 | 授权码错、服务商限制、收件地址错 | 重新生成授权码；确认发件邮箱与授权码配套；核对收件地址；看界面上的「上次发送 · 失败：原因」 |
+| 邮件「启用」被拒 | 未填发件邮箱或授权码 | 先填这两项 → 点「测试发送」确认收到 → 再启用 |
+| 数据管理里删除提交不了 | 令牌缺写权限 | 给该令牌加 **Contents: Read and write**，回「令牌管理」更新那一枚（面板「删除」功能需要写权限） |
+| 删除后条目还在 | 云端删除是**下一轮抓取（≤2 小时）**才执行 | 属正常：本地已立即隐藏，等下轮抓取；关注中的文章本地缓存仍可读 |
+| 待办里搜不到某条 | 搜索是**严格口径**（只在当前时间范围内匹配） | 把时间范围切成「全部」再搜 |
+| 面板显示「统一门户 · 不可用」 | **开源版不提供统一门户抓取**（需登录校园门户） | 正常现象，不是故障 |
+| 面板某来源不见了 | 「栏目频道管理」里把它关了（黑名单语义） | 设置 → 智能与数据 → 栏目频道管理，重新打开；数据一直都在 |
 
 ## 4. 安全提醒（对用户讲一遍）
 
@@ -140,4 +186,4 @@ git add data && git commit -m "data: first crawl" && git push
 
 ## 5. 完成标准
 
-用户能用面板浏览自己的数据、能在对话里查询、定时管道在跑——即完成。此时可提示用户把重要凭据的过期日登记进「令牌管理」以便到期提醒。
+用户能用面板浏览自己的数据、能在对话里查询、定时管道在跑——即完成。若用户还需要邮件报告，再按步骤 G 配好并确认收到测试邮件。此时可提示用户把重要凭据的过期日登记进「令牌管理」以便到期提醒。
