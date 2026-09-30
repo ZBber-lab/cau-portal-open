@@ -278,10 +278,16 @@ export function CauPanel(props: {
       // 否则没在「数据源」填过的客户端会立刻以"未配置数据仓库"失败（顶部红条会解释）
       try {
         if (await adoptServerDataRepo()) setRefreshKey((k) => k + 1)
-        await loadHead()
       } finally {
-        // 无论成功失败都要放行，否则面板会永久停在占位上
+        // 占位**只等"本机配置回读"这一步**（Codex 2026-09-30 复审 #3a）：`finally` 能覆盖"完成/抛错"，
+        // 但覆盖不了"永不完成" —— 把 loadHead()（云端请求）也划进门槛的话，网络慢或请求一直 pending
+        // 时首页会永久停在"正在读取本机配置…"。所以配置一到就放行，状态栏另走一条。
         setAdopted(true)
+      }
+      try {
+        await loadHead()
+      } catch {
+        /* 状态栏数据（云端更新时间/未读）读不到就留空，不影响面板可用 */
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps

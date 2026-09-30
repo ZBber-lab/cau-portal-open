@@ -57,5 +57,9 @@ jobs:
       - name: Simulate client loading
         run: node tools/sim-load.cjs
 
+      # 客户端行为夹具：真渲染设置页/面板组件树 + 三条交错场景 + 变异测试（把修复改回旧写法必须变红）
+      - name: Check client behaviour fixtures
+        run: node tools/client-fixtures.cjs
+
       - name: Check MCP protocol and six tool results
         run: node tools/mcp/smoke-test.mjs

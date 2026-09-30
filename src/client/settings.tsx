@@ -327,8 +327,15 @@ export function CauSettings(props: any) {
    * 设置页用，摆在这儿能少几份拷贝（规则 12/23 的 bundle 纪律）。
    */
   const dataRepoSyncTimer = useRef<any>(null)
+  /** 请求代次（Codex 2026-09-30 复审 #3c）：**旧 PUT 的响应可能晚于新 PUT 返回**，
+   *  只有最新代次允许更新同步提示，否则会出现"已经失败却显示已同步"。 */
+  const dataRepoSyncSeq = useRef(0)
   const scheduleDataRepoConfig = (repo: string) => {
     if (dataRepoSyncTimer.current) clearTimeout(dataRepoSyncTimer.current)
+    const seq = ++dataRepoSyncSeq.current
+    const setStatus = (s: { ok: boolean; text: string }) => {
+      if (seq === dataRepoSyncSeq.current) setDataRepoSync(s)
+    }
     dataRepoSyncTimer.current = setTimeout(() => {
       dataRepoSyncTimer.current = null
       void (async () => {
@@ -340,7 +347,7 @@ export function CauSettings(props: any) {
           })
           const j: any = await res.json().catch(() => null)
           if (res.ok && j?.ok) {
-            setDataRepoSync({
+            setStatus({
               ok: true,
               text: j.configured ? `已同步到本机共享存储（${j.dataRepo}）· MCP 与工具脚本立即可用` : '已清除本机数据仓配置',
             })
@@ -348,12 +355,12 @@ export function CauSettings(props: any) {
           }
           if (res.status === 404) {
             // 旧服务端没有 /api/cau/config：浏览器里填的仓 MCP 读不到（文案与令牌通道一致）
-            setDataRepoSync({ ok: false, text: '本机配置路由不可用（请重启 dsh web / 桌面版，让插件服务端加载新路由）' })
+            setStatus({ ok: false, text: '本机配置路由不可用（请重启 dsh web / 桌面版，让插件服务端加载新路由）' })
             return
           }
-          setDataRepoSync({ ok: false, text: `同步失败：${j?.error || res.status}` })
+          setStatus({ ok: false, text: `同步失败：${j?.error || res.status}` })
         } catch (e: any) {
-          setDataRepoSync({ ok: false, text: `同步失败：${String(e?.message || e)}` })
+          setStatus({ ok: false, text: `同步失败：${String(e?.message || e)}` })
         }
       })()
     }, 600)

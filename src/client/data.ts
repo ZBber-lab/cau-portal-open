@@ -99,7 +99,11 @@ export async function adoptServerDataRepo(): Promise<boolean> {
   if (String(cur.dataRepo || '').trim()) return false
   const srv = await fetchServerDataRepo()
   if (!srv.dataRepo) return false
-  saveSettings({ ...cur, dataRepo: srv.dataRepo })
+  // ⚠️ 回填前重读一次（Codex 2026-09-30 复审 #3b）：await 期间用户可能已在设置页输入仓名，
+  // 拿 GET 前的旧快照回填会覆盖它（设置页那份已修，这条父组件路径上一批漏了）。
+  const now = loadSettings()
+  if (String(now.dataRepo || '').trim()) return false
+  saveSettings({ ...now, dataRepo: srv.dataRepo })
   return true
 }
 
