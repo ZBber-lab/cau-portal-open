@@ -29,11 +29,19 @@ const SETTINGS_KEY = 'dsh.cau-portal.settings.v1'
 const DEFAULT_DATA_REPO = ''
 const GH_BRANCH = 'main'
 
-/** 当前数据仓库（owner/repo）：设置页可配；兼容粘贴完整 URL / .git 后缀。
- *  **未配置时返回 ''** —— 调用方必须给出可操作提示，不许拼出一个空仓地址去发请求。 */
+/** 当前数据仓库（owner/repo）：兼容完整 URL（`https://` 可省）/ `.git` 后缀 / 末尾斜杠；**未配置返回 ''**
+ *  ⚠️ 归一化规则有**三份拷贝**（这里、服务端 `src/index.ts`、`tools/mcp/index.mjs`）——改一处
+ *  必须三处一起改、逐字一致；**先删末尾 `/` 再删 `.git`** 的顺序是关键（否则 `…/r.git/` 漏成
+ *  `…/r.git` → 404）。本文件会被内联多份，注释尽量短。 */
 export function dataRepo(): string {
   try {
-    const r = String(loadSettings().dataRepo || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '')
+    const r = String(loadSettings().dataRepo || '')
+      .trim()
+      .replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, '')
+      .replace(/\/+$/, '')
+      .replace(/\.git$/i, '')
+      .replace(/\/+$/, '')
+      .trim()
     if (r && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(r)) return r
   } catch {
     /* 忽略 */
@@ -68,24 +76,7 @@ export function saveSettings(s: SettingsV1) {
 // 面板「设置 → 数据源」填一次 → 经服务端 PUT /api/cau/config 写进本机共享存储
 // `<profile>\cau-portal-store\config.json` → MCP 与 tools/ 每次调用现读（5 秒缓存）。
 // 从此**不必**再在 profile 的 `cordis.patch.yml` 里给 mcp-cau 的 env 手写 CAU_GITHUB_REPO。
-
-/** 防抖句柄：输入框逐字变化不必每次都发请求 */
-let dataRepoSyncTimer: any = null
-
-/** 把数据仓配置推给服务端（防抖 600ms；服务端写本机共享存储，MCP 与 tools/ 现读它） */
-export function scheduleDataRepoConfig(repo: string) {
-  if (dataRepoSyncTimer) clearTimeout(dataRepoSyncTimer)
-  dataRepoSyncTimer = setTimeout(() => {
-    dataRepoSyncTimer = null
-    void fetch('/api/cau/config', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ dataRepo: String(repo || '').trim() }),
-    }).catch(() => {
-      /* 服务端不可用（旧版本没有这条路由）：面板继续用自己的 localStorage，下次再同步 */
-    })
-  }, 600)
-}
+// （**推送那一步在 `settings.tsx`**：`scheduleDataRepoConfig()` 只有设置页用，放这里会被内联多份。）
 
 /** 读服务端那份数据仓配置（旧服务端没有这条路由时静默返回"未配置"） */
 export async function fetchServerDataRepo(): Promise<{ configured: boolean; dataRepo: string; branch: string }> {

@@ -28,7 +28,7 @@ function joinPath(...parts: string[]): string {
 export const name = 'cau-portal'
 export const inject = ['webServer', 'llm']
 
-const VERSION = '0.5.4'
+const VERSION = '0.5.5'
 
 const SYSTEM_PROMPT = `你是中国农业大学新闻处理助手。阅读给定文章，输出一个 JSON 对象（只输出 JSON，不要输出任何其他文字）。
 
@@ -130,14 +130,21 @@ function readStoredToken(): { token: string; updatedAt: string; dir: string } | 
 }
 
 /**
- * 归一化数据仓库名（`owner/repo`）：允许完整 GitHub 链接、`.git` 后缀、末尾斜杠与首尾空白；
- * 不合法返回 `''`（调用方据此回 400）。**这个白名单同时是 SSRF/注入防线**（原 `/api/cau/data`
- * 里那条 `repo not allowed` 检查已并入这里）。
+ * 归一化数据仓库名（`owner/repo`）：允许完整 GitHub 链接（`https://` 可省）、`.git` 后缀、
+ * 末尾斜杠与首尾空白；不合法返回 `''`（调用方据此回 400）。**这个白名单同时是 SSRF/注入防线**
+ * （原 `/api/cau/data` 里那条 `repo not allowed` 检查已并入这里）。
+ *
+ * ⚠️ 同一套归一化规则有**三份拷贝**：本文件、`src/client/data.ts` 的 `dataRepo()`、
+ * `tools/mcp/index.mjs` 的 `normalizeRepo()`（那份决定 **MCP 到底读哪个仓**）。
+ * **改这里必须三处一起改、逐字一致**（与 `tools/shared/token-store.mjs` 文件头那条约定同理）。
+ * 删斜杠的顺序是关键：**必须先删末尾 `/`、再删 `.git`**，最后再兜一次末尾 `/`；
+ * 否则 `https://github.com/o/r.git/` 会漏成 `o/r.git` —— 归一化"通过"了，但仓是错的（实测 404）。
  */
 function normalizeRepo(input: unknown): string {
   const s = String(input ?? '')
     .trim()
-    .replace(/^https?:\/\/(?:www\.)?github\.com\//i, '')
+    .replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, '')
+    .replace(/\/+$/, '')
     .replace(/\.git$/i, '')
     .replace(/\/+$/, '')
     .trim()
@@ -393,7 +400,9 @@ export function apply(ctx: any) {
           ok: true,
           configured: !!cur?.dataRepo,
           dataRepo: cur?.dataRepo || '',
-          branch: cur?.branch || 'main',
+          // 本版只支持 main（PUT 会拒绝其它值）—— 所以这里也照实际生效的口径回 main，
+          // 免得面板显示一个 legacy config.json 里写着、但 MCP 已按 main 处理的分支。
+          branch: 'main',
           updatedAt: cur?.updatedAt || '',
           dir: cur?.dir || '',
         })
@@ -411,6 +420,14 @@ export function apply(ctx: any) {
         const rawRepo = String(input?.dataRepo ?? '').trim()
         const branch = String(input?.branch ?? '').trim() || 'main'
         const repo = normalizeRepo(rawRepo)
+        // branch 只接受 main（2026-09-30 边界修复 #6）：面板上本来就只有 repo 一个输入框，而
+        // 客户端的 `GH_BRANCH`、`/api/cau/data` 的 `ref=main`、MCP 的缓存键都写死/假定 main ——
+        // 允许自定义分支只会造成"面板说 dev、实际读 main"的不一致。要换分支只能用 MCP 侧
+        // 的 `CAU_GITHUB_BRANCH` 显式覆盖（那属于高级用法，且注释里已写明会与面板不一致）。
+        if (branch !== 'main') {
+          json(res, 400, { ok: false, error: '本版仅支持 main 分支' })
+          return
+        }
         // 空 = 显式清除：删掉 config.json，MCP 立刻回到"请先配置数据仓库"（面板与 MCP 两侧行为一致）
         if (!rawRepo) {
           try {
@@ -424,10 +441,6 @@ export function apply(ctx: any) {
         }
         if (!repo) {
           json(res, 400, { ok: false, error: '数据仓库格式不认识（应为 owner/repo，可粘贴完整 GitHub 链接）' })
-          return
-        }
-        if (!/^[A-Za-z0-9_.\-/]+$/.test(branch)) {
-          json(res, 400, { ok: false, error: 'branch 格式不认识' })
           return
         }
         try {
@@ -498,10 +511,16 @@ export function apply(ctx: any) {
       }
       const rel = String(input?.path ?? '')
       const token = String(input?.token ?? '')
-      // 数据仓：显式 repo 优先，其次本机共享存储的 config.json（#1：**删掉内置默认仓** ——
-      // 原先这里兜底 `ZBber-lab/cau-portal`，等于把作者自己的仓当成所有用户的默认值）。
-      // `normalizeRepo()` 内含 owner/repo 白名单（防 SSRF/注入），不合法一律 400。
-      const repo = normalizeRepo(input?.repo) || normalizeRepo(readStoreConfig()?.dataRepo)
+      // 数据仓：**显式 repo 优先，且显式给了就必须用它**（2026-09-30 边界修复 #4b）：
+      // 旧写法 `normalizeRepo(input.repo) || normalizeRepo(store)` 在"调用方明确要 X、但 X 写错"时
+      // 会静默换成共享配置里的 Y —— 调用方以为拿到了 X 的数据，实际是 Y。只有**参数缺失**时才允许回落。
+      // `normalizeRepo()` 内含 owner/repo 白名单（防 SSRF/注入）。
+      const rawRepo = String(input?.repo ?? '').trim()
+      const repo = rawRepo ? normalizeRepo(rawRepo) : normalizeRepo(readStoreConfig()?.dataRepo)
+      if (rawRepo && !repo) {
+        json(res, 400, { ok: false, error: 'repo 非法（需要 owner/repo 形式，可粘贴完整 GitHub 链接）' })
+        return
+      }
       if (!rel || !token) {
         json(res, 400, { ok: false, error: 'path/token required' })
         return

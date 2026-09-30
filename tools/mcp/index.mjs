@@ -44,18 +44,33 @@ function resolveRepoConfig() {
   const envRepo = String(process.env.CAU_GITHUB_REPO || '').trim()
   const envBranch = String(process.env.CAU_GITHUB_BRANCH || '').trim()
   const repo = normalizeRepo(envRepo) || normalizeRepo(cfg.dataRepo)
-  const branch = envBranch || String(cfg.branch || '').trim() || 'main'
+  // branch：**本版只支持 main**（2026-09-30 边界修复 #6）。config.json 若写着别的分支（手工改过/旧版），
+  // 按 main 处理并记一条 warn —— 面板与服务端 `/api/cau/data` 都走 main，MCP 不能静默读一个别人不看的
+  // 分支（那会让"同一份配置、两个结果"）。`CAU_GITHUB_BRANCH` 保留为**显式高级覆盖**（CI/临时切换用）：
+  // 注意设了它以后 MCP 读的分支就和面板/服务端**不一致**了。
+  const cfgBranch = String(cfg.branch || '').trim()
+  if (cfgBranch && cfgBranch !== 'main') {
+    console.error(`[cau-portal-mcp] 忽略 config.json 里的 branch=${cfgBranch}（本版仅支持 main）`)
+  }
+  const branch = envBranch || 'main'
   _repoCache = { at: now, repo, branch }
   return _repoCache
 }
 const resolveRepo = () => resolveRepoConfig().repo
 const resolveBranch = () => resolveRepoConfig().branch
 
-/** 归一化 owner/repo（允许完整 GitHub 链接与 `.git` 后缀、末尾斜杠）；非法返回 '' */
+/**
+ * 归一化 owner/repo（允许完整 GitHub 链接（`https://` 可省）、`.git` 后缀、末尾斜杠与首尾空白）；非法返回 ''。
+ * ⚠️ 同一套归一化规则有**三份拷贝**：服务端 `src/index.ts`、客户端 `src/client/data.ts` 的 `dataRepo()`、
+ * 本文件。**改一处必须三处一起改、逐字一致**。**这一份决定 MCP 到底读哪个仓**，最不能漂。
+ * 顺序是关键：**先删末尾 `/`、再删 `.git`**，最后再兜一次末尾 `/` —— 否则 `/r.git/` 会漏成 `r.git`，
+ * 归一化"通过"了但仓名是错的（实测 404）。
+ */
 function normalizeRepo(input) {
   const s = String(input ?? '')
     .trim()
-    .replace(/^https?:\/\/(?:www\.)?github\.com\//i, '')
+    .replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, '')
+    .replace(/\/+$/, '')
     .replace(/\.git$/i, '')
     .replace(/\/+$/, '')
     .trim()
@@ -75,6 +90,22 @@ function configHint() {
   const repo = resolveRepo()
   if (repo) return ghMode() ? '' : '本机没有令牌：在面板「设置 → 令牌管理」登记（或设 CAU_GITHUB_TOKEN），否则只能读本地 data/'
   return '请先配置数据仓库：在面板「设置 → 数据源」填写 owner/repo，「设置 → 令牌管理」登记令牌；若只用本地管道数据，请先运行 tools/scraper/crawl.mjs'
+}
+
+/**
+ * **配了数据仓、却没有令牌 → 明确报错**（2026-09-30 边界修复 #5）。
+ * 旧行为是 `ghMode()` 为假就静默读本机 `data/` —— 那可能是一份**过期很久的本地数据**
+ * （2026-09-28 实测事故：凭证路径失灵 → 静默读旧 `data/` → 数据落后 26 天而无人察觉；
+ * 判据就是 `list_sites.data_source` 从 `github:` 变成了 `local:`）。
+ * 什么都不配（纯本地管道的用户）仍允许本地模式，但要在 `list_sites` 里把 mode/hint 写显眼。
+ */
+function localModeBlockedError() {
+  const repo = resolveRepo()
+  return new Error(
+    `已配置数据仓库 ${repo}，但本机没有令牌：请在面板「设置 → 令牌管理」登记令牌（或设环境变量 CAU_GITHUB_TOKEN）。` +
+      `这里直接报错而**不是**悄悄改读本机 data/ —— 那份本地数据可能已过期很久，看起来却像"最新数据"。` +
+      `若确实只想离线读本机 data/，请把面板「设置 → 数据源」的数据仓库清空。`,
+  )
 }
 
 // 缓存键都带 `repo@branch|` 前缀：数据仓可动态切换（#1），**不能沿用旧仓的缓存**
@@ -251,7 +282,7 @@ async function resolveSiteHost(site) {
 }
 const CATEGORIES = ['通知', '新闻', '讲座', '竞赛', '评奖', '选课', '学术', '其他']
 
-const server = new McpServer({ name: 'cau-portal', version: '0.5.4' })
+const server = new McpServer({ name: 'cau-portal', version: '0.5.5' })
 
 // ---------- 数据读取（统一源：GH 模式读 GitHub，否则本地 data/） ----------
 /** 读取 data/ 下的相对子路径文本；GH 模式带进程内缓存 */
@@ -264,6 +295,8 @@ async function readSource(rel) {
     ghCache.set(key, { t: Date.now(), text })
     return text
   }
+  // 配了仓却没令牌：明确报错，绝不静默降级去读本机旧 data/（见 localModeBlockedError）
+  if (resolveRepo()) throw localModeBlockedError()
   try {
     return await readFile(path.join(DATA_DIR, rel), 'utf8')
   } catch {
@@ -290,6 +323,8 @@ async function listDir(rel) {
     ghListCache.set(key, { t: Date.now(), list })
     return list
   }
+  // 同 readSource：配了仓却没令牌 → 报错（见 localModeBlockedError）
+  if (resolveRepo()) throw localModeBlockedError()
   try {
     return (await readdir(path.join(DATA_DIR, rel))).filter((f) => f.endsWith('.json'))
   } catch {
@@ -440,7 +475,17 @@ server.registerTool('list_sites', {
       const hint = configHint()
       return okJson({ error: 'index.json 不存在（尚未运行爬虫）', ...(hint ? { hint } : {}), sites: [] })
     }
-    return okJson({ ...index, data_source: ghMode() ? `github:${resolveRepo()}@${resolveBranch()}` : `local:${DATA_DIR}` })
+    if (ghMode()) return okJson({ ...index, data_source: `github:${resolveRepo()}@${resolveBranch()}` })
+    // 本地模式：**只有"连数据仓都没配"时才会走到这里**（配了仓却没令牌会在 readSource 直接报错）。
+    // 把"我在读本机目录"写显眼 —— data_source 那一行很容易被忽略，而本机 data/ 可能早已过期。
+    return okJson({
+      ...index,
+      data_source: `local:${DATA_DIR}`,
+      mode: 'local',
+      hint:
+        `**本机离线模式**：当前读的是本机目录 ${DATA_DIR}（不是云端数据仓），内容可能是旧的。` +
+        `要读云端数据：面板「设置 → 数据源」填数据仓库、「设置 → 令牌管理」登记令牌（MCP 5 秒内跟上）。`,
+    })
   } catch (e) { return failJson(e) }
 })
 
@@ -705,7 +750,9 @@ const auditLog = (line) => appendFile(path.join(DATA_DIR, 'mcp-audit.log'), `${n
 try {
   const src = ghMode() ? `github:${resolveRepo() || '(未配置数据仓库)'}@${resolveBranch()}` : 'local'
   const warn = !ghMode()
-    ? '  <<< 未进入云端模式：令牌没解析到，读的是本地 data/（可能过期）'
+    ? resolveRepo()
+      ? `  <<< 配了数据仓 ${resolveRepo()} 但没有令牌：工具调用会**直接报错**（2026-09-30 起不再静默读本地 data/）`
+      : '  <<< 未进入云端模式：数据仓与令牌都没配，读的是本地 data/（可能过期）'
     : resolveRepo() ? '' : '  <<< 令牌有、但数据仓库没配置：请到面板「设置 → 数据源」填写'
   await appendFile(path.join(DATA_DIR, 'mcp-start.log'), `${new Date().toISOString()} started pid=${process.pid} mode=${src}${warn} argv=${process.argv.slice(1).join(' ')}\n`, 'utf8')
 } catch { /* 检测辅助，失败不影响服务 */ }

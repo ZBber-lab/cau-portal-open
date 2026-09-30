@@ -46,7 +46,8 @@ DSH 浏览器面板 / 对话 MCP ──▶ GitHub Contents API ──▶ 用户�
 - **数据源**：`sites.json` 数据驱动（站点/栏目），改它即可适配其他院校/栏目
 - **改动生效**：客户端改 `src/client/*` → 重建 `lib/client.js` → 浏览器刷新即生效；服务端改 `src/index.ts` → 重启 DSH（桌面版退出应用重开，web/CLI 重启 `dsh web`）
 - **令牌只存一处**：面板「设置 → 令牌管理」是唯一入口；保存时经服务端路由 `PUT /api/cau/token` 写进 `<profile>\cau-portal-store\token.json`，MCP 与 `tools/` 脚本（`tools/shared/token-store.mjs`）每次现读它 —— 换令牌不需要改配置文件、也不需要重启 DSH。环境变量 `CAU_GITHUB_TOKEN` 仍可用作覆盖。
-- **数据仓也只填一处**（v0.5.4 起）：面板「设置 → 数据源」保存时经 `PUT /api/cau/config` 写进 `<profile>\cau-portal-store\config.json`（`{version,dataRepo,branch,updatedAt}`，与 `token.json` **分开存放**——那份有三个写入实现，混在一起会被静默抹掉）；MCP 每次调用现读它（5 秒缓存）。**没有内置默认仓**：未配置时服务端路由与 MCP 都给出可操作提示。服务端与 MCP 的解析逻辑各有一份，**改格式时两边一起改**。
+- **数据仓也只填一处**（v0.5.4 起）：面板「设置 → 数据源」保存时经 `PUT /api/cau/config` 写进 `<profile>\cau-portal-store\config.json`（`{version,dataRepo,branch,updatedAt}`，与 `token.json` **分开存放**——那份有三个写入实现，混在一起会被静默抹掉）；MCP 每次调用现读它（5 秒缓存）。**没有内置默认仓**：未配置时服务端路由与 MCP 都给出可操作提示。
+  - **边界口径（v0.5.5）**：①**只支持 `main` 分支**（填别的分支会被明确拒绝）；②**填了数据仓却没登记令牌 → MCP 直接报错**（不会悄悄改读本机 `data/` —— 那会让你看到一份过期很久却"看起来像最新"的数据）；③**既没填仓也没令牌 = 本机离线模式**，允许（跑完 `crawl.mjs` 直接用），但 `list_sites` 会带 `mode:"local"` 与 `hint` 提醒"读的是本机目录、可能是旧的"，自查一律看 `data_source` 是否为 `github:<你的仓>@main`；④仓库名归一化（接受完整链接 / `.git` / 末尾斜杠）在**服务端、面板、MCP 各有一份拷贝** —— **改格式时三处一起改**，且顺序不能换（先删末尾 `/` 再删 `.git`，否则 `…/r.git/` 会解析成 `…/r.git` 而 404）；⑤面板「数据源」的同步结果（成功/失败）会显示在输入框下方，**看到失败就是 MCP 那边没生效**，别忽略。
 - **协作**：涉及设计/风险的分歧先与用户确认（`ask`）；构建产物 `lib/` 随仓提交。
 
 ## 六、文件地图

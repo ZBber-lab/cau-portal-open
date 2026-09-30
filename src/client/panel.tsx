@@ -267,12 +267,22 @@ export function CauPanel(props: {
     const readSet = loadReadSet()
     setUnread(unreadCandidates(b.summary).filter((it: any) => !readSet.includes(it.article_id || it.url)).length)
   }
+  // 本机数据仓配置是否已回读完成（2026-09-30 边界修复 #3a）：**必须等 `adoptServerDataRepo()` 落地
+  // 再挂载会发请求的子视图**。React 的 effect 是**子先父后**，所以"我在自己的 effect 里排在 loadHead
+  // 前面"挡不住 HomeView 的 effect —— 它会在 config.json 还没回读时就用空仓去请求（瞬态失败，
+  // 随后靠 refreshKey 重挂载自愈）。这里用 adopted 把关，未就绪只渲染轻量占位。
+  const [adopted, setAdopted] = useState(false)
   useEffect(() => {
     void (async () => {
       // 数据仓配置（2026-09-30 #1）：先回读本机共享存储那份 config.json（本地为空则回填），
       // 否则没在「数据源」填过的客户端会立刻以"未配置数据仓库"失败（顶部红条会解释）
-      if (await adoptServerDataRepo()) setRefreshKey((k) => k + 1)
-      await loadHead()
+      try {
+        if (await adoptServerDataRepo()) setRefreshKey((k) => k + 1)
+        await loadHead()
+      } finally {
+        // 无论成功失败都要放行，否则面板会永久停在占位上
+        setAdopted(true)
+      }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -410,6 +420,11 @@ export function CauPanel(props: {
           <CauSettingsBoundary>
             <CauSettings />
           </CauSettingsBoundary>
+        ) : !adopted ? (
+          // 占位（见上面的 adopted）：本机数据仓配置还没回读完，先不让子视图发请求
+          <div className="dsh-cau_empty">
+            <span className="dsh-cau_emptyMain">正在读取本机配置…</span>
+          </div>
         ) : (
           <div style={{ display: 'contents' }} key={refreshKey}>
             {view.name === 'home' && (

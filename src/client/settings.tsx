@@ -9,11 +9,10 @@
  *   ⑤ 数据源（GitHub 云端 + 统一门户开关 + 连通检查）  ⑥ 每日邮件报告  ⑦ 门户账号（开源版不可用 + 重要链接）
  * 全部纯客户端（localStorage），浏览器刷新生效。
  */
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   loadSettings,
   saveSettings,
-  scheduleDataRepoConfig,
   fetchServerDataRepo,
   readCloudText,
   loadModules,
@@ -297,14 +296,19 @@ export function CauSettings(props: any) {
   }
 
   // 数据仓配置（2026-09-30 #1）：打开设置时回读本机共享存储那份 config.json；
-  // 本地 dataRepo 为空则回填（"缺什么补什么"）—— 换客户端/重装后不用再手填一次
+  // 本地 dataRepo 为空则回填（"缺什么补什么"）—— 换客户端/重装后不用再手填一次。
+  // ⚠️ 回填前**必须重读一次当前设置**（2026-09-30 边界修复 #3b）：这个 effect 的 await 期间
+  // 用户可能已经开始打字，旧写法直接 `setSettings({...cur, dataRepo: srv.dataRepo})` 会把
+  // 用户刚输入的仓名覆盖掉（而且还会 saveSettings 落盘）。只在"现在仍为空"时才回填。
   useEffect(() => {
     void (async () => {
       const cur = loadSettings()
       if (String(cur.dataRepo || '').trim()) return
       const srv = await fetchServerDataRepo()
       if (!srv.dataRepo) return
-      const next = { ...cur, dataRepo: srv.dataRepo }
+      const now = loadSettings()
+      if (String(now.dataRepo || '').trim()) return // 用户已填 → 不覆盖
+      const next = { ...now, dataRepo: srv.dataRepo }
       setSettings(next)
       saveSettings(next)
     })()
@@ -312,6 +316,48 @@ export function CauSettings(props: any) {
   }, [])
   /** 令牌同步状态：面板设置是「唯一入口」，保存后写进本机共享存储，MCP 与工具脚本现读它 */
   const [tokenSync, setTokenSync] = useState<{ ok: boolean; text: string } | null>(null)
+  /** 数据仓同步状态（`PUT /api/cau/config` 的结果）：失败必须让用户看见（旧版静默吞掉） */
+  const [dataRepoSync, setDataRepoSync] = useState<{ ok: boolean; text: string } | null>(null)
+
+  /**
+   * 把数据仓配置推给服务端（防抖 600ms → 服务端写本机共享存储 `config.json`，MCP 现读）。
+   * `onStatus` 让设置页把**失败**也显示出来（2026-09-30 边界修复 #2）：旧实现 `.catch(()=>{})`
+   * 且不查 `res.ok`，400/500/旧服务端无此路由（404）全被静默吞掉，界面却说"填一次即可"。
+   * **放在本文件而不是 `data.ts`**：data.ts 会被内联多份，而这里只被内联两份 —— 本函数只有
+   * 设置页用，摆在这儿能少几份拷贝（规则 12/23 的 bundle 纪律）。
+   */
+  const dataRepoSyncTimer = useRef<any>(null)
+  const scheduleDataRepoConfig = (repo: string) => {
+    if (dataRepoSyncTimer.current) clearTimeout(dataRepoSyncTimer.current)
+    dataRepoSyncTimer.current = setTimeout(() => {
+      dataRepoSyncTimer.current = null
+      void (async () => {
+        try {
+          const res = await fetch('/api/cau/config', {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ dataRepo: String(repo || '').trim() }),
+          })
+          const j: any = await res.json().catch(() => null)
+          if (res.ok && j?.ok) {
+            setDataRepoSync({
+              ok: true,
+              text: j.configured ? `已同步到本机共享存储（${j.dataRepo}）· MCP 与工具脚本立即可用` : '已清除本机数据仓配置',
+            })
+            return
+          }
+          if (res.status === 404) {
+            // 旧服务端没有 /api/cau/config：浏览器里填的仓 MCP 读不到（文案与令牌通道一致）
+            setDataRepoSync({ ok: false, text: '本机配置路由不可用（请重启 dsh web / 桌面版，让插件服务端加载新路由）' })
+            return
+          }
+          setDataRepoSync({ ok: false, text: `同步失败：${j?.error || res.status}` })
+        } catch (e: any) {
+          setDataRepoSync({ ok: false, text: `同步失败：${String(e?.message || e)}` })
+        }
+      })()
+    }, 600)
+  }
 
   /**
    * 把令牌同步到本机共享存储（`<profile>\cau-portal-store\token.json`）。
@@ -1224,6 +1270,12 @@ export function CauSettings(props: any) {
 <label className="dsh-cau_setLabel" htmlFor="cauDataRepo">数据仓库（owner/repo）</label>
 <input id="cauDataRepo" className="dsh-cau_setInput" value={settings.dataRepo || ''} onChange={(e) => upd({ ...settings, dataRepo: e.target.value })} placeholder="如 your-name/cau-data（必填）" spellCheck={false} autoComplete="off" />
 <div className="dsh-cau_setHint">指向含 `data/` 与爬虫产物的仓库；读取/写入用「令牌管理」页配置的令牌。支持填完整 GitHub 链接。<b>留空 = 未配置</b>（顶部红条提醒；MCP 也会提示「请先配置数据仓库」）。</div>
+            {dataRepoSync && (
+              <div className={'dsh-cau_setHint' + (dataRepoSync.ok ? '' : ' dsh-cau_hintErr')}>
+                {dataRepoSync.ok ? '✓ ' : '✕ '}
+                {dataRepoSync.text}
+              </div>
+            )}
             </div>
             <div className="dsh-cau_setRow">
               <button type="button" className="dsh-cau_setBtn" disabled={cloudState === 'loading'} onClick={() => void checkCloud()}>
