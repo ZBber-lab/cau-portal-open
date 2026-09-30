@@ -17,15 +17,20 @@ export type SettingsV1 = {
   panelPinned?: boolean
   /** 系统通知开关（命中关注规则/高重要时弹浏览器通知；默认关） */
   notifyOn?: boolean
-  /** 数据仓库（owner/repo；空=默认仓）。开源后安装者填自己的数据仓。 */
+  /** 数据仓库（owner/repo；空=未配置 —— 必须在「设置 → 数据源」填写，不再有内置默认仓）。开源后安装者填自己的数据仓。 */
   dataRepo?: string
 }
 
 const SETTINGS_KEY = 'dsh.cau-portal.settings.v1'
-const DEFAULT_DATA_REPO = 'ZBber-lab/cau-portal'
+/**
+ * 内置默认数据仓**已删除**（2026-09-30 #1，Codex 报告的问题 #1）：不配置就是"未配置"，
+ * 绝不静默去读别人的仓（旧默认值 `ZBber-lab/cau-portal` 恰好等于作者自己的仓，把 bug 遮住了）。
+ */
+const DEFAULT_DATA_REPO = ''
 const GH_BRANCH = 'main'
 
-/** 当前数据仓库（owner/repo）：设置页可配，空=默认仓；兼容粘贴完整 URL / .git 后缀 */
+/** 当前数据仓库（owner/repo）：设置页可配；兼容粘贴完整 URL / .git 后缀。
+ *  **未配置时返回 ''** —— 调用方必须给出可操作提示，不许拼出一个空仓地址去发请求。 */
 export function dataRepo(): string {
   try {
     const r = String(loadSettings().dataRepo || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '')
@@ -34,6 +39,13 @@ export function dataRepo(): string {
     /* 忽略 */
   }
   return DEFAULT_DATA_REPO
+}
+
+/** 取数据仓（owner/repo）；**未配置时抛可操作错误** —— 客户端读取/写入的统一入口 */
+function requireDataRepo(): string {
+  const r = dataRepo()
+  if (!r) throw new Error('请先配置数据仓库（设置 → 数据源）')
+  return r
 }
 
 export function loadSettings(): SettingsV1 {
@@ -52,8 +64,56 @@ export function saveSettings(s: SettingsV1) {
   }
 }
 
+// ---- 数据仓配置（2026-09-30 #1）----
+// 面板「设置 → 数据源」填一次 → 经服务端 PUT /api/cau/config 写进本机共享存储
+// `<profile>\cau-portal-store\config.json` → MCP 与 tools/ 每次调用现读（5 秒缓存）。
+// 从此**不必**再在 profile 的 `cordis.patch.yml` 里给 mcp-cau 的 env 手写 CAU_GITHUB_REPO。
+
+/** 防抖句柄：输入框逐字变化不必每次都发请求 */
+let dataRepoSyncTimer: any = null
+
+/** 把数据仓配置推给服务端（防抖 600ms；服务端写本机共享存储，MCP 与 tools/ 现读它） */
+export function scheduleDataRepoConfig(repo: string) {
+  if (dataRepoSyncTimer) clearTimeout(dataRepoSyncTimer)
+  dataRepoSyncTimer = setTimeout(() => {
+    dataRepoSyncTimer = null
+    void fetch('/api/cau/config', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataRepo: String(repo || '').trim() }),
+    }).catch(() => {
+      /* 服务端不可用（旧版本没有这条路由）：面板继续用自己的 localStorage，下次再同步 */
+    })
+  }, 600)
+}
+
+/** 读服务端那份数据仓配置（旧服务端没有这条路由时静默返回"未配置"） */
+export async function fetchServerDataRepo(): Promise<{ configured: boolean; dataRepo: string; branch: string }> {
+  try {
+    const res = await fetch('/api/cau/config')
+    const j: any = await res.json().catch(() => null)
+    if (j?.ok) return { configured: !!j.configured, dataRepo: String(j.dataRepo || ''), branch: String(j.branch || 'main') }
+  } catch {
+    /* 静默 */
+  }
+  return { configured: false, dataRepo: '', branch: 'main' }
+}
+
+/**
+ * 打开面板/设置时回读：本地 `dataRepo` 为空则用服务端那份回填（"缺什么补什么"，与令牌一致）。
+ * @returns 是否真的补进来了（true 时调用方要重挂载视图，让各视图用新仓库重新取数）
+ */
+export async function adoptServerDataRepo(): Promise<boolean> {
+  const cur = loadSettings()
+  if (String(cur.dataRepo || '').trim()) return false
+  const srv = await fetchServerDataRepo()
+  if (!srv.dataRepo) return false
+  saveSettings({ ...cur, dataRepo: srv.dataRepo })
+  return true
+}
+
 async function ghFetchText(rel: string, token: string): Promise<string> {
-  const res = await fetch(`https://api.github.com/repos/${dataRepo()}/contents/${rel}?ref=${GH_BRANCH}`, {
+  const res = await fetch(`https://api.github.com/repos/${requireDataRepo()}/contents/${rel}?ref=${GH_BRANCH}`, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github.raw',
@@ -68,7 +128,7 @@ async function serverProxyText(rel: string, token: string): Promise<string> {
   const res = await fetch('/api/cau/data', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: rel, token, repo: dataRepo() }),
+    body: JSON.stringify({ path: rel, token, repo: requireDataRepo() }),
   })
   let data: any = null
   try {
@@ -85,6 +145,7 @@ async function serverProxyText(rel: string, token: string): Promise<string> {
  * 404（文件不存在）等非鉴权错误不换令牌；全部失败后走服务端代理兜底。 */
 export async function readCloudText(rel: string, token?: string): Promise<string> {
   if (!loadModules().cloud) throw new Error('数据源已在设置中禁用')
+  requireDataRepo() // 未配置数据仓 → 明确报错，不拼空仓地址（2026-09-30 #1）
   const tokens = (token ? [token] : activeTokenValues()).filter(Boolean)
   if (!tokens.length) throw new Error('未配置 GitHub 只读令牌')
   let lastErr: unknown = null
@@ -123,7 +184,7 @@ const PRUNED_KEY = 'dsh.cau-portal.pruned.v1'
 
 /** 读取 GitHub 文件元信息（sha + 解码文本）；文件不存在返回空 */
 async function ghFetchShaAndText(rel: string, token: string): Promise<{ sha: string; text: string }> {
-  const res = await fetch(`https://api.github.com/repos/${dataRepo()}/contents/${rel}?ref=${GH_BRANCH}`, {
+  const res = await fetch(`https://api.github.com/repos/${requireDataRepo()}/contents/${rel}?ref=${GH_BRANCH}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'cau-portal-panel' },
   })
   if (res.status === 404) return { sha: '', text: '' }
@@ -144,7 +205,7 @@ async function ghPutText(rel: string, token: string, content: string, sha: strin
     branch: GH_BRANCH,
   }
   if (sha) body.sha = sha
-  const res = await fetch(`https://api.github.com/repos/${dataRepo()}/contents/${rel}`, {
+  const res = await fetch(`https://api.github.com/repos/${requireDataRepo()}/contents/${rel}`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1073,6 +1134,8 @@ export function computeAlerts(): { level: 'error' | 'warn'; text: string; page?:
   const tokens = loadTokens()
   const hasActiveValue = tokens.some((t) => t.enabled && t.value)
   if (!hasActiveValue) out.push({ level: 'error', text: '未配置有效令牌：面板无法读取云端数据（设置 → 令牌管理）', page: 'tokens' })
+  // 数据仓未配置（2026-09-30 #1：内置默认仓已删除）→ 红条 + 一键去「数据源」子页
+  if (!dataRepo()) out.push({ level: 'error', text: '请先配置数据仓库（设置 → 数据源）', page: 'cloud' })
   if (!mods.cloud) out.push({ level: 'error', text: '数据源已禁用：插件将无法读取云端数据', page: 'cloud' })
   const today = new Date()
   today.setHours(0, 0, 0, 0)

@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { readFile, readdir, appendFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveGithubToken, maskToken } from '../shared/token-store.mjs'
+import { resolveGithubToken, readStoreConfig, maskToken } from '../shared/token-store.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = process.env.CAU_DATA_DIR || path.resolve(HERE, '..', '..', 'data')
@@ -28,33 +28,89 @@ function ghToken() {
   return _tokCache.val
 }
 const ghMode = () => !!ghToken()
-const GH_REPO = process.env.CAU_GITHUB_REPO || 'ZBber-lab/cau-portal'
-const GH_BRANCH = process.env.CAU_GITHUB_BRANCH || 'main'
-const ghCache = new Map() // rel -> { t, text }
-const ghListCache = new Map() // rel -> { t, list }
+
+/**
+ * 数据仓库名与分支（2026-09-30 #1）：**面板「设置 → 数据源」填一次即可**。
+ * 解析顺序：环境变量 `CAU_GITHUB_REPO` / `CAU_GITHUB_BRANCH`（可选覆盖）
+ *          → 本机共享存储 `<profile>\cau-portal-store\config.json`（面板经 `PUT /api/cau/config` 写的）
+ *          → **空**（**没有内置默认仓** —— 旧默认值 `ZBber-lab/cau-portal` 把"未配置"静默变成"读作者的仓"）。
+ * **每次现读（5 秒缓存，与令牌同策略）**：面板里改完数据源，MCP 不必重启 DSH 就能跟上。
+ */
+let _repoCache = { at: 0, repo: '', branch: 'main' }
+function resolveRepoConfig() {
+  const now = Date.now()
+  if (now - _repoCache.at < 5000) return _repoCache
+  const cfg = readStoreConfig() || {}
+  const envRepo = String(process.env.CAU_GITHUB_REPO || '').trim()
+  const envBranch = String(process.env.CAU_GITHUB_BRANCH || '').trim()
+  const repo = normalizeRepo(envRepo) || normalizeRepo(cfg.dataRepo)
+  const branch = envBranch || String(cfg.branch || '').trim() || 'main'
+  _repoCache = { at: now, repo, branch }
+  return _repoCache
+}
+const resolveRepo = () => resolveRepoConfig().repo
+const resolveBranch = () => resolveRepoConfig().branch
+
+/** 归一化 owner/repo（允许完整 GitHub 链接与 `.git` 后缀、末尾斜杠）；非法返回 '' */
+function normalizeRepo(input) {
+  const s = String(input ?? '')
+    .trim()
+    .replace(/^https?:\/\/(?:www\.)?github\.com\//i, '')
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '')
+    .trim()
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(s) ? s : ''
+}
+
+/** 未配置数据仓时的**可操作**错误（绝不 404、绝不静默去读别人的仓） */
+function repoMissingError() {
+  return new Error(
+    '请先配置数据仓库：在面板「设置 → 数据源」填写你的数据仓库（owner/repo，填一次即可，MCP 会自动跟上），' +
+      '或设置环境变量 CAU_GITHUB_REPO。',
+  )
+}
+
+/** 本机什么都没配时的提示（数据仓缺失 / 令牌缺失）——给 list_sites 这类"第一站"工具用 */
+function configHint() {
+  const repo = resolveRepo()
+  if (repo) return ghMode() ? '' : '本机没有令牌：在面板「设置 → 令牌管理」登记（或设 CAU_GITHUB_TOKEN），否则只能读本地 data/'
+  return '请先配置数据仓库：在面板「设置 → 数据源」填写 owner/repo，「设置 → 令牌管理」登记令牌；若只用本地管道数据，请先运行 tools/scraper/crawl.mjs'
+}
+
+// 缓存键都带 `repo@branch|` 前缀：数据仓可动态切换（#1），**不能沿用旧仓的缓存**
+// （否则切换瞬间会出现"data_source 已显示新仓、而 index.json/feed/文章仍是旧仓"的 30–300 秒错配）
+const ghCache = new Map() // "repo@branch|rel" -> { t, text }
+const ghListCache = new Map() // "repo@branch|rel" -> { t, list }
 const CACHE_TTL_MS = 30_000
 const CACHE_TTL_LIST_MS = 30_000
 const CACHE_TTL_ARTICLE_MS = 300_000
 
+/** 缓存键：`<repo>@<branch>|<rel>`（仓/分支来自 resolveRepoConfig()，5 秒缓存） */
+const cacheKey = (rel) => `${resolveRepo()}@${resolveBranch()}|${rel}`
+
 /**
  * GitHub 侧错误的「人话化」。**404 在数据仓这一层几乎总是"仓库没配对"，而不是文件真的不存在**：
- * 数据仓库名只有**一个**来源 —— 环境变量 `CAU_GITHUB_REPO`（缺省 `ZBber-lab/cau-portal`）；
- * 面板「设置 → 数据源」里填的那一份归**面板自己**用，MCP 不会自动继承（两处要各写一次）。
+ * 2026-09-30 #1 起数据仓由**面板设置**决定（本机共享存储 `config.json`），不再是硬编码默认值。
  */
 function ghError(kind, rel, res) {
+  const repo = resolveRepo()
+  const branch = resolveBranch()
   let hint = ''
   if (res.status === 404) {
     hint =
-      `。当前用的是 ${GH_REPO}@${GH_BRANCH} —— 若不是你的数据仓：在 profile 的 cordis.patch.yml 里` +
-      `给 mcp-cau 的 env 加一行 CAU_GITHUB_REPO: <你的 owner/repo>（原有 env 块请连同 DSH_HOME 一起保留），重启 DSH 后生效。`
+      `。当前用的是 ${repo}@${branch} —— 若不是你的数据仓：在面板「设置 → 数据源」改正（填一次即可，` +
+      `MCP 5 秒内跟上）；也可用环境变量 CAU_GITHUB_REPO 覆盖。`
   } else if (res.status === 401 || res.status === 403) {
-    hint = `。令牌无效或权限不足：确认它被授权访问 ${GH_REPO}（Contents: Read），且没有写错仓。`
+    hint = `。令牌无效或权限不足：确认它被授权访问 ${repo}（Contents: Read），且没有写错仓。`
   }
-  return new Error(`GitHub ${res.status} ${kind} ${rel}（仓库 ${GH_REPO}@${GH_BRANCH}）${hint}`)
+  return new Error(`GitHub ${res.status} ${kind} ${rel}（仓库 ${repo}@${branch}）${hint}`)
 }
 
 async function ghFetch(rel) {
-  const url = `https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`
+  const repo = resolveRepo()
+  const branch = resolveBranch()
+  if (!repo) throw repoMissingError()
+  const url = `https://api.github.com/repos/${repo}/contents/${rel}?ref=${branch}`
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${ghToken()}`,
@@ -67,7 +123,10 @@ async function ghFetch(rel) {
 }
 
 async function ghList(rel) {
-  const url = `https://api.github.com/repos/${GH_REPO}/contents/${rel}?ref=${GH_BRANCH}`
+  const repo = resolveRepo()
+  const branch = resolveBranch()
+  if (!repo) throw repoMissingError()
+  const url = `https://api.github.com/repos/${repo}/contents/${rel}?ref=${branch}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${ghToken()}`, 'User-Agent': 'cau-portal-mcp' },
   })
@@ -76,23 +135,133 @@ async function ghList(rel) {
   return Array.isArray(list) ? list.map((e) => e.name) : []
 }
 
-const SITE_HOST = {
+/**
+ * 站点 id → baseUrl：**数据驱动、四层**（优先级由低到高）
+ *   内置表（兜底） ← 数据仓的 sites.json（云端；README 第 5 步让用户放数据仓根）
+ *   ← 工具仓自己的 sites.json ← `CAU_SITES_FILE` 覆盖
+ *
+ * 为什么不写死一张表：用户用「添加栏目」自己接的来源**永远不会出现在内置表里**，而失败是**静默的**
+ * —— 2026-09-13 接入的校团委就这么漏了一个多月（MCP 一直在给相对路径，没人报错）。
+ * 所以解析不出时**不输出相对路径**：置 `url: null` 并附 `url_relative`，让调用方看得见"这条要自己拼主机"。
+ */
+const SITE_HOST_BUILTIN = {
   clst: 'https://clst.cau.edu.cn',
   jwc: 'https://jwc.cau.edu.cn',
   news: 'https://news.cau.edu.cn',
+  youth: 'https://youth.cau.edu.cn',
+  zju_gs: 'http://gs.zju.edu.cn',
+  zju_cers: 'http://www.cers.zju.edu.cn/cercn',
+}
+const SITES_TTL_MS = 60_000
+let _repoSitesCache = { at: 0, map: {} } // 工具仓自己的 sites.json
+let _overrideSitesCache = { key: '', at: 0, map: {} } // CAU_SITES_FILE（按路径隔离）
+let _cloudSitesCache = { key: '', at: 0, map: {} } // 数据仓 sites.json（按 repo@branch 隔离）
+let _cloudSitesLoading = null // 同一进程内并发去重
+
+/** sites.json 文本 → { siteId: baseUrl }（坏文件当空，绝不抛） */
+function hostsFromSitesJson(text) {
+  const out = {}
+  try {
+    const j = JSON.parse(text)
+    for (const s of Array.isArray(j?.sites) ? j.sites : []) {
+      const id = String(s?.id ?? '').trim()
+      const base = String(s?.baseUrl ?? '').trim().replace(/\/+$/, '')
+      if (id && /^https?:\/\//i.test(base)) out[id] = base
+    }
+  } catch {
+    /* 坏文件当没有 */
+  }
+  return out
+}
+
+async function readSitesFile(p) {
+  try {
+    return hostsFromSitesJson(await readFile(p, 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+/** 本地层之一：工具仓自己的 sites.json（无网络开销）；60 秒缓存 */
+async function repoSiteHosts() {
+  if (_repoSitesCache.at && Date.now() - _repoSitesCache.at < SITES_TTL_MS) return _repoSitesCache.map
+  const map = await readSitesFile(path.join(path.resolve(HERE, '..', '..'), 'sites.json'))
+  _repoSitesCache = { at: Date.now(), map }
+  return map
+}
+
+/** 本地层之二：`CAU_SITES_FILE` 覆盖（优先级最高）；按路径隔离缓存 */
+async function overrideSiteHosts() {
+  const key = String(process.env.CAU_SITES_FILE || '').trim()
+  if (!key) return {}
+  const abs = path.resolve(key)
+  if (_overrideSitesCache.key === abs && Date.now() - _overrideSitesCache.at < SITES_TTL_MS) return _overrideSitesCache.map
+  const map = await readSitesFile(abs)
+  _overrideSitesCache = { key: abs, at: Date.now(), map }
+  return map
+}
+
+/**
+ * 云端层：数据仓的 sites.json（仓根优先，兼容被复制进 data/ 的写法）。
+ * 缓存按 `repo@branch` 隔离（#1 让数据仓可动态切换后，不能沿用旧仓的映射）；并发首次请求用 in-flight Promise 去重。
+ */
+async function cloudSiteHosts() {
+  if (!ghMode()) return {}
+  if (!resolveRepo()) return {}
+  const key = `${resolveRepo()}@${resolveBranch()}`
+  if (_cloudSitesCache.key === key && Date.now() - _cloudSitesCache.at < SITES_TTL_MS) return _cloudSitesCache.map
+  if (_cloudSitesLoading && _cloudSitesLoading.key === key) return _cloudSitesLoading.promise
+  const promise = (async () => {
+    let map = {}
+    for (const rel of ['sites.json', 'data/sites.json']) {
+      try {
+        map = hostsFromSitesJson(await ghFetch(rel))
+        if (Object.keys(map).length) break
+      } catch {
+        /* 没有就试下一个（404 是常态，不刷错误） */
+      }
+    }
+    _cloudSitesCache = { key, at: Date.now(), map }
+    return map
+  })()
+  _cloudSitesLoading = { key, promise }
+  try {
+    return await promise
+  } finally {
+    if (_cloudSitesLoading?.key === key) _cloudSitesLoading = null
+  }
+}
+
+/**
+ * 站点 id → baseUrl。**逐层查找，严格按优先级**：
+ *   `CAU_SITES_FILE` → 工具仓 sites.json → 数据仓 sites.json（云端）→ 内置表（**仅兜底**）
+ *
+ * ⚠️ 必须一层层查，**不能先把内置表合并进 map 再查** —— 那样内置表会挡住数据仓对**同名站点**的覆盖
+ * （用户想改 `youth`/`zju_gs` 这类已在内置表里的 id 时会静默失效）。2026-09-29 Codex 审查指出。
+ */
+async function resolveSiteHost(site) {
+  if (!site) return ''
+  const override = await overrideSiteHosts()
+  if (override[site]) return override[site]
+  const repo = await repoSiteHosts()
+  if (repo[site]) return repo[site]
+  const cloud = await cloudSiteHosts()
+  if (cloud[site]) return cloud[site]
+  return SITE_HOST_BUILTIN[site] || ''
 }
 const CATEGORIES = ['通知', '新闻', '讲座', '竞赛', '评奖', '选课', '学术', '其他']
 
-const server = new McpServer({ name: 'cau-portal', version: '0.2.0' })
+const server = new McpServer({ name: 'cau-portal', version: '0.5.4' })
 
 // ---------- 数据读取（统一源：GH 模式读 GitHub，否则本地 data/） ----------
 /** 读取 data/ 下的相对子路径文本；GH 模式带进程内缓存 */
 async function readSource(rel) {
   if (ghMode()) {
-    const hit = ghCache.get(rel)
+    const key = cacheKey(rel)
+    const hit = ghCache.get(key)
     if (hit && Date.now() - hit.t < (rel.startsWith('articles/') ? CACHE_TTL_ARTICLE_MS : CACHE_TTL_MS)) return hit.text
     const text = await ghFetch(`data/${rel}`)
-    ghCache.set(rel, { t: Date.now(), text })
+    ghCache.set(key, { t: Date.now(), text })
     return text
   }
   try {
@@ -114,10 +283,11 @@ async function readJson(rel) {
 
 async function listDir(rel) {
   if (ghMode()) {
-    const hit = ghListCache.get(rel)
+    const key = cacheKey(rel)
+    const hit = ghListCache.get(key)
     if (hit && Date.now() - hit.t < CACHE_TTL_LIST_MS) return hit.list
     const list = await ghList(`data/${rel}`)
-    ghListCache.set(rel, { t: Date.now(), list })
+    ghListCache.set(key, { t: Date.now(), list })
     return list
   }
   try {
@@ -141,12 +311,42 @@ async function loadFeeds() {
   return feeds
 }
 
-/** 相对路径 → 绝对 URL */
-function absUrl(site, url) {
+/**
+ * 相对路径 → 绝对 URL。已经是绝对地址的原样返回；
+ * **站点解析不出来时返回 ''**（调用方必须改成 url:null + url_relative，不许再静默给相对路径）。
+ */
+async function absUrl(site, url) {
   const u = String(url ?? '')
   if (/^https?:\/\//i.test(u)) return u
-  const host = SITE_HOST[site] ?? ''
+  const host = await resolveSiteHost(site)
+  if (!host) return ''
   return host + (u.startsWith('/') ? u : '/' + u)
+}
+
+/**
+ * **所有对外输出链接的工具都必须过这一层**（统一约定，2026-09-29 Codex 审查要求）：
+ *   绝对 URL        → `{ url }`
+ *   可解析的相对 URL → `{ url: 绝对地址 }`
+ *   解析不出的相对   → `{ url: null, url_relative: 原始相对路径 }`
+ *
+ * 文章 JSON 与 `summary.json` 里**都没有 site 字段**（实测键：title/time/source/url/…），
+ * 所以站点未知时退回"按 path 反查 feed"来拿主机；仍拿不到就按解析不出处理 —— **绝不静默给相对路径**。
+ */
+async function normLink(url, site) {
+  const raw = String(url ?? '').trim()
+  if (!raw) return {}
+  if (/^https?:\/\//i.test(raw)) return { url: raw }
+  if (site) {
+    const abs = await absUrl(site, raw)
+    if (abs) return { url: abs }
+  }
+  try {
+    const hit = (await flattenFeeds()).find((it) => it.path === pathForm(raw))
+    if (hit?.url) return { url: hit.url }
+  } catch {
+    /* 反查失败 → 按解析不出处理 */
+  }
+  return { url: null, url_relative: raw }
 }
 
 /** URL 归一化：去协议/主机，统一以 / 开头（用于相对与绝对 URL 互查） */
@@ -160,14 +360,15 @@ function pathForm(url) {
   return u
 }
 
-/** 展开所有 feed 条目，附加站点/栏目上下文与绝对 URL */
+/** 展开所有 feed 条目，附加站点/栏目上下文与绝对 URL（站点解析不出时给 url:null + url_relative，不静默给相对路径） */
 async function flattenFeeds() {
   const feeds = await loadFeeds()
   const out = []
   for (const feed of feeds) {
     for (const it of feed.items ?? []) {
+      const abs = await absUrl(feed.site, it.url)
       out.push({
-        url: absUrl(feed.site, it.url),
+        ...(abs ? { url: abs } : { url: null, url_relative: String(it.url ?? '') }),
         path: pathForm(it.url),
         title: it.title ?? '',
         date: it.date ?? '',
@@ -235,8 +436,11 @@ server.registerTool('list_sites', {
 }, async () => {
   try {
     const index = await loadIndex()
-    if (!index) return okJson({ error: 'index.json 不存在（尚未运行爬虫）', sites: [] })
-    return okJson({ ...index, data_source: ghMode() ? `github:${GH_REPO}@${GH_BRANCH}` : `local:${DATA_DIR}` })
+    if (!index) {
+      const hint = configHint()
+      return okJson({ error: 'index.json 不存在（尚未运行爬虫）', ...(hint ? { hint } : {}), sites: [] })
+    }
+    return okJson({ ...index, data_source: ghMode() ? `github:${resolveRepo()}@${resolveBranch()}` : `local:${DATA_DIR}` })
   } catch (e) { return failJson(e) }
 })
 
@@ -311,7 +515,9 @@ server.registerTool('search_news', {
       date: it.date,
       source: it.site_name,
       column: it.column_name,
-      url: it.url,
+      // 条目已由 flattenFeeds() 过了一遍链接规整：这里**原样带上** url / url_relative，别再只取 url
+      url: it.url ?? null,
+      ...(it.url_relative ? { url_relative: it.url_relative } : {}),
       article_id: articleKey(it),
       ai_summary: ai?.summary ?? null,
       importance: ai?.importance ?? null,
@@ -370,7 +576,7 @@ server.registerTool('get_article', {
     const idOnly = key.replace(/\.json$/, '').split(/[\\/]/).pop()
     if (/^[0-9a-f]{40}$/.test(idOnly)) {
       const art = await readJson('articles/' + idOnly + '.json')
-      if (art) return okJson({ found: true, stored: true, ...art, article_id: idOnly })
+      if (art) return okJson({ found: true, stored: true, ...art, ...(await normLink(art.url, art.site)), article_id: idOnly })
     }
     // 2) 按 URL 反查 feed
     const target = pathForm(key)
@@ -379,7 +585,7 @@ server.registerTool('get_article', {
     if (!hit) return okJson({ found: false, stored: false, id_or_url: key, note: '未找到该文章：id 或 URL 不在农大门户数据中' })
     if (hit.article) {
       const art = await readJson('articles/' + hit.article)
-      if (art) return okJson({ found: true, stored: true, ...art, article_id: String(hit.article).replace(/\.json$/, '') })
+      if (art) return okJson({ found: true, stored: true, ...art, ...(await normLink(art.url, art.site)), article_id: String(hit.article).replace(/\.json$/, '') })
     }
     return okJson({
       found: true,
@@ -388,8 +594,8 @@ server.registerTool('get_article', {
       date: hit.date,
       source: hit.site_name,
       column: hit.column_name,
-      url: hit.url,
-      note: '正文尚未抓取入库，仅有列表信息；可直接打开 url 查看原文。',
+      ...(await normLink(hit.url, hit.site)),
+      note: '正文尚未抓取入库，仅有列表信息；可直接打开 url 查看原文（若只给了 url_relative，说明该站点不在 sites.json 里，需要自己拼主机）。',
     })
   } catch (e) { return failJson(e) }
 })
@@ -420,7 +626,7 @@ server.registerTool('list_deadlines', {
       out.push({
         title: d.title,
         source: d.source,
-        url: d.url,
+        ...(await normLink(d.url, d.site)),
         publish_time: d.time ?? null,
         summary: (aiMap[d.article_id] && aiMap[d.article_id].summary) || null,
         deadline: { item: d.item ?? '', date: d.date, evidence: d.evidence ?? '' },
@@ -480,7 +686,7 @@ server.registerTool('get_usage', {
 const transport = new StdioServerTransport()
 await server.connect(transport)
 // stdio 打开即保持进程存活；日志一律走 stderr，避免污染协议流
-console.error(`[cau-portal-mcp] ready, data dir: ${DATA_DIR}${ghMode() ? ` (github: ${GH_REPO}@${GH_BRANCH}, token ${maskToken(ghToken())})` : ' (local)'}`)
+console.error(`[cau-portal-mcp] ready, data dir: ${DATA_DIR}${ghMode() ? ` (github: ${resolveRepo() || '(未配置数据仓库)'}@${resolveBranch()}, token ${maskToken(ghToken())})` : ' (local)'}`)
 // 协议审计（本地日志，验证 DSH 客户端握手与工具调用用）
 const auditLog = (line) => appendFile(path.join(DATA_DIR, 'mcp-audit.log'), `${new Date().toISOString()} ${line}\n`, 'utf8').catch(() => {})
 {
@@ -497,5 +703,9 @@ const auditLog = (line) => appendFile(path.join(DATA_DIR, 'mcp-audit.log'), `${n
 }
 // 启动心跳文件（供外部检测 DSH 是否已 spawn 本服务器）
 try {
-  await appendFile(path.join(DATA_DIR, 'mcp-start.log'), `${new Date().toISOString()} started pid=${process.pid} mode=${ghMode() ? `github:${GH_REPO}@${GH_BRANCH}` : 'local'}${ghMode() ? '' : '  <<< 未进入云端模式：令牌没解析到，读的是本地 data/（可能过期）'} argv=${process.argv.slice(1).join(' ')}\n`, 'utf8')
+  const src = ghMode() ? `github:${resolveRepo() || '(未配置数据仓库)'}@${resolveBranch()}` : 'local'
+  const warn = !ghMode()
+    ? '  <<< 未进入云端模式：令牌没解析到，读的是本地 data/（可能过期）'
+    : resolveRepo() ? '' : '  <<< 令牌有、但数据仓库没配置：请到面板「设置 → 数据源」填写'
+  await appendFile(path.join(DATA_DIR, 'mcp-start.log'), `${new Date().toISOString()} started pid=${process.pid} mode=${src}${warn} argv=${process.argv.slice(1).join(' ')}\n`, 'utf8')
 } catch { /* 检测辅助，失败不影响服务 */ }

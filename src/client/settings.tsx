@@ -13,6 +13,8 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import {
   loadSettings,
   saveSettings,
+  scheduleDataRepoConfig,
+  fetchServerDataRepo,
   readCloudText,
   loadModules,
   saveModules,
@@ -285,12 +287,29 @@ export function CauSettings(props: any) {
   const upd = (next: any) => {
     setSettings(next)
     saveSettings(next)
+    // 数据源改动 → 防抖 600ms 同步到本机共享存储 config.json（MCP 与面板共用同一份，不用再写 profile env）
+    if (String(next?.dataRepo ?? '') !== String(settings?.dataRepo ?? '')) scheduleDataRepoConfig(next?.dataRepo)
   }
   const toggleMod = (k: ModuleKey) => {
     const next = { ...mods, [k]: !mods[k] }
     setMods(next)
     saveModules(next)
   }
+
+  // 数据仓配置（2026-09-30 #1）：打开设置时回读本机共享存储那份 config.json；
+  // 本地 dataRepo 为空则回填（"缺什么补什么"）—— 换客户端/重装后不用再手填一次
+  useEffect(() => {
+    void (async () => {
+      const cur = loadSettings()
+      if (String(cur.dataRepo || '').trim()) return
+      const srv = await fetchServerDataRepo()
+      if (!srv.dataRepo) return
+      const next = { ...cur, dataRepo: srv.dataRepo }
+      setSettings(next)
+      saveSettings(next)
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   /** 令牌同步状态：面板设置是「唯一入口」，保存后写进本机共享存储，MCP 与工具脚本现读它 */
   const [tokenSync, setTokenSync] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -1201,10 +1220,10 @@ export function CauSettings(props: any) {
               <Toggle on={mods.cloud} onToggle={() => toggleMod('cloud')} label="切换 数据源" />
             </div>
             <div className="dsh-cau_setDesc">
-              数据存于 GitHub 仓库的 `data/`（每 2 小时抓取+AI 加工并提交）；面板与 MCP 直接读云端。默认指向 `ZBber-lab/cau-portal`；自建数据者改为自己的仓库。关闭本开关将完全停止数据读取（顶部红条提醒）。
+              数据存于 GitHub 仓库的 `data/`（每 2 小时抓取+AI 加工并提交）；面板与 MCP 直接读云端。<b>这里填一次即可</b>——保存后自动写进本机 `cau-portal-store\config.json`，对话里的 MCP 查询用同一个仓（不必再改 profile 的 `cordis.patch.yml`）。关闭本开关将完全停止数据读取（顶部红条提醒）。
 <label className="dsh-cau_setLabel" htmlFor="cauDataRepo">数据仓库（owner/repo）</label>
-<input id="cauDataRepo" className="dsh-cau_setInput" value={settings.dataRepo || ''} onChange={(e) => upd({ ...settings, dataRepo: e.target.value })} placeholder="如 ZBber-lab/cau-portal（留空=默认）" spellCheck={false} autoComplete="off" />
-<div className="dsh-cau_setHint">指向含 `data/` 与爬虫产物的仓库；读取/写入用「令牌管理」页配置的令牌。支持填完整 GitHub 链接。</div>
+<input id="cauDataRepo" className="dsh-cau_setInput" value={settings.dataRepo || ''} onChange={(e) => upd({ ...settings, dataRepo: e.target.value })} placeholder="如 your-name/cau-data（必填）" spellCheck={false} autoComplete="off" />
+<div className="dsh-cau_setHint">指向含 `data/` 与爬虫产物的仓库；读取/写入用「令牌管理」页配置的令牌。支持填完整 GitHub 链接。<b>留空 = 未配置</b>（顶部红条提醒；MCP 也会提示「请先配置数据仓库」）。</div>
             </div>
             <div className="dsh-cau_setRow">
               <button type="button" className="dsh-cau_setBtn" disabled={cloudState === 'loading'} onClick={() => void checkCloud()}>

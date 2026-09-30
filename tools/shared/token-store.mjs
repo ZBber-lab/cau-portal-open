@@ -105,6 +105,45 @@ export function readStoreToken() {
   return null
 }
 
+/**
+ * 数据仓配置（2026-09-30 #1）：`<store>\config.json`，格式 `{version:1, dataRepo, branch, updatedAt}`。
+ * 面板「设置 → 数据源」填一次 → 经服务端 `PUT /api/cau/config` 写这里 → MCP 每次调用现读
+ * （5 秒缓存），**不必再在 profile 的 `cordis.patch.yml` 里给 mcp-cau 的 env 手写 `CAU_GITHUB_REPO`**。
+ *
+ * 为什么与 `token.json` **分开存放**（用户 2026-09-30 拍板）：token.json 有**三个**写入实现
+ * （本模块、`src/index.ts` 的服务端路由、面板侧），且已漂移 —— 混在一个文件里会被静默抹掉。
+ */
+export const CONFIG_FILE = 'config.json'
+
+/**
+ * 从共享存储读数据仓配置（没有则 null）。
+ * @returns {{dataRepo:string, branch:string, updatedAt:string, dir:string}|null}
+ */
+export function readStoreConfig() {
+  for (const dir of storeDirs()) {
+    try {
+      const j = JSON.parse(readFileSync(join(dir, CONFIG_FILE), 'utf8'))
+      const dataRepo = String(j?.dataRepo || '').trim()
+      const branch = String(j?.branch || '').trim()
+      if (dataRepo || branch) return { dataRepo, branch, updatedAt: String(j?.updatedAt || ''), dir }
+    } catch {
+      /* 换下一个候选 */
+    }
+  }
+  return null
+}
+
+/** 写入共享存储的数据仓配置（面板走服务端 `/api/cau/config` 路由；脚本侧一般不用）。返回写入路径 */
+export function writeStoreConfig(cfg) {
+  const dir = primaryStoreDir()
+  if (!dir) throw new Error('找不到可写的存储目录')
+  const p = join(dir, CONFIG_FILE)
+  const dataRepo = String(cfg?.dataRepo || '').trim()
+  const branch = String(cfg?.branch || '').trim() || 'main'
+  writeFileSync(p, JSON.stringify({ version: 1, dataRepo, branch, updatedAt: new Date().toISOString() }, null, 2) + '\n', 'utf8')
+  return p
+}
+
 /** 旧位置：profile 补丁层里的 CAU_GITHUB_TOKEN（兼容期用，之后删除本函数） */
 export function readLegacyYmlToken() {
   const root = profilesRoot()

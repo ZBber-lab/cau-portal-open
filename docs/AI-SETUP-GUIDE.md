@@ -56,7 +56,10 @@ dsh plugin --profile web add "github:ZBber-lab/cau-portal-open"       # 老的 w
 
 按顺序：
 
-1. **数据源** → 数据仓库填 `username/cau-data`（支持完整链接与 `.git` 后缀，插件会自动归一化）；
+1. **数据源** → 数据仓库填 `username/cau-data`（支持完整链接与 `.git` 后缀，插件会自动归一化）。**只填这一处**：
+   保存时面板会把 `owner/repo` 同步到本机共享存储 `<profile>\cau-portal-store\config.json`，
+   步骤 E2 的 MCP 直接读同一份（v0.5.4 起**不再需要**在 `cordis.patch.yml` 的 `env` 里写 `CAU_GITHUB_REPO`）；
+   **留空 = 未配置** —— 顶部会出现红条「请先配置数据仓库（设置 → 数据源）」，MCP 也会给出同样的提示（不会静默去读别人的仓）；
 2. **令牌管理** → 添加令牌：名称（如 `github-read`）、令牌值（第 B 步生成）、过期日（建议填）、用途；
 3. **数据源** → 点「连通性检查」：应提示已连通并显示 `last_updated`（数据仓还是空的话会显示不存在/条目 0——此时先跳过，跑完管道再查）；
 4. （可选）**AI 加工 · 模型配置** → 选择模型；默认用服务端配置的模型即可。
@@ -126,16 +129,22 @@ cd ../<数据仓> && git add data && git commit -m "data: first crawl" && git pu
      args: [<本仓库路径>\tools\mcp\index.mjs]
      cwd: <本仓库路径>\tools\mcp
      env:
-       CAU_GITHUB_REPO: <用户的数据仓，owner/repo>
+       # 数据仓名**不用写在这里**（v0.5.4 起 MCP 直接读面板「设置 → 数据源」写下的那份）；
+       # 只想临时换仓时才用这行覆盖：
+       # CAU_GITHUB_REPO: <用户的数据仓，owner/repo>
        # 用户设了 DSH_HOME（数据目录不在 ~/.dsh）时必须带上这一行，否则令牌解析不到：
        # DSH_HOME: <用户的 DSH 主目录>
    ```
-   ⚠️ **`CAU_GITHUB_REPO` 不能省** —— MCP 读数据仓**只认这个环境变量**（缺省值是作者的 `ZBber-lab/cau-portal`）。用户在面板「设置 → 数据源」填的那一份**只给面板用，MCP 不会继承**；漏了它，MCP 的 6 个工具会**全部报 404**（报错里会写出它当前在用哪个仓）。这是当前版本的已知限制，正式打通（面板配置自动同步给 MCP）待后续版本。
+   ✅ **数据仓名不必在这里再写一次**（v0.5.4 起）：MCP 每次调用现读 `<profile>\cau-portal-store\config.json`
+   ——也就是步骤 C 在面板「设置 → 数据源」填的那一份；改完**不用重启 DSH**（MCP 侧 5 秒缓存）。
+   `CAU_GITHUB_REPO` 只在**想临时覆盖**时才用（优先级最高）。
+   ⚠️ **没配数据仓时**：MCP 不再有内置默认仓，会明确返回「请先配置数据仓库：在面板「设置 → 数据源」填写…」，
+   而不是 404、更不会静默去读作者的仓。
    ⚠️ **不要把令牌写进这里** —— MCP 会自动读面板设置页写下的那一份（`<profile>\cau-portal-store\token.json`），这也是「令牌只存一处」的设计。
    ⚠️ 若确实要在此处写 `env:`，**必须同时带上 `DSH_HOME`**：该 `env:` 块对子进程是**替换**而不是合并环境，漏了它令牌就解析不到，MCP 会**静默退回本地 `data/`**（读到可能是严重过期的数据）。另外 `env` 的改动不会热重载，改完必须重启 DSH。
 3. 重启 DSH 生效（桌面版：完全退出应用再打开；web/CLI：重启 `dsh web`）。
 
-- **验证点**：① 对话里问"最近有什么通知"，AI 能调用 `mcp__cau__list_latest` 返回结果；② 再调一次 `mcp__cau__list_sites`，返回的 `data_source` 必须是 `github:<用户的数据仓>@main` —— 显示成别的仓，就是 `CAU_GITHUB_REPO` 没配对。
+- **验证点**：① 对话里问"最近有什么通知"，AI 能调用 `mcp__cau__list_latest` 返回结果；② 再调一次 `mcp__cau__list_sites`，返回的 `data_source` 必须是 `github:<用户的数据仓>@main` —— 显示成别的仓、或提示「请先配置数据仓库」，就是面板「设置 → 数据源」那一栏没填对（两者现在读同一份配置）。
 
 ### 步骤 F：功能与体验验证（逐项过一遍，别只看一眼）
 

@@ -30,6 +30,7 @@ import {
   siteShown,
   siteOfItem,
   loadSiteDirectory,
+  adoptServerDataRepo,
 } from './data'
 
 /** 设置页错误边界：出错了显示错误文字（便于定位），不再静默白屏 */
@@ -267,7 +268,12 @@ export function CauPanel(props: {
     setUnread(unreadCandidates(b.summary).filter((it: any) => !readSet.includes(it.article_id || it.url)).length)
   }
   useEffect(() => {
-    void loadHead()
+    void (async () => {
+      // 数据仓配置（2026-09-30 #1）：先回读本机共享存储那份 config.json（本地为空则回填），
+      // 否则没在「数据源」填过的客户端会立刻以"未配置数据仓库"失败（顶部红条会解释）
+      if (await adoptServerDataRepo()) setRefreshKey((k) => k + 1)
+      await loadHead()
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

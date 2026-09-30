@@ -35,7 +35,7 @@ DSH 浏览器面板 / 对话 MCP ──▶ GitHub Contents API ──▶ 用户�
 3. **配置插件**（DSH 侧边栏→设置）：数据源填 owner/repo；令牌管理登记令牌；AI 加工·模型选择加工模型
 4. **跑管道攒数据**：`node tools/scraper/crawl.mjs` + `DEEPSEEK_API_KEY=... node tools/scraper/enrich.mjs`（Windows 用 `$env:DEEPSEEK_API_KEY='...'`）
 5. **定时抓取（可选）**：把 `.github/workflows/crawl.yml` 复制到用户**自己的数据仓** + 配置 Secret `DEEPSEEK_API_KEY`；用 cron-job.org 桥（POST dispatch）实现定时（免费私有仓的 `schedule` 不生效）
-6. **对话查询 MCP（可选）**：`cd tools/mcp && pnpm install`；在 DSH profile `cordis.patch.yml` 里加 mcp client（stdio，指向本仓 `tools/mcp/index.mjs`，**不必写令牌**——它读面板设置页写下的那一份）；重启 DSH 后可用 `mcp__cau__*`（6 个工具）—— 桌面版＝完全退出应用再打开，web/CLI＝重启 `dsh web`。⚠️ **但数据仓名必须在 `env:` 里显式给**：`CAU_GITHUB_REPO: <owner/repo>` —— 面板「设置 → 数据源」填的那份**只给面板用、MCP 不继承**，漏了会 6 个工具全报 404；自查 `list_sites` 的 `data_source` 是否为 `github:<该仓>@main`
+6. **对话查询 MCP（可选）**：`cd tools/mcp && pnpm install`；在 DSH profile `cordis.patch.yml` 里加 mcp client（stdio，指向本仓 `tools/mcp/index.mjs`，**不必写令牌**——它读面板设置页写下的那一份）；重启 DSH 后可用 `mcp__cau__*`（6 个工具）—— 桌面版＝完全退出应用再打开，web/CLI＝重启 `dsh web`。✅ **数据仓名也不用手写**：MCP 每次调用现读本机共享存储 `<profile>\cau-portal-store\config.json`，也就是面板「设置 → 数据源」填的那一份（改完不用重启 DSH，MCP 侧 5 秒缓存）；只有想临时覆盖时才用 env `CAU_GITHUB_REPO`。**没有内置默认仓** —— 没配就明确返回「请先配置数据仓库」，不会 404、不会静默读别人的仓；自查 `list_sites` 的 `data_source` 是否为 `github:<该仓>@main`。⚠️ 若 `env:` 块里写了 `DSH_HOME` 之类变量，记得该块是**替换**而非合并继承环境
 
 > 安全提示：调度令牌只授 `Actions: Read & write` 最小权限、只填 cron-job.org、不入仓；DeepSeek API Key / 邮箱授权码等只在本机。
 
@@ -46,6 +46,7 @@ DSH 浏览器面板 / 对话 MCP ──▶ GitHub Contents API ──▶ 用户�
 - **数据源**：`sites.json` 数据驱动（站点/栏目），改它即可适配其他院校/栏目
 - **改动生效**：客户端改 `src/client/*` → 重建 `lib/client.js` → 浏览器刷新即生效；服务端改 `src/index.ts` → 重启 DSH（桌面版退出应用重开，web/CLI 重启 `dsh web`）
 - **令牌只存一处**：面板「设置 → 令牌管理」是唯一入口；保存时经服务端路由 `PUT /api/cau/token` 写进 `<profile>\cau-portal-store\token.json`，MCP 与 `tools/` 脚本（`tools/shared/token-store.mjs`）每次现读它 —— 换令牌不需要改配置文件、也不需要重启 DSH。环境变量 `CAU_GITHUB_TOKEN` 仍可用作覆盖。
+- **数据仓也只填一处**（v0.5.4 起）：面板「设置 → 数据源」保存时经 `PUT /api/cau/config` 写进 `<profile>\cau-portal-store\config.json`（`{version,dataRepo,branch,updatedAt}`，与 `token.json` **分开存放**——那份有三个写入实现，混在一起会被静默抹掉）；MCP 每次调用现读它（5 秒缓存）。**没有内置默认仓**：未配置时服务端路由与 MCP 都给出可操作提示。服务端与 MCP 的解析逻辑各有一份，**改格式时两边一起改**。
 - **协作**：涉及设计/风险的分歧先与用户确认（`ask`）；构建产物 `lib/` 随仓提交。
 
 ## 六、文件地图
