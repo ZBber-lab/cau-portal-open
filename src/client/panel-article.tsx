@@ -264,6 +264,19 @@ export function ArticleView(props: {
             </div>
           )}
 
+          {/* 同一份通知里的其它截止（2026-10-20 补）：主项进待办，附项只在这里展示，避免待办被撑长 */}
+          {hasDeadline && Array.isArray(art.ai.deadlines_extra) && art.ai.deadlines_extra.length > 0 && (
+            <div className="dsh-cau_adeadlineMore">
+              <span className="dsh-cau_adeadlineMoreTitle">同一通知里的其它截止</span>
+              {(art.ai.deadlines_extra as any[]).map((x: any) => (
+                <div className="dsh-cau_adeadlineMoreRow" key={`${x.date}|${x.item}`}>
+                  <span className="dsh-cau_adeadlineMoreDate">{x.date}</span>
+                  <span className="dsh-cau_adeadlineMoreItem">{x.item}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="dsh-cau_abody">
             {isPortal(art?.url) ? (
               <div className="dsh-cau_portalCard">

@@ -6,7 +6,7 @@
  * 视图栈**按 tab（≈会话）各记一份**（state.ts 的 panels 桶），切走再回来还停在这一页。
  * 未读口径：AI 重要（高/中）+近 7 天；打开即读（计数即时减一）；tertiary 计数无红点。
  */
-import { Component, useEffect, useRef, useState } from 'react'
+import { Component, useEffect, useMemo, useRef, useState } from 'react'
 import { Ic } from './icons'
 import { HomeView } from './panel-home'
 import { NewsView } from './panel-news'
@@ -30,6 +30,7 @@ import {
   siteShown,
   siteOfItem,
   loadSiteDirectory,
+  matchQuery,
   adoptServerDataRepo,
 } from './data'
 
@@ -142,13 +143,21 @@ function IconBtn(props: { n: string; label: string; title?: string; on?: boolean
 // ---- 归档视图（已归档待办）----
 function ArchiveView(props: { onBack: () => void; onOpenArticle: (id: string) => void }) {
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
   const refresh = () => {
     void (async () => {
       const token = activeTokenValues()[0]
       if (!token) return
       const b = await loadBundle(token)
       const ops = loadDeadlineOps()
-      const list = (b.summary?.deadlines || []).filter((d: any) => ops[d.article_id || d.url] === 'archive')
+      const list = (b.summary?.deadlines || [])
+        .filter((d: any) => ops[d.article_id || d.url] === 'archive')
+        // 预拼搜索串（事项名 / 标题 / 来源 / 栏目 / AI 摘要）—— 与「全部待办」同一口径，零额外请求
+        .map((d: any) => ({
+          ...d,
+          _hay: [d.item, d.title, d.source, d.column, b.summary?.ai_map?.[d.article_id]?.summary].filter(Boolean).join(' '),
+        }))
+        .sort((x: any, y: any) => String(x.date || '').localeCompare(String(y.date || '')))
       setRows(list)
     })()
   }
@@ -156,6 +165,8 @@ function ArchiveView(props: { onBack: () => void; onOpenArticle: (id: string) =>
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  /** 搜索只在已归档集合里做（不跨到未归档） */
+  const shown = useMemo(() => (q.trim() ? rows.filter((r) => matchQuery(r._hay, q)) : rows), [rows, q])
   return (
     <div className="dsh-cau_view">
       <div className="dsh-cau_bread">
@@ -163,9 +174,25 @@ function ArchiveView(props: { onBack: () => void; onOpenArticle: (id: string) =>
         <span className="dsh-cau_breadPath">已归档待办</span>
       </div>
       <div className="dsh-cau_dlHint">归档的截止事项保留在这里；点「取消归档」可回到「全部待办」。</div>
+      <input
+        className="dsh-cau_mgSearch dsh-cau_dlSearch"
+        type="search"
+        placeholder="搜索已归档：事项名 / 标题 / 来源 / 栏目 / AI 摘要…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        spellCheck={false}
+      />
+      {q.trim() && (
+        <div className="dsh-cau_dlHit">
+          搜索「{q.trim()}」命中 <b>{shown.length}</b> 条 · 已归档共 {rows.length} 条
+        </div>
+      )}
       <div className="dsh-cau_card">
         {rows.length === 0 && <Empty icon={<Ic n="inbox" />} main="暂无归档待办" sub="在待办或文章页点「归档」的事项会保留在这里" />}
-        {rows.map((d) => {
+        {rows.length > 0 && shown.length === 0 && (
+          <Empty icon={<Ic n="search" />} main={`没有匹配「${q.trim()}」的归档`} sub={`已归档共 ${rows.length} 条，都不含这个关键词；可换词再试`} />
+        )}
+        {shown.map((d) => {
           const id = d.article_id || d.url
           return (
             <div className="dsh-cau_dlRow" key={id}>
@@ -789,6 +816,11 @@ body[data-ds-dark-theme] .dsh-cau_ov{background:var(--cau-brand-a9)}
 .dsh-cau_adeadlineItem{font-size:13px;font-weight:600;color:var(--cau-warn)}
 .dsh-cau_adeadlineDate{font-size:12px;font-weight:600;color:var(--cau-warn)}
 .dsh-cau_adeadlineEv{font-size:11px;color:var(--cau-ink2)}
+.dsh-cau_adeadlineMore{display:flex;flex-direction:column;gap:4px;padding:8px 12px;border-radius:10px;border:1px dashed color-mix(in srgb,var(--cau-warn) 35%,transparent);background:color-mix(in srgb,var(--cau-warn) 6%,transparent);margin:-4px 0 10px}
+.dsh-cau_adeadlineMoreTitle{font-size:11px;color:var(--cau-ink2)}
+.dsh-cau_adeadlineMoreRow{display:flex;gap:8px;align-items:baseline;font-size:12px}
+.dsh-cau_adeadlineMoreDate{font-weight:600;color:var(--cau-warn)}
+.dsh-cau_adeadlineMoreItem{color:var(--cau-ink2)}
 .dsh-cau_abody{font-size:14px;line-height:26px;color:var(--cau-ink);white-space:pre-wrap;word-break:break-word}
 .dsh-cau_aactions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:10px;border-top:1px solid var(--cau-line-soft)}
 .dsh-cau_aBtn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:1px solid var(--cau-line);border-radius:10px;background:transparent;color:var(--cau-ink);font-size:12px;cursor:pointer;text-decoration:none}

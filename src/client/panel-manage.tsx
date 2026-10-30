@@ -6,7 +6,7 @@
  * 本地立即隐藏；可随时退出管理模式。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { readCloudJson, readFeed, loadFollow, loadMine, loadDeadlineOps, isPruned, queuePruneRequest } from './data'
+import { readCloudJson, readFeed, loadFollow, loadMine, loadDeadlineOps, setDeadlineOp, isPruned, queuePruneRequest } from './data'
 import { Empty } from './empty'
 import { Ic } from './icons'
 
@@ -181,6 +181,20 @@ export function ManageView(props: { onBack: () => void }) {
     }
   }
 
+  /**
+   * 取消归档所选（2026-10-20 用户反馈补）：管理页此前只能搜到、看得到归档标记，却改不了状态，
+   * 要取消只能绕到文章页点开关。这里直接按本地 ops 批量置 null，回到「全部待办」。
+   */
+  const doUnarchive = () => {
+    const chosen = rows.filter((r) => sel.has(r.id) && r.archived)
+    if (!chosen.length) return
+    for (const r of chosen) setDeadlineOp(r.id, null)
+    const ids = new Set(chosen.map((r) => r.id))
+    setRows((prev) => prev.map((r) => (ids.has(r.id) ? { ...r, archived: false } : r)))
+    setDone(`已取消归档 ${chosen.length} 条，它们会回到「全部待办」`)
+    setError('')
+  }
+
   return (
     <div className="dsh-cau_view">
       <div className="dsh-cau_bread">
@@ -248,6 +262,9 @@ export function ManageView(props: { onBack: () => void }) {
 
           <div className="dsh-cau_mgBar">
             已选 <b>{sel.size}</b> 条（我的事项 {selMine} · 关注中 {selFollow}{selArch > 0 ? ` · 已归档 ${selArch}` : ''}）
+            <button type="button" className="dsh-cau_mgBtn" disabled={!selArch || busy} onClick={doUnarchive} title="把所选里已归档的条目恢复到「全部待办」">
+              取消归档所选（{selArch}）
+            </button>
             <button type="button" className="dsh-cau_mgDel" disabled={!sel.size || busy} onClick={() => setConfirm(true)}>
               删除所选（{sel.size}）
             </button>
@@ -305,7 +322,7 @@ export function ManageView(props: { onBack: () => void }) {
                               </span>
                             )}
                             {r.archived && (
-                              <span className="dsh-cau_mgArch" title="已归档（全部待办不再显示，可取消归档）">
+                              <span className="dsh-cau_mgArch" title="已归档（全部待办不再显示；勾选后点上方「取消归档所选」可恢复）">
                                 <Ic n="archive" />
                               </span>
                             )}
